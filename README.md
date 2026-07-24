@@ -21,7 +21,7 @@ cp .env.example .env
 pnpm install
 docker compose up -d postgres
 pnpm db:migrate
-pnpm db:seed                  # demo user + HN + example Substack subscription
+pnpm db:seed                  # demo user + HN + Platformer Substack + example topic
 pnpm --filter @newsroom/web dev
 ```
 
@@ -31,14 +31,15 @@ Open http://localhost:3000 — sign up / sign in, then check health:
 curl -sS http://localhost:3000/api/health | jq
 ```
 
-One-shot ingest (requires migrate + seed or your own subscriptions):
+One-shot ingest then rank (requires migrate + seed or your own subscriptions/topics):
 
 ```bash
-pnpm worker:ingest
-# or: NEWSROOM_WORKER_ONCE=ingest pnpm --filter @newsroom/worker start
+pnpm worker:ingest            # upserts articles; enqueues a pending rank job
+pnpm worker:rank              # keyword shortlist + Ollama batches → user_article_scores
+# or: NEWSROOM_WORKER_ONCE=ingest|rank pnpm --filter @newsroom/worker start
 ```
 
-Long-running worker (claims `ingest` jobs ~every 12 minutes):
+Long-running worker (claims `ingest` and `rank` jobs; ingest cadence ~12 minutes):
 
 ```bash
 pnpm --filter @newsroom/worker start
@@ -48,13 +49,13 @@ pnpm --filter @newsroom/worker start
 
 | Path | Role |
 |------|------|
-| `apps/web` | Next.js — auth, health, `/api/sources` |
+| `apps/web` | Next.js — auth, health, `/api/sources`, `/api/topics`, `/api/feed` |
 | `apps/mobile` | Expo Router shell (health via api-client) |
-| `apps/worker` | Postgres job poller + one-shot ingest CLI |
-| `packages/db` | Drizzle schema + migrations (auth + ingest tables) |
-| `packages/ai` | `AiProvider` + `OllamaProvider` |
+| `apps/worker` | Postgres job poller + one-shot ingest/rank CLI |
+| `packages/db` | Drizzle schema + migrations (auth, ingest, topics, scores) |
+| `packages/ai` | `AiProvider` + keyword/`rankArticleBatch` helpers |
 | `packages/sources` | HN + Substack adapters (`SourceAdapter`) |
-| `packages/api-client` | Typed client (`health()`, sources CRUD) |
+| `packages/api-client` | Typed client (health, sources, topics, feed) |
 
 ## Commands
 
@@ -65,31 +66,43 @@ pnpm --filter @newsroom/worker start
 | `docker compose --profile ollama up -d` | Optional Ollama container (Postgres does not depend on it) |
 | `pnpm db:generate` | Generate Drizzle migrations from schema |
 | `pnpm db:migrate` | Apply migrations to `DATABASE_URL` |
-| `pnpm db:seed` | Ensure demo user + enabled HN + Platformer Substack RSS |
+| `pnpm db:seed` | Demo user + HN + Platformer Substack + `AI & infra` topic |
 | `pnpm db:studio` | Drizzle Studio |
 | `pnpm --filter @newsroom/web dev` | Next.js dev server (:3000) |
 | `pnpm --filter @newsroom/web build` / `start` | Production web build / serve |
-| `pnpm --filter @newsroom/worker start` | Long-running ingest job poller |
-| `pnpm worker:ingest` / `pnpm --filter @newsroom/worker ingest` | One-shot ingest then exit |
+| `pnpm --filter @newsroom/worker start` | Long-running ingest + rank job poller |
+| `pnpm worker:ingest` / `pnpm --filter @newsroom/worker ingest` | One-shot ingest then exit (enqueues rank) |
+| `pnpm worker:rank` / `pnpm --filter @newsroom/worker rank` | One-shot rank then exit |
 | `pnpm --filter @newsroom/mobile start` | Expo dev server |
 | `pnpm sources:test` | Adapter + URL normalization fixture tests |
-| `pnpm worker:test` | Ingest upsert integration test (needs Postgres) |
-| `pnpm --filter @newsroom/ai test` | AI unit tests (offline-safe) |
+| `pnpm worker:test` | Ingest + rank integration tests (needs Postgres; AI mocked) |
+| `pnpm web:test` | Topics/feed parsers + session isolation (needs Postgres) |
+| `pnpm --filter @newsroom/ai test` | AI unit tests (offline-safe keyword + rank parse) |
 | `pnpm --filter @newsroom/ai smoke` | Live Ollama smoke (skips if unreachable; `OLLAMA_SMOKE=1` to require it) |
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID` (attach seed subscriptions to an existing Better Auth user), `NEWSROOM_WORKER_ONCE=ingest`.
+Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank`, `RANK_BATCH_SIZE` (clamped 20–50, default 30).
 
-Health, ingest seed notes, and Compose: [docs/ops-local.md](docs/ops-local.md). Ingest URL/HN choices: [docs/decisions/001-ingest-url-and-hn.md](docs/decisions/001-ingest-url-and-hn.md).
+### Topics & feed API (session cookie)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET/POST` | `/api/topics` | List / create (caller’s topics only) |
+| `PATCH/DELETE` | `/api/topics/:id` | Update / delete own topic |
+| `GET` | `/api/feed?cursor=&topic=&source=&limit=` | Ranked scores; default excludes `dismissed` |
+| `POST` | `/api/feed/:articleId/seen\|saved\|dismissed` | Update status; `404` if no score row |
+
+Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md). Health, seed, Compose: [docs/ops-local.md](docs/ops-local.md).
 
 ## Docs
 
 | Doc | Purpose |
 |-----|---------|
 | [docs/architecture.md](docs/architecture.md) | System design, data model, APIs |
-| [docs/ops-local.md](docs/ops-local.md) | Local Compose / health / ingest ops |
+| [docs/ops-local.md](docs/ops-local.md) | Local Compose / health / ingest / rank ops |
 | [docs/decisions/001-ingest-url-and-hn.md](docs/decisions/001-ingest-url-and-hn.md) | Canonical URL + HN Firebase choices |
+| [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md) | Keyword + AI rank formulas and jobs |
 | [docs/feature-backlog.md](docs/feature-backlog.md) | Feature segmentation index |
 | [docs/feature-completed.md](docs/feature-completed.md) | Shipped registry |
 | [docs/github-workflow.md](docs/github-workflow.md) | Issues, handoffs, scripts |
@@ -117,4 +130,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo` and `ingest-hn-substack` are implemented (auth, sources API, HN/Substack ingest). Ranking and feed UI are next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, and `hybrid-rank-feed` are implemented (auth, sources, ingest, topics/feed APIs, worker rank). Polished web/mobile feed UI is next per the backlog.

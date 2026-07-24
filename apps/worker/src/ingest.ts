@@ -261,5 +261,10 @@ export async function processIngestJob(
     lastError: result.errors.length > 0 ? result.errors.join("; ") : null,
   });
 
+  if (!allFailed) {
+    const { ensureNextRankJob } = await import("./rank.js");
+    await ensureNextRankJob(db, { delayMs: 0 });
+  }
+
   return result;
 }

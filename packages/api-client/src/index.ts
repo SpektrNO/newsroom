@@ -40,6 +40,69 @@ export type PatchSourceInput = {
   config?: SourceConfig;
 };
 
+export type Topic = {
+  id: string;
+  name: string;
+  keywords: string[];
+  weight: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TopicsListResponse = { topics: Topic[] };
+export type TopicResponse = { topic: Topic };
+
+export type CreateTopicInput = {
+  name: string;
+  keywords: string[];
+  weight?: number;
+  enabled?: boolean;
+};
+
+export type PatchTopicInput = {
+  name?: string;
+  keywords?: string[];
+  weight?: number;
+  enabled?: boolean;
+};
+
+export type FeedItemStatus = "new" | "seen" | "saved" | "dismissed";
+
+export type FeedSource = {
+  sourceType: string;
+  externalId: string | null;
+};
+
+export type FeedItem = {
+  articleId: string;
+  title: string;
+  summary: string | null;
+  canonicalUrl: string;
+  author: string | null;
+  publishedAt: string | null;
+  sources: FeedSource[];
+  keywordScore: number;
+  aiScore: number | null;
+  finalRank: number;
+  reason: string | null;
+  nearDuplicateOfArticleId: string | null;
+  status: FeedItemStatus;
+  scoredAt: string;
+};
+
+export type FeedPage = {
+  items: FeedItem[];
+  nextCursor: string | null;
+};
+
+export type ListFeedOptions = {
+  cursor?: string;
+  topic?: string;
+  source?: SourceTypeV1;
+  limit?: number;
+};
+
 export type ApiClientOptions = {
   baseUrl: string;
   fetch?: typeof fetch;
@@ -102,6 +165,66 @@ export class ApiClient {
     );
     if (res.status === 204) return;
     await this.throwApiError(res);
+  }
+
+  async listTopics(): Promise<TopicsListResponse> {
+    return this.requestJson("GET", "/api/topics");
+  }
+
+  async createTopic(input: CreateTopicInput): Promise<TopicResponse> {
+    return this.requestJson("POST", "/api/topics", input);
+  }
+
+  async patchTopic(id: string, input: PatchTopicInput): Promise<TopicResponse> {
+    return this.requestJson(
+      "PATCH",
+      `/api/topics/${encodeURIComponent(id)}`,
+      input,
+    );
+  }
+
+  async deleteTopic(id: string): Promise<void> {
+    const res = await this.fetchImpl(
+      `${this.baseUrl}/api/topics/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+        headers: { accept: "application/json" },
+      },
+    );
+    if (res.status === 204) return;
+    await this.throwApiError(res);
+  }
+
+  async listFeed(options: ListFeedOptions = {}): Promise<FeedPage> {
+    const params = new URLSearchParams();
+    if (options.cursor) params.set("cursor", options.cursor);
+    if (options.topic) params.set("topic", options.topic);
+    if (options.source) params.set("source", options.source);
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    return this.requestJson("GET", qs ? `/api/feed?${qs}` : "/api/feed");
+  }
+
+  async markFeedSeen(articleId: string): Promise<{ item: FeedItem }> {
+    return this.requestJson(
+      "POST",
+      `/api/feed/${encodeURIComponent(articleId)}/seen`,
+    );
+  }
+
+  async markFeedSaved(articleId: string): Promise<{ item: FeedItem }> {
+    return this.requestJson(
+      "POST",
+      `/api/feed/${encodeURIComponent(articleId)}/saved`,
+    );
+  }
+
+  async markFeedDismissed(articleId: string): Promise<{ item: FeedItem }> {
+    return this.requestJson(
+      "POST",
+      `/api/feed/${encodeURIComponent(articleId)}/dismissed`,
+    );
   }
 
   private async requestJson<T>(

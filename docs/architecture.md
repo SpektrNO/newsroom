@@ -102,7 +102,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 ## API surface
 
 - `POST /api/auth/*` — Better Auth
-- `GET/POST/PATCH /api/topics`
+- `GET/POST/PATCH/DELETE /api/topics`
 - `GET/POST/DELETE /api/sources`
 - `GET /api/feed?cursor=&topic=&source=`
 - `POST /api/feed/:id/seen|saved|dismissed`

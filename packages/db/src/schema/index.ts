@@ -6,3 +6,10 @@ export {
   jobs,
   type SourceSubscriptionConfig,
 } from "./ingest.js";
+export {
+  topics,
+  userArticleScores,
+  userArticleScoreStatuses,
+  type TopicKeywords,
+  type UserArticleScoreStatus,
+} from "./ranking.js";

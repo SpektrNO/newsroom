@@ -1,4 +1,4 @@
-# Handoff: ingest-hn-substack
+# Handoff: hybrid-rank-feed
 
 **Status:** done  
 **Created:** 2026-07-24  
@@ -9,245 +9,282 @@
 
 | Field | Value |
 |-------|-------|
-| Feature id | `ingest-hn-substack` |
-| Parent issue | #12 — https://github.com/SpektrNO/newsroom/issues/12 |
-| Open tasks | _(none — all closed)_ |
-| Closed tasks | `spec` (#13), `db` (#14), `api` (#15), `worker` (#16), `verify` (#17), `docs` (#18) |
+| Feature id | `hybrid-rank-feed` |
+| Parent issue | #19 — https://github.com/SpektrNO/newsroom/issues/19 |
+| Open tasks | _(none)_ |
+| Closed tasks | `spec` (#20), `db` (#21), `api` (#22), `worker` (#23), `verify` (#24), `docs` (#25) |
 
 Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`  
 (This feature has no `web` / `mobile` tasks — skip those slugs.)
 
-Closed Phase 1: `spec` (#13).
+Closed Phase 1: `spec` (#20).
 
 ## Intent
 
-Authenticated users can manage HN and Substack source subscriptions; a worker (schedule or CLI) fetches recent items via adapters and upserts shared `articles` linked through `article_sources`.
+Authenticated users manage topic keywords, and a worker keyword-shortlists then Ollama-ranks ingested articles into a cursor-paginated personal feed API with seen/saved/dismissed actions.
 
 ## User-facing spec
 
 | Field | Value |
 |-------|-------|
-| Trigger | User creates/toggles/deletes source subscriptions via API; worker runs ingest on ~10–15 min schedule or one-shot CLI. |
-| Surfaces | `packages/sources` adapters · `packages/db` schema · Next.js `/api/sources*` · `apps/worker` ingest job · optional seed/CLI — **no feed UI** |
-| Copy | N/A (no product UI in this feature). API error messages: plain JSON `{ "error": "<code>" }` (see contract). |
+| Trigger | User creates/updates topics via API; worker ranks after ingest (or via one-shot rank CLI); clients read `GET /api/feed` and post interaction status. |
+| Surfaces | `packages/db` · `packages/ai` ranking helpers · Next.js `/api/topics*`, `/api/feed*` · `apps/worker` rank job · `packages/api-client` — **no polished web/mobile UI** |
+| Copy | N/A (no product UI in this feature). API errors: plain JSON `{ "error": "<code>" }` (same pattern as sources). |
 | Acceptance | See **Acceptance criteria** below. |
 
 ### Acceptance criteria
 
-1. **Adapters:** `HackerNewsAdapter` and `SubstackAdapter` implement `SourceAdapter` (`fetchRecent() → NormalizedArticle[]`) in `packages/sources`. Stub may remain for tests; live adapters perform network I/O.
-2. **HN:** Fetches recent/top items via Firebase HN API and/or Algolia HN Search (architecture allows both). Returns normalized URL, title, optional summary/author/`publishedAt`, and `raw` payload. Limits a single `fetchRecent` call to a bounded batch (e.g. ≤100 items) — document the chosen limit.
-3. **Substack:** Given `config.rssUrl`, fetches and parses RSS/Atom; maps items to `NormalizedArticle`. Does **not** scrape paywalled full bodies.
-4. **Upsert:** Ingest writes `articles` keyed by **canonical URL** (unique). Re-fetch updates title/summary/author/`published_at`/`raw`/`content_hash` when changed; does not create duplicates for the same URL.
-5. **Linkage:** Each successful ingest path creates/updates `article_sources` tying the article to `source_type` and the originating `source_subscription_id`.
-6. **Subscriptions:** `source_subscriptions` rows are **per-user** (`user_id`). HN: at most one subscription per user (`source_type = hackernews`). Substack: many per user, unique on `(user_id, rssUrl)` (normalize URL before uniqueness check).
-7. **API:** Session-authenticated `GET/POST/PATCH/DELETE /api/sources` manage only the caller’s subscriptions. Unauthenticated → `401`. Cross-user access → not possible (filter by session `user_id`).
-8. **Worker:** Can (a) process an `ingest` job from the Postgres `jobs` queue on an interval (~10–15 min), and (b) run a one-shot ingest via CLI/script (documented in README). One ingest pass processes all **enabled** subscriptions across users (shared article store).
-9. **Jobs:** Minimal Postgres-backed queue supports at least `type = ingest`. Do not implement ranking jobs or call Ollama.
-10. **Seed:** Local seed (script or documented migration seed) can create/ensure: one demo user path **or** attach to an existing Better Auth user — enable HN + one example Substack RSS URL. Topics seed is **out of scope**.
-11. **Verify:** Automated checks cover adapter normalization (fixture/mocked HTTP) and an ingest path that leaves ≥1 `articles` + matching `article_sources` row for a seeded/test subscription (mock or recorded fixture preferred over flaky live HN in CI).
-12. **Docs:** README lists migrate, seed (if any), worker start/schedule, and one-shot ingest commands.
+1. **Topics:** `topics` rows are **per-user** (`user_id`) with `name`, `keywords[]`, `weight`, `enabled`. Session-authenticated CRUD only touches the caller’s topics.
+2. **Scores:** `user_article_scores` stores per `(user_id, article_id)`: `keyword_score`, `ai_score`, `final_rank`, `reason`, `status` (`new` \| `seen` \| `saved` \| `dismissed`), plus timestamps.
+3. **Keyword pass:** For each user with ≥1 enabled topic, match article `title` + `summary` against enabled topic keywords (case-insensitive substring or token match — document choice). Clear misses are **not** written as feed rows (no score row, or only ephemeral shortlist — prefer **no row** until keyword hit). Hits get a `keyword_score` in `[0, 1]` reflecting match strength (weight-aware; document formula).
+4. **AI pass:** Shortlisted articles are ranked via `packages/ai` (Ollama behind `AiProvider`). Never call Ollama from UI packages. Batches of **~20–50** articles per model call (configurable; default 30). Each item returns: relevance `ai_score` in `[0, 1]`, optional near-duplicate hint (article id or canonical URL of peer in batch / prior scores), and a one-line `reason`. Persist scores; set `final_rank` from keyword + AI (document formula, e.g. weighted sum).
+5. **Near-dup:** Near-duplicate hints must not crash the pipeline if parse fails; store hint when present (nullable column or JSON field — see contract). Prefer marking lower-ranked dups without deleting articles.
+6. **Worker:** Supports `jobs.type = rank` (in addition to existing `ingest`). After a successful ingest job (or at end of one-shot ingest), enqueue a `rank` job if none pending. Also support one-shot rank CLI (`pnpm worker:rank` / `NEWSROOM_WORKER_ONCE=rank`). Long-running worker claims both `ingest` and `rank`.
+7. **Rank scope:** One rank pass processes users who have enabled topics; for each user, shortlist recent unmatched / stale articles (document window, e.g. articles ingested or updated in last 7 days, or never scored), keyword-filter, then AI-rank in batches. Partial Ollama failure: mark job `failed` or `completed` with `last_error` aggregate — prefer continue other users; if Ollama unreachable for all batches → `failed`.
+8. **Feed API:** `GET /api/feed` returns the session user’s scored articles ordered by `final_rank` desc (tie-break `article_id`), cursor pagination, optional `topic` and `source` filters. Default excludes `dismissed`.
+9. **Interactions:** `POST /api/feed/:id/seen|saved|dismissed` updates `user_article_scores.status` for that article. Unknown / other-user article score → `404`. Unauthenticated → `401`.
+10. **Topics API:** `GET/POST /api/topics`, `PATCH/DELETE /api/topics/:id` — session-scoped; validation errors → `400`.
+11. **api-client:** Typed helpers for topics CRUD, feed list, and feed status posts (same cookie/`fetch` injection pattern as sources).
+12. **Seed:** Extend `pnpm db:seed` with ≥1 example enabled topic (keywords that can match HN/Substack titles) for the demo user. Do not remove existing HN/Substack seed behavior.
+13. **Verify:** Automated tests cover (a) keyword matching / score formula with fixtures, (b) AI ranking parse with mocked `AiProvider` (no live Ollama in unit/CI), (c) feed/topics API auth isolation (session user only), (d) worker rank path writing ≥1 `user_article_scores` row given fixture articles + topics. Live Ollama remains optional smoke (`packages/ai` smoke already exists).
+14. **Docs:** README lists migrate, seed (topics), worker rank / one-shot rank, and feed/topics API overview pointers.
 
 ## API / DB contract
 
-PostgreSQL-backed; Better Auth session for identity. Extend existing Better Auth `user` / `session` tables — do not duplicate users.
+PostgreSQL-backed; Better Auth session for identity. Extend existing ingest tables — do not change canonical URL / sources contracts from `ingest-hn-substack`.
 
 ### Tables (new)
 
-#### `source_subscriptions`
+#### `topics`
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | text PK | UUID or nanoid |
+| `id` | text PK | UUID |
 | `user_id` | text FK → `user.id` ON DELETE CASCADE | Required |
-| `source_type` | text not null | `hackernews` \| `substack` (reserve `bluesky` in app enum/types; no Bluesky adapter yet) |
-| `config` | jsonb not null default `{}` | See config shapes below |
-| `enabled` | boolean not null default true | |
+| `name` | text not null | Display name; trim; non-empty |
+| `keywords` | jsonb not null | JSON string array, e.g. `["llm","postgres"]`; ≥1 keyword on create when `enabled` |
+| `weight` | real/double not null default `1` | Relative importance; clamp to sensible range (e.g. `0.1`–`10`) in API |
+| `enabled` | boolean not null default true | Disabled topics excluded from keyword/AI ranking |
 | `created_at` | timestamptz not null | |
 | `updated_at` | timestamptz not null | |
 
 **Constraints**
 
-- Partial unique: one `hackernews` row per `user_id`.
-- Unique `(user_id, (config->>'rssUrl'))` for `source_type = substack` (or equivalent unique index after URL normalization in app code + DB check).
-- Index on `(user_id)`, `(enabled, source_type)`.
+- Index on `(user_id)`, `(user_id, enabled)`.
+- Optional unique `(user_id, lower(name))` — **yes**, enforce case-insensitive unique name per user → `409` on conflict.
 
-**`config` shapes**
-
-| `source_type` | Config | Required keys |
-|---------------|--------|----------------|
-| `hackernews` | `{}` or `{ "mode": "top" \| "new" }` | None; default mode `top` if omitted |
-| `substack` | `{ "rssUrl": "https://..." }` | `rssUrl` — absolute http(s) URL |
-
-Reject unknown keys only if they break parsing; ignore extra keys safely.
-
-#### `articles`
+#### `user_article_scores`
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | text PK | |
-| `canonical_url` | text not null UNIQUE | Normalized absolute URL (strip fragment; consistent trailing-slash policy — document choice) |
-| `title` | text not null | |
-| `summary` | text null | |
-| `author` | text null | |
-| `published_at` | timestamptz null | |
-| `raw` | jsonb null | Adapter payload snapshot |
-| `content_hash` | text null | Hash of stable fields for change detection |
+| `id` | text PK | UUID |
+| `user_id` | text FK → `user.id` ON DELETE CASCADE | |
+| `article_id` | text FK → `articles.id` ON DELETE CASCADE | |
+| `keyword_score` | real not null | `[0, 1]` |
+| `ai_score` | real null | `[0, 1]`; null until AI pass completes |
+| `final_rank` | real not null | Sort key; update when AI completes |
+| `reason` | text null | One-line why from AI (or keyword-only reason before AI) |
+| `near_duplicate_of_article_id` | text null FK → `articles.id` ON DELETE SET NULL | Optional near-dup peer |
+| `status` | text not null default `new` | `new` \| `seen` \| `saved` \| `dismissed` |
+| `scored_at` | timestamptz not null | Last keyword/AI write |
 | `created_at` | timestamptz not null | |
 | `updated_at` | timestamptz not null | |
 
-#### `article_sources`
+**Constraints**
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | text PK | |
-| `article_id` | text FK → `articles.id` ON DELETE CASCADE | |
-| `source_subscription_id` | text FK → `source_subscriptions.id` ON DELETE SET NULL | Nullable if subscription deleted later |
-| `source_type` | text not null | Denormalized mirror of adapter type |
-| `external_id` | text null | e.g. HN item id |
-| `fetched_at` | timestamptz not null | Last successful fetch via this link |
+- Unique `(user_id, article_id)`.
+- Index `(user_id, final_rank desc)` (or equivalent) for feed.
+- Index `(user_id, status)`.
+- Check / app enum for `status`.
 
-**Constraints:** unique `(article_id, source_subscription_id)` when `source_subscription_id` is not null; else unique `(article_id, source_type)` for orphaned rows. Index on `source_subscription_id`.
+### Jobs (`jobs` table — extend usage)
 
-#### `jobs`
+Existing `jobs` table stays. This feature **processes** `type = rank`.
 
-Minimal Postgres queue (architecture default; no Redis).
+| `type` | Payload | Behavior |
+|--------|---------|----------|
+| `ingest` | `{}` (unchanged) | After successful ingest completion, enqueue `rank` if no open (`pending`/`running`) rank job exists |
+| `rank` | `{}` or `{ "userId"?: string }` | Rank all eligible users, or single user if `userId` set |
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | text PK | |
-| `type` | text not null | This feature: `ingest` only. Allow `rank` in check/enum for later — **do not enqueue or process `rank`**. |
-| `status` | text not null | `pending` \| `running` \| `completed` \| `failed` |
-| `payload` | jsonb not null default `{}` | Optional filters later; empty OK for full ingest |
-| `scheduled_at` | timestamptz not null | When eligible to run |
-| `started_at` | timestamptz null | |
-| `finished_at` | timestamptz null | |
-| `attempts` | int not null default 0 | |
-| `last_error` | text null | |
-| `created_at` | timestamptz not null | |
+Worker claim: claim next due job among `ingest` **and** `rank` (prefer earliest `scheduled_at`). Avoid concurrent duplicate rank jobs (single-flight same as ingest).
 
-Index: `(status, scheduled_at)` for claim queries. Worker claims with row lock / `UPDATE … WHERE status = 'pending' … RETURNING` pattern (or equivalent) to stay multi-worker-safe.
+### Ranking algorithm (normative)
 
-### Tables explicitly **not** in this feature
+1. **Eligible users:** those with ≥1 `topics` where `enabled = true`.
+2. **Candidate articles:** articles linked via `article_sources` to that user’s enabled `source_subscriptions` (personal Substack + shared HN via their HN subscription). Include articles not yet in `user_article_scores` for that user, **or** with `ai_score` null / `scored_at` older than article `updated_at` (re-score when article content changes). Cap candidates per user per run (e.g. 200) ordered by `published_at`/`created_at` desc.
+3. **Keyword shortlist:** For each candidate, compute match against all enabled topics’ keywords. If no keyword hits → skip (no row). If hit → upsert score with `keyword_score`, provisional `final_rank = keyword_score` (or weight-normalized), `reason` optional keyword summary, `ai_score` null if first write.
+4. **AI batches:** Take shortlist needing AI (e.g. `ai_score` is null), chunk size default **30** (env `RANK_BATCH_SIZE`, clamp 20–50). Call ranking helper in `packages/ai` with topic names/keywords + article title/summary (truncate summaries). Parse structured JSON array; on malformed item, keep keyword-only score and continue.
+5. **Persist AI:** Set `ai_score`, `reason`, optional `near_duplicate_of_article_id`, `final_rank = combine(keyword_score, ai_score, topic weights)` — document exact formula in code + README (suggested default: `0.35 * keyword_score + 0.65 * ai_score`, then mildly boost by max matched topic `weight` capped).
+6. **Idempotency:** Re-running rank upserts the same `(user_id, article_id)`; do **not** reset `status` on re-score unless status was never set.
 
-- `topics`
-- `user_article_scores`
-- Any feed-ranking columns
+### `packages/ai` ranking surface
 
-### `NormalizedArticle` / adapter contract
+Keep `AiProvider.complete` / `health`. Add a **ranking helper** (e.g. `rankArticleBatch(provider, input) → RankedItem[]`) that:
 
-Existing stub in `packages/sources` is the baseline. Implementers may extend the type **only** if needed for ingest (e.g. optional `externalId?: string`); keep `fetchRecent(): Promise<NormalizedArticle[]>`.
+- Builds a strict JSON-only prompt
+- Parses model output into `{ articleId, aiScore, reason, nearDuplicateOfArticleId? }[]`
+- Does not import DB or Next.js
 
-| Field | Required | Maps to |
-|-------|----------|---------|
-| `url` | yes | `articles.canonical_url` (after normalization) |
-| `title` | yes | `articles.title` |
-| `summary` | no | `articles.summary` |
-| `author` | no | `articles.author` |
-| `publishedAt` | no | `articles.published_at` |
-| `raw` | no | `articles.raw` |
-| `contentHash` | no | `articles.content_hash` (worker may compute if adapter omits) |
-
-Constructor/factory: adapters receive subscription `config` (and optionally `source_type`).
+Optional: extend `AiProvider` with `rank` only if it stays provider-portable; otherwise helper-on-`complete` is preferred (minimal surface).
 
 ### HTTP API
 
-Base: Next.js App Router under `apps/web`. All routes below require Better Auth session.
+Base: Next.js App Router under `apps/web`. Session required unless noted.
+
+#### Topics
 
 | Endpoint | Method | Body / query | Success | Errors |
 |----------|--------|--------------|---------|--------|
-| `/api/sources` | `GET` | — | `200` `{ "sources": Source[] }` | `401` |
-| `/api/sources` | `POST` | Create body (below) | `201` `{ "source": Source }` | `401`, `400` validation, `409` duplicate HN or Substack URL |
-| `/api/sources/:id` | `PATCH` | `{ "enabled"?: boolean, "config"?: object }` | `200` `{ "source": Source }` | `401`, `404` (wrong id / other user), `400` |
-| `/api/sources/:id` | `DELETE` | — | `204` empty | `401`, `404` |
+| `/api/topics` | `GET` | — | `200` `{ "topics": Topic[] }` | `401` |
+| `/api/topics` | `POST` | Create body | `201` `{ "topic": Topic }` | `401`, `400`, `409` duplicate name |
+| `/api/topics/:id` | `PATCH` | Partial update | `200` `{ "topic": Topic }` | `401`, `404`, `400`, `409` |
+| `/api/topics/:id` | `DELETE` | — | `204` | `401`, `404` |
 
-**`Source` JSON shape**
+**`Topic` JSON**
 
 ```json
 {
   "id": "…",
-  "sourceType": "hackernews" | "substack",
-  "config": {},
+  "name": "AI infra",
+  "keywords": ["llm", "ollama", "postgres"],
+  "weight": 1,
   "enabled": true,
   "createdAt": "ISO-8601",
   "updatedAt": "ISO-8601"
 }
 ```
 
-**`POST /api/sources` body**
+**`POST /api/topics` body**
 
 ```json
-{ "sourceType": "hackernews", "config": { "mode": "top" }, "enabled": true }
+{
+  "name": "AI infra",
+  "keywords": ["llm", "ollama"],
+  "weight": 1,
+  "enabled": true
+}
 ```
-or
+
+- Default `weight: 1`, `enabled: true`.
+- Empty `name` or empty `keywords` array → `400` `{ "error": "invalid_topic" }`.
+- Keywords: non-empty strings, trim, drop empties; max e.g. 50 keywords / 64 chars each (document limits).
+
+**`PATCH`:** any of `name`, `keywords`, `weight`, `enabled`.
+
+#### Feed
+
+| Endpoint | Method | Body / query | Success | Errors |
+|----------|--------|--------------|---------|--------|
+| `/api/feed` | `GET` | `cursor?`, `topic?` (topic id), `source?` (`hackernews` \| `substack`), `limit?` (default 20, max 50) | `200` FeedPage | `401`, `400` bad cursor/filter |
+| `/api/feed/:articleId/seen` | `POST` | — | `200` `{ "item": FeedItem }` | `401`, `404` |
+| `/api/feed/:articleId/saved` | `POST` | — | `200` `{ "item": FeedItem }` | `401`, `404` |
+| `/api/feed/:articleId/dismissed` | `POST` | — | `200` `{ "item": FeedItem }` | `401`, `404` |
+
+**Default feed filter:** `status != 'dismissed'`. Optional query `status=` later is out of scope unless cheap; do not require it.
+
+**`topic` filter:** article must have matched that topic in the latest score path **or** simpler: filter scores whose keyword match set included that topic — if too heavy, accept filter as “user owns topic id” AND article keywords overlap that topic’s keywords at query time (recompute overlap for filter only). Prefer storing nothing extra; re-check keyword overlap for `topic=` filter is OK.
+
+**`source` filter:** article has ≥1 `article_sources.source_type` equal to filter (and preferably linked to the user’s subscription for that type).
+
+**`FeedItem` JSON**
+
 ```json
-{ "sourceType": "substack", "config": { "rssUrl": "https://example.substack.com/feed" }, "enabled": true }
+{
+  "articleId": "…",
+  "title": "…",
+  "summary": "…",
+  "canonicalUrl": "https://…",
+  "author": "…",
+  "publishedAt": "ISO-8601|null",
+  "sources": [{ "sourceType": "hackernews", "externalId": "123" }],
+  "keywordScore": 0.8,
+  "aiScore": 0.72,
+  "finalRank": 0.75,
+  "reason": "Matches your LLM topic; discusses local inference.",
+  "nearDuplicateOfArticleId": null,
+  "status": "new",
+  "scoredAt": "ISO-8601"
+}
 ```
 
-- Default `enabled: true` if omitted.
-- `bluesky` (and other non-v1 types) → `400` `{ "error": "unsupported_source_type" }`.
-- Invalid/missing `rssUrl` for Substack → `400` `{ "error": "invalid_config" }`.
+**`FeedPage`**
 
-**Not in this feature:** `GET /api/feed`, topic routes, seen/saved/dismissed, health changes (keep existing health as-is unless DB check already covers new tables implicitly).
+```json
+{
+  "items": [ "FeedItem" ],
+  "nextCursor": "opaque-string-or-null"
+}
+```
+
+Cursor: opaque (e.g. base64 of `{ finalRank, articleId }`); stable ordering `final_rank DESC, article_id DESC`.
+
+Architecture lists `POST /api/feed/:id/seen|saved|dismissed` — use **`articleId`** as `:id` (score is looked up by session user + article). Creating a status update for an article with **no** score row → `404` `{ "error": "not_found" }` (do not invent scores from interactions alone in v1).
 
 ### `packages/api-client`
 
-Add typed helpers mirroring the sources API (session cookie / `fetch` injection same as future authenticated calls). Health client stays unchanged.
+Add:
+
+- `listTopics`, `createTopic`, `patchTopic`, `deleteTopic`
+- `listFeed({ cursor?, topic?, source?, limit? })`
+- `markFeedSeen(articleId)`, `markFeedSaved(articleId)`, `markFeedDismissed(articleId)`
+
+Mirror existing `ApiError` / credentials pattern.
 
 ### Worker / CLI behavior
 
 | Mode | Behavior |
 |------|----------|
-| Scheduled | Worker loop: ensure a pending `ingest` job exists on ~10–15 min cadence **or** claim due jobs continuously; process `ingest` by loading enabled `source_subscriptions`, calling adapters, upserting articles + `article_sources`. |
-| One-shot | Documented command (e.g. `pnpm --filter @newsroom/worker ingest` or `NEWSROOM_WORKER_ONCE=ingest`) enqueues+runs or runs ingest inline, then exits `0` on success. |
-| Idle | Existing `NEWSROOM_WORKER_IDLE=1` may remain for long-running process that also polls jobs. |
+| After ingest | On ingest job `completed` (including partial subscription success), `ensureNextRankJob` (pending immediately if none open) |
+| Scheduled / poll | Existing poll loop also claims `rank` jobs; process via `processRankJob` |
+| One-shot rank | `pnpm worker:rank` or `NEWSROOM_WORKER_ONCE=rank` enqueues+runs or runs inline, exit `0` on success |
+| One-shot ingest | Unchanged, but should enqueue rank after (so local `pnpm worker:ingest` eventually needs a rank pass — either chain in-process or leave pending job for poller; **prefer enqueue pending rank** and document that `pnpm worker:rank` or the long-running worker finishes ranking) |
 
-**Ingest algorithm (normative)**
+**Do not** call ranking from Next.js request handlers except optionally a future admin trigger (out of scope). Feed/topics routes only read/write DB.
 
-1. Load all `source_subscriptions` where `enabled = true` (all users).
-2. For each subscription, instantiate the matching adapter with `config`; call `fetchRecent()`.
-3. For each `NormalizedArticle`: normalize URL → upsert `articles` on `canonical_url` → upsert `article_sources` for this subscription.
-4. Adapter/network failures for one subscription: log, record on job `last_error` (aggregate OK), continue other subscriptions; job may still `completed` with partial success unless **all** subscriptions fail → then `failed`.
-5. Never write `user_article_scores` or call `packages/ai`.
+### Seed
 
-### Seed / config path
+Extend `packages/db` seed:
 
-Prefer a **documented seed script** (Make/`pnpm` target) that:
+1. Keep demo user + HN + Platformer Substack.
+2. Upsert ≥1 topic, e.g. name `AI & infra`, keywords `["ai","llm","openai","postgres","typescript"]`, `weight: 1`, `enabled: true`.
 
-1. Requires an existing user id **or** creates a single local seed user via Better Auth APIs / direct insert consistent with auth schema.
-2. Upserts HN subscription (`enabled: true`).
-3. Upserts one example Substack `rssUrl` (use a stable public feed; document which).
+### Health
 
-Pure env-only config **without** `source_subscriptions` rows is **rejected** — architecture stores config on subscriptions.
+Keep existing `/api/health` (DB + Ollama). No required change unless rank adds a new dependency (it should not).
 
 ## Touchpoints
 
-- `packages/db` — Drizzle schema + migration for `source_subscriptions`, `articles`, `article_sources`, `jobs`
-- `packages/sources` — `HackerNewsAdapter`, `SubstackAdapter`; keep exported types; RSS parser + HN HTTP client deps live here or worker-only if cleaner (prefer adapters self-contained in `packages/sources`)
-- `packages/api-client` — sources methods
-- `apps/web` — `/api/sources` route handlers + session auth
-- `apps/worker` — job claim loop + ingest runner + CLI one-shot
-- `README.md` / `docs/ops-local.md` — commands for migrate, seed, worker, one-shot ingest
+- `packages/db` — schema + migration for `topics`, `user_article_scores`; seed topics
+- `packages/ai` — batch ranking helper (+ unit tests with fake provider)
+- `packages/api-client` — topics + feed methods
+- `apps/web` — `/api/topics`, `/api/topics/[id]`, `/api/feed`, `/api/feed/[id]/seen|saved|dismissed`
+- `apps/worker` — claim/process `rank`; enqueue after ingest; `worker:rank` script / env
+- `README.md` / `docs/ops-local.md` — rank commands, seed topics note
 - Must not contradict `docs/architecture.md`
 
 ## Out of scope
 
-- Topics CRUD and `topics` table
-- Keyword shortlist, Ollama ranking, `user_article_scores`
-- `GET /api/feed` and feed interaction endpoints
-- Web/mobile sources or feed UI (`web-feed-topics-sources`, `mobile-feed-topics`)
-- Bluesky / X adapters
-- Full-text paywalled Substack bodies
+- Polished web feed / topics UI (`web-feed-topics-sources`)
+- Expo feed / topics UI (`mobile-feed-topics`)
+- Bluesky / X adapters and subscriptions
+- Push notifications
+- Calling Ollama from web or mobile bundles
 - Redis or non-Postgres queues
+- Multi-user rate limits / hosted AI swap (`multiuser-harden`)
+- Full-text paywalled Substack bodies
 - Changing Better Auth providers / OAuth
-- Ranking job processing (`type = rank` may exist in enum only)
+- Replacing or redesigning ingest adapters
 
 ## Open questions / non-blocking defaults
 
 | Topic | Default for implementer |
 |-------|-------------------------|
-| HN exact endpoint mix | Use Firebase for item hydration; use Algolia HN Search **or** Firebase `topstories`/`newstories` lists for candidate IDs. Document choice in code comment + README. Prefer determinism for tests via mocked HTTP. |
-| Canonical URL normalization | Lowercase host; strip `#fragment`; preserve path; choose one trailing-slash policy and apply everywhere. |
-| Job scheduler | Worker self-enqueues next `ingest` after completion **or** inserts due job every interval — either OK if ~10–15 min and single-flight (no duplicate concurrent ingest jobs). |
+| Keyword match | Case-insensitive substring on `title` + `summary` (null summary = title only); score = min(1, sum over hits of topic.weight * 0.25) normalized into `[0,1]` — adjust if ugly but keep deterministic tests |
+| `final_rank` | `0.35 * keyword_score + 0.65 * (ai_score ?? keyword_score)` |
+| Rank after ingest | Enqueue `rank` pending; do not block ingest response/job finish on Ollama |
+| Near-dup storage | `near_duplicate_of_article_id` column; ignore invalid ids from model |
+| Feed without scores | Empty `items` until rank runs — acceptable |
+| Architecture `GET/POST/PATCH /api/topics` | This handoff adds **DELETE** for full CRUD (aligned with sources) |
 
 ---
 
@@ -255,37 +292,36 @@ Pure env-only config **without** `source_subscriptions` rows is **rejected** —
 
 ### Changes
 
-- **DB:** `source_subscriptions`, `articles`, `article_sources`, `jobs` + migration `0001_ancient_vampiro.sql`; seed script (`pnpm db:seed`).
-- **Sources:** `HackerNewsAdapter` (Firebase, ≤100), `SubstackAdapter` (RSS), `normalizeCanonicalUrl`, `createSourceAdapter`.
-- **API:** Session-scoped `GET/POST /api/sources`, `PATCH/DELETE /api/sources/:id`; `packages/api-client` sources helpers.
-- **Worker:** Postgres job claim (`FOR UPDATE SKIP LOCKED`), ingest upsert by canonical URL, ~12 min self-schedule, `pnpm worker:ingest` one-shot.
-- **Verify:** Fixture tests in `@newsroom/sources` + mocked ingest integration in `@newsroom/worker`.
-- **Docs:** README/ops-local commands; ADR `docs/decisions/001-ingest-url-and-hn.md`.
+- **db:** `topics` + `user_article_scores` schema/migration `0002`; seed topic `AI & infra`.
+- **api:** Session-scoped `/api/topics` CRUD, `/api/feed` cursor pagination + filters, status posts; `packages/api-client` helpers; `packages/ai` `scoreKeywordMatch` / `combineFinalRank` / `rankArticleBatch`.
+- **worker:** `jobs.type=rank` claim/process; enqueue after ingest; `pnpm worker:rank` / `NEWSROOM_WORKER_ONCE=rank`; poller claims ingest+rank.
+- **verify:** Keyword + AI parse unit tests; worker rank integration (mocked AI); topics/feed session isolation tests.
+- **docs:** README + ops-local rank/seed/API notes; ADR `docs/decisions/002-hybrid-ranking.md`; architecture DELETE topics.
 
 ### Verification
 
-- [x] `pnpm --filter @newsroom/sources test` — 5 pass (URL + HN + Substack fixtures)
-- [x] `pnpm --filter @newsroom/worker test` — ingest upserts ≥1 article + `article_sources` (mocked HTTP, local Postgres)
-- [x] `pnpm db:migrate` / `pnpm db:seed` against Compose Postgres
-- [x] `pnpm --filter @newsroom/db|sources|worker typecheck` (and web typecheck during API)
-- [ ] Manual: live one-shot `pnpm worker:ingest` against real HN/Substack; exercise `/api/sources` with a signed-in browser session
+- [x] `pnpm --filter @newsroom/ai test` (keyword formula + rank JSON parse)
+- [x] `pnpm worker:test` (ingest + rank → ≥1 score row; Postgres)
+- [x] `pnpm web:test` (parsers + session isolation; Postgres)
+- [x] `pnpm --filter @newsroom/web typecheck`
+- [ ] Live Ollama end-to-end rank smoke (`pnpm worker:rank` with Ollama up) — optional
+- [ ] Manual HTTP topics/feed with browser session cookie
 
 ### Deviations from spec
 
-- None material. HN uses Firebase only (Algolia not wired) — documented default. Architecture diagram still lists topics/feed as future; this feature did not add them.
+- None material. Near-dup peers accepted only within the current AI batch ids (invalid/out-of-batch ids ignored). Mild topic-weight boost on `final_rank` omitted; used exact open-question formula `0.35/0.65`.
 
 ### Follow-ups
 
-- Parallelize HN item hydration (currently sequential).
-- Ranking jobs / `hybrid-rank-feed`; feed UI features.
-- Optionally close idle Postgres clients in tests without `--test-force-exit`.
+- Polished web/mobile UI (`web-feed-topics-sources`, `mobile-feed-topics`)
+- Optional live Ollama CI smoke for rank batches
 
 ---
 
 ## Handoff summary (for developer agent)
 
-- **Ship ingest only:** HN + Substack adapters, upsert `articles` by canonical URL, `article_sources` + per-user `source_subscriptions`, Postgres `jobs` queue with `ingest` processing — no topics, scores, ranking, or feed API/UI.
-- **API:** Session-scoped `GET/POST/PATCH/DELETE /api/sources` with HN singleton-per-user and Substack RSS URL uniqueness; wire `packages/api-client`.
-- **Worker:** ~10–15 min scheduled ingest via `jobs` **and** documented one-shot CLI; process all enabled subscriptions; partial failure tolerant per subscription.
-- **DB:** Add four tables (`source_subscriptions`, `articles`, `article_sources`, `jobs`); leave `topics` / `user_article_scores` for `hybrid-rank-feed`.
-- **Verify + docs:** Fixture-based adapter/ingest tests; README commands for migrate, seed (HN + one Substack), worker, and one-shot ingest.
+- **Ship ranking + feed APIs only:** `topics` CRUD, `user_article_scores`, keyword shortlist → Ollama batch rank via `packages/ai`, worker `rank` jobs (after ingest + one-shot), `GET /api/feed` + seen/saved/dismissed — no web/mobile UI polish.
+- **DB:** Add `topics` and `user_article_scores`; unique topic name per user; unique `(user_id, article_id)` scores with status enum and optional near-dup FK.
+- **Worker:** Process `jobs.type = rank` in batches of ~20–50; enqueue after ingest; expose `pnpm worker:rank` / `NEWSROOM_WORKER_ONCE=rank`; never call Ollama from UI.
+- **API + client:** Session-scoped topics + cursor feed with `topic`/`source` filters; wire `packages/api-client`; seed one example topic.
+- **Verify + docs:** Mocked AI + keyword/feed tests; README rank/seed commands.
