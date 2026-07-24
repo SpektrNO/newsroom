@@ -1,9 +1,9 @@
 # Handoff: hybrid-rank-feed
 
-**Status:** spec  
+**Status:** done  
 **Created:** 2026-07-24  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `hybrid-rank-feed` |
 | Parent issue | #19 — https://github.com/SpektrNO/newsroom/issues/19 |
-| Open tasks | `db` (#21), `api` (#22), `worker` (#23), `verify` (#24), `docs` (#25) |
-| Closed tasks | `spec` (#20) |
+| Open tasks | _(none)_ |
+| Closed tasks | `spec` (#20), `db` (#21), `api` (#22), `worker` (#23), `verify` (#24), `docs` (#25) |
 
 Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`  
 (This feature has no `web` / `mobile` tasks — skip those slugs.)
@@ -290,24 +290,31 @@ Keep existing `/api/health` (DB + Ollama). No required change unless rank adds a
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- **db:** `topics` + `user_article_scores` schema/migration `0002`; seed topic `AI & infra`.
+- **api:** Session-scoped `/api/topics` CRUD, `/api/feed` cursor pagination + filters, status posts; `packages/api-client` helpers; `packages/ai` `scoreKeywordMatch` / `combineFinalRank` / `rankArticleBatch`.
+- **worker:** `jobs.type=rank` claim/process; enqueue after ingest; `pnpm worker:rank` / `NEWSROOM_WORKER_ONCE=rank`; poller claims ingest+rank.
+- **verify:** Keyword + AI parse unit tests; worker rank integration (mocked AI); topics/feed session isolation tests.
+- **docs:** README + ops-local rank/seed/API notes; ADR `docs/decisions/002-hybrid-ranking.md`; architecture DELETE topics.
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `pnpm --filter @newsroom/ai test` (keyword formula + rank JSON parse)
+- [x] `pnpm worker:test` (ingest + rank → ≥1 score row; Postgres)
+- [x] `pnpm web:test` (parsers + session isolation; Postgres)
+- [x] `pnpm --filter @newsroom/web typecheck`
+- [ ] Live Ollama end-to-end rank smoke (`pnpm worker:rank` with Ollama up) — optional
+- [ ] Manual HTTP topics/feed with browser session cookie
 
 ### Deviations from spec
 
-- None / list with rationale
+- None material. Near-dup peers accepted only within the current AI batch ids (invalid/out-of-batch ids ignored). Mild topic-weight boost on `final_rank` omitted; used exact open-question formula `0.35/0.65`.
 
 ### Follow-ups
 
-- 
+- Polished web/mobile UI (`web-feed-topics-sources`, `mobile-feed-topics`)
+- Optional live Ollama CI smoke for rank batches
 
 ---
 
