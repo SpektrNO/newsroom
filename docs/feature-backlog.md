@@ -37,7 +37,7 @@ Architecture: [architecture.md](./architecture.md)
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `web-feed-topics-sources` | Elegant feed, topics, sources UI | ⬜ | `docs/architecture.md` |
+| `web-feed-topics-sources` | Elegant feed, topics, sources UI | ✅ | `docs/architecture.md` |
 
 ## D. Mobile client
 

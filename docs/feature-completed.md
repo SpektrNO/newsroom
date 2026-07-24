@@ -15,6 +15,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-24 | `scaffold-monorepo` | Turborepo apps/packages, Compose, auth, health | #6 | auth + health monorepo scaffold |
 | 2026-07-24 | `ingest-hn-substack` | HN + Substack adapters, article upsert | #12 | Completed via spec→implement pipeline |
 | 2026-07-24 | `hybrid-rank-feed` | Keyword shortlist, Ollama rank, feed API | #19 | topics/feed APIs + worker rank; no UI polish |
+| 2026-07-24 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | #26 | editorial web feed/topics/sources/settings; PR #59 |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -29,3 +30,9 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 |----|---------|-----------|------|-------|
 | `ingest-hn-substack` | HN + Substack adapters, article upsert | 2026-07-24 | `docs/architecture.md` | Completed via spec→implement pipeline |
 | `hybrid-rank-feed` | Keyword shortlist, Ollama rank, feed API | 2026-07-24 | `docs/architecture.md` | topics/feed APIs + worker rank; no UI polish |
+
+## C. Web client
+
+| ID | Feature | Completed | Spec | Notes |
+|----|---------|-----------|------|-------|
+| `web-feed-topics-sources` | Elegant feed, topics, sources UI | 2026-07-24 | `docs/architecture.md` | editorial web feed/topics/sources/settings; PR #59 |

@@ -13,6 +13,7 @@ import {
   encodeFeedCursor,
   parseFeedLimit,
   parseFeedSourceFilter,
+  parseFeedStatusFilter,
   passesTopicFilter,
   toFeedItemJson,
   type FeedSourceJson,
@@ -29,8 +30,9 @@ export async function GET(request: Request) {
   const cursorRaw = url.searchParams.get("cursor");
   const topicId = url.searchParams.get("topic");
   const sourceFilter = parseFeedSourceFilter(url.searchParams.get("source"));
+  const statusFilter = parseFeedStatusFilter(url.searchParams.get("status"));
 
-  if (sourceFilter === "invalid") {
+  if (sourceFilter === "invalid" || statusFilter === "invalid") {
     return Response.json({ error: "invalid_filter" }, { status: 400 });
   }
 
@@ -59,7 +61,9 @@ export async function GET(request: Request) {
 
   const conditions = [
     eq(userArticleScores.userId, authResult.userId),
-    ne(userArticleScores.status, "dismissed"),
+    statusFilter !== null
+      ? eq(userArticleScores.status, statusFilter)
+      : ne(userArticleScores.status, "dismissed"),
   ];
 
   if (cursor) {

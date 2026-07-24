@@ -1,38 +1,34 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import type { ReactNode } from "react";
-import { auth } from "@/lib/auth";
-import "./globals.css";
+import { AppShell } from "@/components/app-shell";
+import { FeedClient } from "@/components/feed-client";
+import { getPageSession } from "@/lib/page-session";
 
 export default async function HomePage(): Promise<ReactNode> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getPageSession();
 
-  return (
-    <main className="shell">
-      <section className="panel">
-        <h1 className="brand">Newsroom</h1>
-        <p className="lede">
-          Focused stories for topics you care about. Sign in to continue.
-        </p>
-
-        {session ? (
-          <div className="session-box">
-            <p className="meta">
-              Signed in as <strong>{session.user.email}</strong>
-            </p>
-            <p className="meta">Session is active. Feed UI arrives in a later feature.</p>
-            <Link href="/sign-in">Sign out / switch account</Link>
-          </div>
-        ) : (
-          <div className="footer-links">
-            <Link href="/sign-up">Create an account</Link>
-            {" · "}
+  if (!session) {
+    return (
+      <main className="shell landing-shell">
+        <section className="landing">
+          <h1 className="brand landing-brand">Newsroom</h1>
+          <p className="lede landing-lede">
+            Focused stories for topics you care about.
+          </p>
+          <div className="landing-ctas">
+            <Link className="button-link" href="/sign-up">
+              Sign up
+            </Link>
             <Link href="/sign-in">Sign in</Link>
           </div>
-        )}
-      </section>
-    </main>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <AppShell email={session.email}>
+      <FeedClient />
+    </AppShell>
   );
 }
