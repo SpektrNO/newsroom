@@ -1,0 +1,17 @@
+# Ignore local secrets and tooling noise
+.env
+.env.local
+*.local
+
+node_modules/
+.turbo/
+dist/
+.next/
+.expo/
+expo-env.d.ts
+coverage/
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+*.swp

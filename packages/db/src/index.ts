@@ -1,0 +1,26 @@
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema/index.js";
+
+export type Database = ReturnType<typeof createDb>;
+
+export function createDb(connectionString = process.env.DATABASE_URL) {
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required");
+  }
+
+  const client = postgres(connectionString, { max: 10 });
+  return drizzle(client, { schema });
+}
+
+let singleton: Database | undefined;
+
+/** Shared app DB client (lazy). Prefer createDb() in workers/tests. */
+export function getDb(): Database {
+  if (!singleton) {
+    singleton = createDb();
+  }
+  return singleton;
+}
+
+export * from "./schema/index.js";
