@@ -15,6 +15,13 @@
       "when": 1784890259564,
       "tag": "0001_ancient_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784893000303,
+      "tag": "0002_huge_lizard",
+      "breakpoints": true
     }
   ]
 }

@@ -1,19 +1,28 @@
 /**
- * Seed demo user + HN + example Substack subscription.
+ * Seed demo user + HN + example Substack subscription + example topic.
  *
  * Usage:
  *   DATABASE_URL=... pnpm --filter @newsroom/db seed
  *   SEED_USER_ID=<existing-better-auth-user-id> pnpm --filter @newsroom/db seed
  *
  * Example Substack feed: https://www.platformer.news/feed
+ * Example topic: "AI & infra" (keywords that can match HN/Substack titles)
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { normalizeCanonicalUrl } from "@newsroom/sources";
-import { createDb, sourceSubscriptions, user } from "./index.js";
+import { createDb, sourceSubscriptions, topics, user } from "./index.js";
 
 const DEMO_USER_ID = "seed-demo-user";
 const DEMO_EMAIL = "demo@localhost";
 const EXAMPLE_SUBSTACK_RSS = "https://www.platformer.news/feed";
+const EXAMPLE_TOPIC_NAME = "AI & infra";
+const EXAMPLE_TOPIC_KEYWORDS = [
+  "ai",
+  "llm",
+  "openai",
+  "postgres",
+  "typescript",
+];
 
 async function main() {
   const databaseUrl =
@@ -120,6 +129,44 @@ async function main() {
       updatedAt: now,
     });
     console.log(`Created Substack subscription ${id} (${rssUrl})`);
+  }
+
+  const [existingTopic] = await db
+    .select({ id: topics.id })
+    .from(topics)
+    .where(
+      and(
+        eq(topics.userId, userId),
+        sql`lower(${topics.name}) = lower(${EXAMPLE_TOPIC_NAME})`,
+      ),
+    )
+    .limit(1);
+
+  if (existingTopic) {
+    await db
+      .update(topics)
+      .set({
+        name: EXAMPLE_TOPIC_NAME,
+        keywords: EXAMPLE_TOPIC_KEYWORDS,
+        weight: 1,
+        enabled: true,
+        updatedAt: now,
+      })
+      .where(eq(topics.id, existingTopic.id));
+    console.log(`Updated topic ${existingTopic.id} (${EXAMPLE_TOPIC_NAME})`);
+  } else {
+    const id = crypto.randomUUID();
+    await db.insert(topics).values({
+      id,
+      userId,
+      name: EXAMPLE_TOPIC_NAME,
+      keywords: EXAMPLE_TOPIC_KEYWORDS,
+      weight: 1,
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.log(`Created topic ${id} (${EXAMPLE_TOPIC_NAME})`);
   }
 
   console.log("Seed complete.");
