@@ -67,6 +67,9 @@ importers:
       '@newsroom/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@newsroom/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
       better-auth:
         specifier: ^1.2.12
         version: 1.6.25(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(kysely@0.29.4)(postgres@3.4.9))(next@15.5.21(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -150,6 +153,9 @@ importers:
 
   packages/sources:
     devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.20.1
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

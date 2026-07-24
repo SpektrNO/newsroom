@@ -9,6 +9,8 @@ export type NormalizedArticle = {
   publishedAt?: Date;
   raw?: unknown;
   contentHash?: string;
+  /** Adapter-specific id (e.g. HN item id) for article_sources.external_id. */
+  externalId?: string;
 };
 
 export interface SourceAdapter {
@@ -16,7 +18,7 @@ export interface SourceAdapter {
   fetchRecent(): Promise<NormalizedArticle[]>;
 }
 
-/** No-op stub — live HN/Substack/Bluesky adapters land in later features. */
+/** No-op stub — live HN/Substack adapters land in the worker/ingest layer. */
 export class StubSourceAdapter implements SourceAdapter {
   constructor(readonly type: SourceType) {}
 
@@ -24,3 +26,5 @@ export class StubSourceAdapter implements SourceAdapter {
     return [];
   }
 }
+
+export { normalizeCanonicalUrl } from "./url.js";
