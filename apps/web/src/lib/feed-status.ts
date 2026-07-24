@@ -1,14 +1,14 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { UserArticleScoreStatus } from "@newsroom/db";
 import {
   articleSources,
   articles,
   getDb,
   sourceSubscriptions,
-  userArticleScores,
 } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
 import { toFeedItemJson, type FeedSourceJson } from "@/lib/feed";
+import { updateScoreStatusForUser } from "@/lib/feed-queries";
 
 export async function updateFeedStatusResponse(
   articleId: string,
@@ -17,17 +17,12 @@ export async function updateFeedStatusResponse(
   const authResult = await requireSessionUserId();
   if ("error" in authResult) return authResult.error;
 
-  const now = new Date();
-  const [updated] = await getDb()
-    .update(userArticleScores)
-    .set({ status, updatedAt: now })
-    .where(
-      and(
-        eq(userArticleScores.userId, authResult.userId),
-        eq(userArticleScores.articleId, articleId),
-      ),
-    )
-    .returning();
+  const updated = await updateScoreStatusForUser(
+    getDb(),
+    authResult.userId,
+    articleId,
+    status,
+  );
 
   if (!updated) {
     return Response.json({ error: "not_found" }, { status: 404 });

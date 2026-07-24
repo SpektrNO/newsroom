@@ -6,6 +6,7 @@ import {
   parseTopicPatchBody,
   toTopicJson,
 } from "@/lib/topics";
+import { deleteTopicForUser, getTopicForUser } from "@/lib/topics-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +18,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
 
-  const [existing] = await getDb()
-    .select()
-    .from(topics)
-    .where(and(eq(topics.id, id), eq(topics.userId, authResult.userId)))
-    .limit(1);
+  const existing = await getTopicForUser(getDb(), authResult.userId, id);
 
   if (!existing) {
     return Response.json({ error: "not_found" }, { status: 404 });
@@ -88,12 +85,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
   const { id } = await context.params;
 
-  const deleted = await getDb()
-    .delete(topics)
-    .where(and(eq(topics.id, id), eq(topics.userId, authResult.userId)))
-    .returning({ id: topics.id });
+  const deleted = await deleteTopicForUser(getDb(), authResult.userId, id);
 
-  if (deleted.length === 0) {
+  if (!deleted) {
     return Response.json({ error: "not_found" }, { status: 404 });
   }
 

@@ -90,12 +90,13 @@ function parseRankedItem(
   if (typeof articleId !== "string" || !knownIds.has(articleId)) return null;
 
   const scoreRaw = rec.aiScore ?? rec.ai_score ?? rec.score;
-  const aiScore =
-    typeof scoreRaw === "number"
-      ? clamp01(scoreRaw)
-      : typeof scoreRaw === "string"
-        ? clamp01(Number(scoreRaw))
-        : null;
+  let aiScore: number | null = null;
+  if (typeof scoreRaw === "number" && Number.isFinite(scoreRaw)) {
+    aiScore = clamp01(scoreRaw);
+  } else if (typeof scoreRaw === "string" && scoreRaw.trim() !== "") {
+    const n = Number(scoreRaw);
+    if (Number.isFinite(n)) aiScore = clamp01(n);
+  }
   if (aiScore === null) return null;
 
   const reasonRaw = rec.reason;

@@ -15,6 +15,7 @@
     "worker:rank": "pnpm --filter @newsroom/worker rank",
     "sources:test": "pnpm --filter @newsroom/sources test",
     "worker:test": "pnpm --filter @newsroom/worker test",
+    "web:test": "pnpm --filter @newsroom/web test",
     "ai:test": "pnpm --filter @newsroom/ai test",
     "ai:smoke": "pnpm --filter @newsroom/ai smoke",
     "web:dev": "pnpm --filter @newsroom/web dev",

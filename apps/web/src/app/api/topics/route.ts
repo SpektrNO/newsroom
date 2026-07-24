@@ -1,4 +1,3 @@
-import { desc, eq } from "drizzle-orm";
 import { getDb, topics } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
 import {
@@ -6,6 +5,7 @@ import {
   parseTopicCreateBody,
   toTopicJson,
 } from "@/lib/topics";
+import { listTopicsForUser } from "@/lib/topics-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,7 @@ export async function GET() {
   const authResult = await requireSessionUserId();
   if ("error" in authResult) return authResult.error;
 
-  const rows = await getDb()
-    .select()
-    .from(topics)
-    .where(eq(topics.userId, authResult.userId))
-    .orderBy(desc(topics.updatedAt));
+  const rows = await listTopicsForUser(getDb(), authResult.userId);
 
   return Response.json({
     topics: rows.map((row) =>
