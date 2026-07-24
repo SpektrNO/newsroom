@@ -101,6 +101,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@newsroom/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@newsroom/db':
         specifier: workspace:*
         version: link:../../packages/db

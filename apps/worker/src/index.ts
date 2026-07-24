@@ -7,6 +7,12 @@ import {
   processIngestJob,
   runIngest,
 } from "./ingest.js";
+import {
+  claimNextWorkerJob,
+  enqueueRankNow,
+  processRankJob,
+  runRank,
+} from "./rank.js";
 
 const POLL_MS = 5_000;
 
@@ -17,7 +23,7 @@ function loadDb() {
   return createDb(databaseUrl);
 }
 
-async function runOnce(): Promise<number> {
+async function runOnceIngest(): Promise<number> {
   const db = loadDb();
   console.log("[newsroom-worker] one-shot ingest starting");
   await enqueueIngestNow(db);
@@ -25,6 +31,8 @@ async function runOnce(): Promise<number> {
   if (!claimed) {
     const result = await runIngest(db);
     console.log("[newsroom-worker] one-shot ingest (inline):", result);
+    const { ensureNextRankJob } = await import("./rank.js");
+    await ensureNextRankJob(db, { delayMs: 0 });
     return result.subscriptions > 0 &&
       result.succeeded === 0 &&
       result.failed > 0
@@ -40,22 +48,52 @@ async function runOnce(): Promise<number> {
     : 0;
 }
 
+async function runOnceRank(): Promise<number> {
+  const db = loadDb();
+  console.log("[newsroom-worker] one-shot rank starting");
+  await enqueueRankNow(db);
+  const claimed = await claimNextWorkerJob(db);
+  if (!claimed || claimed.type !== "rank") {
+    // May have claimed ingest if both pending; fall back to inline rank.
+    if (claimed?.type === "ingest") {
+      // Put ingest back to pending? Simpler: process ingest then rank.
+      const ingestResult = await processIngestJob(db, claimed.id);
+      console.log("[newsroom-worker] processed pending ingest first:", ingestResult);
+      await ensureNextIngestJob(db, INGEST_INTERVAL_MS);
+    }
+    const result = await runRank(db);
+    console.log("[newsroom-worker] one-shot rank (inline):", result);
+    const allAiFailed =
+      result.aiBatches > 0 && result.aiBatchFailures === result.aiBatches;
+    return allAiFailed ? 1 : 0;
+  }
+
+  const result = await processRankJob(db, claimed.id);
+  console.log("[newsroom-worker] one-shot rank done:", result);
+  const allAiFailed =
+    result.aiBatches > 0 && result.aiBatchFailures === result.aiBatches;
+  return allAiFailed ? 1 : 0;
+}
+
 async function pollLoop(): Promise<void> {
   const db = loadDb();
   console.log(
-    `[newsroom-worker] polling jobs (ingest every ~${INGEST_INTERVAL_MS / 60_000} min)`,
+    `[newsroom-worker] polling jobs (ingest ~${INGEST_INTERVAL_MS / 60_000} min; also rank)`,
   );
-  // Bootstrap: schedule an ingest due immediately if none open.
   await ensureNextIngestJob(db, 0);
 
   const tick = async () => {
     try {
-      const claimed = await claimNextIngestJob(db);
-      if (claimed) {
+      const claimed = await claimNextWorkerJob(db);
+      if (claimed?.type === "ingest") {
         console.log(`[newsroom-worker] claimed ingest job ${claimed.id}`);
         const result = await processIngestJob(db, claimed.id);
         console.log("[newsroom-worker] ingest finished:", result);
         await ensureNextIngestJob(db, INGEST_INTERVAL_MS);
+      } else if (claimed?.type === "rank") {
+        console.log(`[newsroom-worker] claimed rank job ${claimed.id}`);
+        const result = await processRankJob(db, claimed.id);
+        console.log("[newsroom-worker] rank finished:", result);
       } else {
         await ensureNextIngestJob(db, INGEST_INTERVAL_MS);
       }
@@ -79,13 +117,22 @@ async function pollLoop(): Promise<void> {
 }
 
 async function main() {
-  const once =
+  const onceIngest =
     process.env.NEWSROOM_WORKER_ONCE === "ingest" ||
     process.argv.includes("ingest") ||
     process.argv.includes("--once");
 
-  if (once) {
-    const code = await runOnce();
+  const onceRank =
+    process.env.NEWSROOM_WORKER_ONCE === "rank" ||
+    process.argv.includes("rank");
+
+  if (onceRank) {
+    const code = await runOnceRank();
+    process.exit(code);
+  }
+
+  if (onceIngest) {
+    const code = await runOnceIngest();
     process.exit(code);
   }
 
