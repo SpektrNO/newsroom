@@ -100,6 +100,8 @@ export type ListFeedOptions = {
   cursor?: string;
   topic?: string;
   source?: SourceTypeV1;
+  /** When set, only items with this status. When omitted, API excludes dismissed. */
+  status?: FeedItemStatus;
   limit?: number;
 };
 
@@ -201,6 +203,7 @@ export class ApiClient {
     if (options.cursor) params.set("cursor", options.cursor);
     if (options.topic) params.set("topic", options.topic);
     if (options.source) params.set("source", options.source);
+    if (options.status) params.set("status", options.status);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     const qs = params.toString();
     return this.requestJson("GET", qs ? `/api/feed?${qs}` : "/api/feed");

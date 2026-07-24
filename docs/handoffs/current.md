@@ -1,9 +1,9 @@
 # Handoff: Elegant feed, topics, sources UI
 
-**Status:** spec  
+**Status:** implementing  
 **Created:** 2026-07-24  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** in progress
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `web-feed-topics-sources` |
 | Parent issue | UNKNOWN — GitHub Issues API returns 403 (`Resource not accessible by integration`) for this environment’s `gh` token. PRs/git push work; issue read/write does not. Do **not** invent issue numbers. |
-| Open tasks | `spec`, `api`, `web`, `verify`, `docs` (no issue numbers; Issues inaccessible) |
-| Closed tasks | _(none yet — close `spec` when Issues API works)_ |
+| Open tasks | `web`, `verify`, `docs` (no issue numbers; Issues inaccessible) |
+| Closed tasks | `spec` (handoff authoritative), `api` (in progress → close on commit) |
 | Backlog | `docs/feature-backlog.md` § C — status ⬜ (no `audit` task) |
 
 Task order for this **web** feature (from `create-feature-issues.sh`): `spec` → `api` → `web` → `verify` → `docs`  
