@@ -30,7 +30,7 @@ Architecture: [architecture.md](./architecture.md)
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `ingest-hn-substack` | HN + Substack adapters, article upsert | ⬜ | `docs/architecture.md` |
+| `ingest-hn-substack` | HN + Substack adapters, article upsert | ✅ | `docs/architecture.md` |
 | `hybrid-rank-feed` | Keyword shortlist, Ollama rank, feed API | ⬜ | `docs/architecture.md` |
 
 ## C. Web client

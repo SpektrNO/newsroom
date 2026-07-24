@@ -1,4 +1,4 @@
-# Handoff: scaffold-monorepo
+# Handoff: ingest-hn-substack
 
 **Status:** done  
 **Created:** 2026-07-24  
@@ -9,126 +9,245 @@
 
 | Field | Value |
 |-------|-------|
-| Feature id | `scaffold-monorepo` |
-| Parent issue | #6 — https://github.com/SpektrNO/newsroom/issues/6 |
-| Open tasks | _(none — db #8, api #9, verify #10, docs #11 closed)_ |
+| Feature id | `ingest-hn-substack` |
+| Parent issue | #12 — https://github.com/SpektrNO/newsroom/issues/12 |
+| Open tasks | _(none — all closed)_ |
+| Closed tasks | `spec` (#13), `db` (#14), `api` (#15), `worker` (#16), `verify` (#17), `docs` (#18) |
 
-Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`
+Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`  
+(This feature has no `web` / `mobile` tasks — skip those slugs.)
 
-Phase-1 note: `spec` (#7) closed by specifier. Foundation section has no separate `worker` / `web` / `mobile` GitHub tasks — those apps are still created in this feature (see Touchpoints); track under `db` + `api` as appropriate, then `verify` / `docs`.
+Closed Phase 1: `spec` (#13).
 
 ## Intent
 
-A developer can clone the repo, bring up Postgres (and optional Ollama) via Compose, run the Turborepo monorepo, sign up / sign in with Better Auth, and confirm `GET /api/health` reports DB + Ollama reachability — without ingest, ranking, or feed UI yet.
+Authenticated users can manage HN and Substack source subscriptions; a worker (schedule or CLI) fetches recent items via adapters and upserts shared `articles` linked through `article_sources`.
 
 ## User-facing spec
 
 | Field | Value |
 |-------|-------|
-| Trigger | Local bootstrap: install deps, `docker compose up`, run web (and optionally worker/mobile stubs). |
-| Surfaces | `apps/web` (Next.js App Router + auth + health), `apps/mobile` (Expo Router shell), `apps/worker` (runnable stub), Docker Compose (Postgres + optional Ollama), shared packages. |
-| Copy | Minimal auth UI only: email/password sign-up and sign-in forms with clear error text on failure. No marketing landing, feed, topics, or sources screens. App / product name: **Newsroom**. |
-| Acceptance | Observable pass/fail criteria below. |
+| Trigger | User creates/toggles/deletes source subscriptions via API; worker runs ingest on ~10–15 min schedule or one-shot CLI. |
+| Surfaces | `packages/sources` adapters · `packages/db` schema · Next.js `/api/sources*` · `apps/worker` ingest job · optional seed/CLI — **no feed UI** |
+| Copy | N/A (no product UI in this feature). API error messages: plain JSON `{ "error": "<code>" }` (see contract). |
+| Acceptance | See **Acceptance criteria** below. |
 
 ### Acceptance criteria
 
-1. **Monorepo layout** exists and matches architecture:
-   - `apps/web` — Next.js (App Router)
-   - `apps/mobile` — Expo (Expo Router shell; can start)
-   - `apps/worker` — Node entry that starts and exits cleanly or idles without crashing (no ingest jobs required)
-   - `packages/db` — Drizzle schema + migrations
-   - `packages/ai` — `AiProvider` interface + `OllamaProvider` default
-   - `packages/sources` — package stub with adapter contract type(s) only (no live HN/Substack/Bluesky fetch)
-   - `packages/api-client` — shared typed client used by web (and importable by mobile)
-   - Root Turborepo + workspace package manager wired so `turbo` / workspace scripts build or typecheck the graph
-2. **Docker Compose** starts Postgres with a documented `DATABASE_URL`. Optional Ollama service (or documented host-Ollama path via `OLLAMA_HOST`). Compose must not require Ollama to start Postgres.
-3. **Env** documented in `.env.example` / README: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL` (align with existing commented placeholders).
-4. **Better Auth** email/password works end-to-end against Postgres: register → session cookie/token → authenticated session readable by the web app. User-scoped identity from day one (no anonymous-only mode).
-5. **`GET /api/health`** returns JSON including at least:
-   - overall / service status
-   - database reachability (ok / fail)
-   - Ollama reachability (ok / fail) — probe `OLLAMA_HOST`; must not crash the process if Ollama is down (report fail)
-6. **`packages/ai`**: `AiProvider` abstraction; `OllamaProvider` implements it. A **smoke test** (unit or script under package/tests) proves the provider can be constructed and, when Ollama is reachable, completes a trivial call; when unreachable, fails gracefully (no unhandled throw that breaks the suite when marked optional / skipped appropriately — document how to run the live smoke).
-7. **Migrations** apply cleanly to empty Postgres (`packages/db` migrate command documented).
-8. **README** lists install, Compose, migrate, web/worker/mobile run, health check, and AI smoke commands.
-9. **Out of scope items** below are absent (no feed API, no ingest adapters calling external sources, no ranking pipeline, no Bluesky).
+1. **Adapters:** `HackerNewsAdapter` and `SubstackAdapter` implement `SourceAdapter` (`fetchRecent() → NormalizedArticle[]`) in `packages/sources`. Stub may remain for tests; live adapters perform network I/O.
+2. **HN:** Fetches recent/top items via Firebase HN API and/or Algolia HN Search (architecture allows both). Returns normalized URL, title, optional summary/author/`publishedAt`, and `raw` payload. Limits a single `fetchRecent` call to a bounded batch (e.g. ≤100 items) — document the chosen limit.
+3. **Substack:** Given `config.rssUrl`, fetches and parses RSS/Atom; maps items to `NormalizedArticle`. Does **not** scrape paywalled full bodies.
+4. **Upsert:** Ingest writes `articles` keyed by **canonical URL** (unique). Re-fetch updates title/summary/author/`published_at`/`raw`/`content_hash` when changed; does not create duplicates for the same URL.
+5. **Linkage:** Each successful ingest path creates/updates `article_sources` tying the article to `source_type` and the originating `source_subscription_id`.
+6. **Subscriptions:** `source_subscriptions` rows are **per-user** (`user_id`). HN: at most one subscription per user (`source_type = hackernews`). Substack: many per user, unique on `(user_id, rssUrl)` (normalize URL before uniqueness check).
+7. **API:** Session-authenticated `GET/POST/PATCH/DELETE /api/sources` manage only the caller’s subscriptions. Unauthenticated → `401`. Cross-user access → not possible (filter by session `user_id`).
+8. **Worker:** Can (a) process an `ingest` job from the Postgres `jobs` queue on an interval (~10–15 min), and (b) run a one-shot ingest via CLI/script (documented in README). One ingest pass processes all **enabled** subscriptions across users (shared article store).
+9. **Jobs:** Minimal Postgres-backed queue supports at least `type = ingest`. Do not implement ranking jobs or call Ollama.
+10. **Seed:** Local seed (script or documented migration seed) can create/ensure: one demo user path **or** attach to an existing Better Auth user — enable HN + one example Substack RSS URL. Topics seed is **out of scope**.
+11. **Verify:** Automated checks cover adapter normalization (fixture/mocked HTTP) and an ingest path that leaves ≥1 `articles` + matching `article_sources` row for a seeded/test subscription (mock or recorded fixture preferred over flaky live HN in CI).
+12. **Docs:** README lists migrate, seed (if any), worker start/schedule, and one-shot ingest commands.
 
-## API / DB contract (if any)
+## API / DB contract
 
-PostgreSQL-backed; Better Auth for identity. This feature ships **auth + health only** on the HTTP surface. Domain tables for topics/articles/jobs are **deferred** to later features unless Better Auth’s own tables require them (they do not).
+PostgreSQL-backed; Better Auth session for identity. Extend existing Better Auth `user` / `session` tables — do not duplicate users.
 
-### Endpoints
+### Tables (new)
 
-| Field / Endpoint | Type | Source | Notes |
-|------------------|------|--------|-------|
-| `POST /api/auth/*` | Better Auth handlers | Better Auth | Email/password first. Mount per Better Auth + Next.js App Router conventions. OAuth deferred. |
-| `GET /api/health` | JSON | Live probes | Must include DB connectivity and Ollama reachability. Unauthenticated. Stable shape documented in README or a short `docs/` note if non-obvious. Suggested fields: `status` (`ok` \| `degraded` \| `error`), `checks.database` (`ok` \| `error`), `checks.ollama` (`ok` \| `error`), optional `version` / timestamp. `degraded` when app is up but a dependency fails (e.g. Ollama down, DB up). |
+#### `source_subscriptions`
 
-### Explicitly not in this feature
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | text PK | UUID or nanoid |
+| `user_id` | text FK → `user.id` ON DELETE CASCADE | Required |
+| `source_type` | text not null | `hackernews` \| `substack` (reserve `bluesky` in app enum/types; no Bluesky adapter yet) |
+| `config` | jsonb not null default `{}` | See config shapes below |
+| `enabled` | boolean not null default true | |
+| `created_at` | timestamptz not null | |
+| `updated_at` | timestamptz not null | |
 
-| Endpoint | Notes |
-|----------|-------|
-| `GET/POST/PATCH /api/topics` | Later (`web-feed-topics-sources` / ranking features) |
-| `GET/POST/DELETE /api/sources` | Later |
-| `GET /api/feed` + feed actions | Later (`hybrid-rank-feed`) |
+**Constraints**
 
-### Database (Drizzle in `packages/db`)
+- Partial unique: one `hackernews` row per `user_id`.
+- Unique `(user_id, (config->>'rssUrl'))` for `source_type = substack` (or equivalent unique index after URL normalization in app code + DB check).
+- Index on `(user_id)`, `(enabled, source_type)`.
 
-| Table / concern | Notes |
-|-----------------|-------|
-| Better Auth tables | Whatever Better Auth + Drizzle adapter require for email/password (e.g. `user`, `session`, `account`, `verification` — follow current Better Auth schema; names may match library defaults). Migrations checked in. |
-| Domain tables (`topics`, `source_subscriptions`, `articles`, `article_sources`, `user_article_scores`, `jobs`) | **Out of scope** for this handoff. Do not invent partial stubs that conflict with later features; leave for `ingest-hn-substack` / `hybrid-rank-feed`. |
-| Personal-first | Single registered user is a valid production shape; schema remains multi-user-ready via `user.id` on auth tables. |
+**`config` shapes**
 
-### Shared packages contracts
+| `source_type` | Config | Required keys |
+|---------------|--------|----------------|
+| `hackernews` | `{}` or `{ "mode": "top" \| "new" }` | None; default mode `top` if omitted |
+| `substack` | `{ "rssUrl": "https://..." }` | `rssUrl` — absolute http(s) URL |
 
-| Package | Contract |
-|---------|----------|
-| `packages/ai` | `AiProvider` interface (e.g. `complete` / `rank`-style method(s) sufficient for a smoke call — keep minimal). `OllamaProvider` reads `OLLAMA_HOST` + `OLLAMA_MODEL`. No UI imports this package for model calls later without going through API/worker — establish that boundary now. |
-| `packages/sources` | Export adapter interface matching architecture intent: `fetchRecent() → NormalizedArticle[]` (types + empty/no-op stubs OK). No network I/O to HN/Substack/Bluesky. |
-| `packages/api-client` | Typed client with at least `health()` hitting `GET /api/health`. Auth helpers optional if web uses Better Auth client directly; keep package ready for web + mobile. |
-| `packages/db` | Schema + migrate + client export used by web (and later worker). |
+Reject unknown keys only if they break parsing; ignore extra keys safely.
 
-### Jobs / queue
+#### `articles`
 
-Postgres-backed job queue is the architecture default for v1, but **job table + worker scheduling are out of scope** here. `apps/worker` is a scaffold entrypoint only.
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | text PK | |
+| `canonical_url` | text not null UNIQUE | Normalized absolute URL (strip fragment; consistent trailing-slash policy — document choice) |
+| `title` | text not null | |
+| `summary` | text null | |
+| `author` | text null | |
+| `published_at` | timestamptz null | |
+| `raw` | jsonb null | Adapter payload snapshot |
+| `content_hash` | text null | Hash of stable fields for change detection |
+| `created_at` | timestamptz not null | |
+| `updated_at` | timestamptz not null | |
+
+#### `article_sources`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | text PK | |
+| `article_id` | text FK → `articles.id` ON DELETE CASCADE | |
+| `source_subscription_id` | text FK → `source_subscriptions.id` ON DELETE SET NULL | Nullable if subscription deleted later |
+| `source_type` | text not null | Denormalized mirror of adapter type |
+| `external_id` | text null | e.g. HN item id |
+| `fetched_at` | timestamptz not null | Last successful fetch via this link |
+
+**Constraints:** unique `(article_id, source_subscription_id)` when `source_subscription_id` is not null; else unique `(article_id, source_type)` for orphaned rows. Index on `source_subscription_id`.
+
+#### `jobs`
+
+Minimal Postgres queue (architecture default; no Redis).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | text PK | |
+| `type` | text not null | This feature: `ingest` only. Allow `rank` in check/enum for later — **do not enqueue or process `rank`**. |
+| `status` | text not null | `pending` \| `running` \| `completed` \| `failed` |
+| `payload` | jsonb not null default `{}` | Optional filters later; empty OK for full ingest |
+| `scheduled_at` | timestamptz not null | When eligible to run |
+| `started_at` | timestamptz null | |
+| `finished_at` | timestamptz null | |
+| `attempts` | int not null default 0 | |
+| `last_error` | text null | |
+| `created_at` | timestamptz not null | |
+
+Index: `(status, scheduled_at)` for claim queries. Worker claims with row lock / `UPDATE … WHERE status = 'pending' … RETURNING` pattern (or equivalent) to stay multi-worker-safe.
+
+### Tables explicitly **not** in this feature
+
+- `topics`
+- `user_article_scores`
+- Any feed-ranking columns
+
+### `NormalizedArticle` / adapter contract
+
+Existing stub in `packages/sources` is the baseline. Implementers may extend the type **only** if needed for ingest (e.g. optional `externalId?: string`); keep `fetchRecent(): Promise<NormalizedArticle[]>`.
+
+| Field | Required | Maps to |
+|-------|----------|---------|
+| `url` | yes | `articles.canonical_url` (after normalization) |
+| `title` | yes | `articles.title` |
+| `summary` | no | `articles.summary` |
+| `author` | no | `articles.author` |
+| `publishedAt` | no | `articles.published_at` |
+| `raw` | no | `articles.raw` |
+| `contentHash` | no | `articles.content_hash` (worker may compute if adapter omits) |
+
+Constructor/factory: adapters receive subscription `config` (and optionally `source_type`).
+
+### HTTP API
+
+Base: Next.js App Router under `apps/web`. All routes below require Better Auth session.
+
+| Endpoint | Method | Body / query | Success | Errors |
+|----------|--------|--------------|---------|--------|
+| `/api/sources` | `GET` | — | `200` `{ "sources": Source[] }` | `401` |
+| `/api/sources` | `POST` | Create body (below) | `201` `{ "source": Source }` | `401`, `400` validation, `409` duplicate HN or Substack URL |
+| `/api/sources/:id` | `PATCH` | `{ "enabled"?: boolean, "config"?: object }` | `200` `{ "source": Source }` | `401`, `404` (wrong id / other user), `400` |
+| `/api/sources/:id` | `DELETE` | — | `204` empty | `401`, `404` |
+
+**`Source` JSON shape**
+
+```json
+{
+  "id": "…",
+  "sourceType": "hackernews" | "substack",
+  "config": {},
+  "enabled": true,
+  "createdAt": "ISO-8601",
+  "updatedAt": "ISO-8601"
+}
+```
+
+**`POST /api/sources` body**
+
+```json
+{ "sourceType": "hackernews", "config": { "mode": "top" }, "enabled": true }
+```
+or
+```json
+{ "sourceType": "substack", "config": { "rssUrl": "https://example.substack.com/feed" }, "enabled": true }
+```
+
+- Default `enabled: true` if omitted.
+- `bluesky` (and other non-v1 types) → `400` `{ "error": "unsupported_source_type" }`.
+- Invalid/missing `rssUrl` for Substack → `400` `{ "error": "invalid_config" }`.
+
+**Not in this feature:** `GET /api/feed`, topic routes, seen/saved/dismissed, health changes (keep existing health as-is unless DB check already covers new tables implicitly).
+
+### `packages/api-client`
+
+Add typed helpers mirroring the sources API (session cookie / `fetch` injection same as future authenticated calls). Health client stays unchanged.
+
+### Worker / CLI behavior
+
+| Mode | Behavior |
+|------|----------|
+| Scheduled | Worker loop: ensure a pending `ingest` job exists on ~10–15 min cadence **or** claim due jobs continuously; process `ingest` by loading enabled `source_subscriptions`, calling adapters, upserting articles + `article_sources`. |
+| One-shot | Documented command (e.g. `pnpm --filter @newsroom/worker ingest` or `NEWSROOM_WORKER_ONCE=ingest`) enqueues+runs or runs ingest inline, then exits `0` on success. |
+| Idle | Existing `NEWSROOM_WORKER_IDLE=1` may remain for long-running process that also polls jobs. |
+
+**Ingest algorithm (normative)**
+
+1. Load all `source_subscriptions` where `enabled = true` (all users).
+2. For each subscription, instantiate the matching adapter with `config`; call `fetchRecent()`.
+3. For each `NormalizedArticle`: normalize URL → upsert `articles` on `canonical_url` → upsert `article_sources` for this subscription.
+4. Adapter/network failures for one subscription: log, record on job `last_error` (aggregate OK), continue other subscriptions; job may still `completed` with partial success unless **all** subscriptions fail → then `failed`.
+5. Never write `user_article_scores` or call `packages/ai`.
+
+### Seed / config path
+
+Prefer a **documented seed script** (Make/`pnpm` target) that:
+
+1. Requires an existing user id **or** creates a single local seed user via Better Auth APIs / direct insert consistent with auth schema.
+2. Upserts HN subscription (`enabled: true`).
+3. Upserts one example Substack `rssUrl` (use a stable public feed; document which).
+
+Pure env-only config **without** `source_subscriptions` rows is **rejected** — architecture stores config on subscriptions.
 
 ## Touchpoints
 
-- Create: root workspace (`package.json`, `pnpm-workspace.yaml` or npm/yarn equivalent — prefer **pnpm** if choosing greenfield), `turbo.json`, `docker-compose.yml`, `.env.example` (extend existing), `apps/*`, `packages/*`
-- `apps/web`: Next.js App Router, Better Auth route handlers, minimal sign-up/sign-in pages, `GET /api/health`
-- `apps/mobile`: Expo Router app shell (tabs optional); must resolve/build; may call health via `api-client`
-- `apps/worker`: minimal `main` / start script
-- `packages/db`, `packages/ai`, `packages/sources`, `packages/api-client`
-- `README.md` — onboarding commands (required for done)
-- Optional ADR under `docs/decisions/` only if a non-obvious choice needs recording (e.g. package manager, Better Auth adapter details)
+- `packages/db` — Drizzle schema + migration for `source_subscriptions`, `articles`, `article_sources`, `jobs`
+- `packages/sources` — `HackerNewsAdapter`, `SubstackAdapter`; keep exported types; RSS parser + HN HTTP client deps live here or worker-only if cleaner (prefer adapters self-contained in `packages/sources`)
+- `packages/api-client` — sources methods
+- `apps/web` — `/api/sources` route handlers + session auth
+- `apps/worker` — job claim loop + ingest runner + CLI one-shot
+- `README.md` / `docs/ops-local.md` — commands for migrate, seed, worker, one-shot ingest
 - Must not contradict `docs/architecture.md`
-
-### Suggested task mapping (implementer)
-
-| GitHub task | Focus |
-|-------------|--------|
-| `db` (#8) | Compose Postgres, `packages/db` + migrations (Better Auth tables), env wiring |
-| `api` (#9) | Turborepo apps/packages skeleton, Better Auth on web, health endpoint, `packages/ai` + smoke, `packages/sources` stub, `packages/api-client`, mobile + worker scaffolds |
-| `verify` (#10) | Migrations, auth flow, health with/without Ollama, AI smoke as documented |
-| `docs` (#11) | README + any short ops note; backlog status left to `record-feature-complete.sh` at feature end |
 
 ## Out of scope
 
-- Ingest adapters with live HN / Substack / Bluesky fetching
-- Hybrid keyword + Ollama ranking pipeline and `user_article_scores`
-- Feed UI (web or mobile), topics UI, sources management UI
-- `GET /api/feed` and topic/source CRUD APIs
-- Domain Drizzle tables listed in architecture beyond Better Auth
-- OAuth / social login
+- Topics CRUD and `topics` table
+- Keyword shortlist, Ollama ranking, `user_article_scores`
+- `GET /api/feed` and feed interaction endpoints
+- Web/mobile sources or feed UI (`web-feed-topics-sources`, `mobile-feed-topics`)
+- Bluesky / X adapters
+- Full-text paywalled Substack bodies
 - Redis or non-Postgres queues
-- Production deploy / hosting
-- Seed of example topics / Substack feeds (architecture “Local development” seed is for later when those tables exist; optional single seed **user** for auth smoke is allowed if documented)
+- Changing Better Auth providers / OAuth
+- Ranking job processing (`type = rank` may exist in enum only)
 
-### Open questions / non-conflicts
+## Open questions / non-blocking defaults
 
-- None blocking. Architecture seed (topics + Substack) waits until those tables exist in later features.
-- Package manager not prescribed in architecture; pick one workspace tool and document it (pnpm recommended).
+| Topic | Default for implementer |
+|-------|-------------------------|
+| HN exact endpoint mix | Use Firebase for item hydration; use Algolia HN Search **or** Firebase `topstories`/`newstories` lists for candidate IDs. Document choice in code comment + README. Prefer determinism for tests via mocked HTTP. |
+| Canonical URL normalization | Lowercase host; strip `#fragment`; preserve path; choose one trailing-slash policy and apply everywhere. |
+| Job scheduler | Worker self-enqueues next `ingest` after completion **or** inserts due job every interval — either OK if ~10–15 min and single-flight (no duplicate concurrent ingest jobs). |
 
 ---
 
@@ -136,46 +255,37 @@ Postgres-backed job queue is the architecture default for v1, but **job table + 
 
 ### Changes
 
-- Root pnpm + Turborepo workspace (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`)
-- `docker-compose.yml` — Postgres always; Ollama via `--profile ollama`
-- `packages/db` — Better Auth `user`/`session`/`account`/`verification` schema + migration `0000_*`, `pnpm db:migrate`
-- `packages/ai` — `AiProvider`, `OllamaProvider`, unit tests + `smoke` script
-- `packages/sources` — `SourceAdapter` / `NormalizedArticle` + `StubSourceAdapter`
-- `packages/api-client` — `health()` typed client
-- `apps/web` — Next.js App Router, Better Auth email/password, `/sign-up` `/sign-in`, `GET /api/health`
-- `apps/mobile` — Expo Router shell calling health via api-client
-- `apps/worker` — stub entry (exit or idle)
-- `scripts/verify-scaffold.sh` — local acceptance smoke
-- `README.md` + `docs/ops-local.md` — onboarding and health contract
+- **DB:** `source_subscriptions`, `articles`, `article_sources`, `jobs` + migration `0001_ancient_vampiro.sql`; seed script (`pnpm db:seed`).
+- **Sources:** `HackerNewsAdapter` (Firebase, ≤100), `SubstackAdapter` (RSS), `normalizeCanonicalUrl`, `createSourceAdapter`.
+- **API:** Session-scoped `GET/POST /api/sources`, `PATCH/DELETE /api/sources/:id`; `packages/api-client` sources helpers.
+- **Worker:** Postgres job claim (`FOR UPDATE SKIP LOCKED`), ingest upsert by canonical URL, ~12 min self-schedule, `pnpm worker:ingest` one-shot.
+- **Verify:** Fixture tests in `@newsroom/sources` + mocked ingest integration in `@newsroom/worker`.
+- **Docs:** README/ops-local commands; ADR `docs/decisions/001-ingest-url-and-hn.md`.
 
 ### Verification
 
-- [x] `pnpm db:migrate` on Compose Postgres
-- [x] Better Auth sign-up → session; sign-in → session (curl + `./scripts/verify-scaffold.sh`)
-- [x] `GET /api/health` → `degraded` with `database: ok`, `ollama: error` when Ollama down (no crash)
-- [x] `pnpm --filter @newsroom/ai test` pass; smoke skips when Ollama unreachable
-- [x] `pnpm --filter @newsroom/web build`; worker stub exits; mobile `typecheck`
-- [ ] Live Ollama complete() — requires host/Compose Ollama + model pull (`OLLAMA_SMOKE=1 pnpm ai:smoke`)
-- [ ] Expo interactive `start` on device/simulator — typecheck only in CI-like verify
+- [x] `pnpm --filter @newsroom/sources test` — 5 pass (URL + HN + Substack fixtures)
+- [x] `pnpm --filter @newsroom/worker test` — ingest upserts ≥1 article + `article_sources` (mocked HTTP, local Postgres)
+- [x] `pnpm db:migrate` / `pnpm db:seed` against Compose Postgres
+- [x] `pnpm --filter @newsroom/db|sources|worker typecheck` (and web typecheck during API)
+- [ ] Manual: live one-shot `pnpm worker:ingest` against real HN/Substack; exercise `/api/sources` with a signed-in browser session
 
 ### Deviations from spec
 
-- None material. Chose **pnpm** as workspace package manager (recommended in handoff).
-- Bumped `drizzle-orm` to `^0.45.2` for Better Auth peer range.
-- Health returns HTTP 503 only when both checks fail; single-dep failure stays 200 + `degraded`.
+- None material. HN uses Firebase only (Algolia not wired) — documented default. Architecture diagram still lists topics/feed as future; this feature did not add them.
 
 ### Follow-ups
 
-- Parent #6 stays open until PR merges (`Closes #6`).
-- Next backlog: `ingest-hn-substack`, then ranking/feed UI features.
-- Operators should set `BETTER_AUTH_SECRET` ≥ 32 chars in local `.env` / `apps/web/.env.local`.
+- Parallelize HN item hydration (currently sequential).
+- Ranking jobs / `hybrid-rank-feed`; feed UI features.
+- Optionally close idle Postgres clients in tests without `--test-force-exit`.
 
 ---
 
-## Handoff summary (for developer)
+## Handoff summary (for developer agent)
 
-- Scaffold Turborepo: `apps/{web,mobile,worker}` + `packages/{db,ai,sources,api-client}`; Compose Postgres (+ optional Ollama); document env from `.env.example`.
-- Ship Better Auth email/password + Drizzle migrations for auth tables only; personal-first, multi-user-ready via real `user` rows.
-- Implement `GET /api/health` with DB + Ollama checks (`degraded` when deps fail); never crash health on Ollama down.
-- Add `AiProvider` + `OllamaProvider` and a documented smoke test; `packages/sources` = types/stub only.
-- Do **not** build ingest, ranking, feed/topics/sources APIs or UI, or Bluesky — leave domain tables for later features.
+- **Ship ingest only:** HN + Substack adapters, upsert `articles` by canonical URL, `article_sources` + per-user `source_subscriptions`, Postgres `jobs` queue with `ingest` processing — no topics, scores, ranking, or feed API/UI.
+- **API:** Session-scoped `GET/POST/PATCH/DELETE /api/sources` with HN singleton-per-user and Substack RSS URL uniqueness; wire `packages/api-client`.
+- **Worker:** ~10–15 min scheduled ingest via `jobs` **and** documented one-shot CLI; process all enabled subscriptions; partial failure tolerant per subscription.
+- **DB:** Add four tables (`source_subscriptions`, `articles`, `article_sources`, `jobs`); leave `topics` / `user_article_scores` for `hybrid-rank-feed`.
+- **Verify + docs:** Fixture-based adapter/ingest tests; README commands for migrate, seed (HN + one Substack), worker, and one-shot ingest.

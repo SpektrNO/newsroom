@@ -13,6 +13,7 @@
     "@newsroom/ai": "workspace:*",
     "@newsroom/api-client": "workspace:*",
     "@newsroom/db": "workspace:*",
+    "@newsroom/sources": "workspace:*",
     "better-auth": "^1.2.12",
     "drizzle-orm": "^0.45.2",
     "next": "^15.3.4",

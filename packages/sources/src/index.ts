@@ -1,26 +1,24 @@
-export type SourceType = "hackernews" | "substack" | "bluesky";
-
-/** Canonical article shape produced by adapters (ingest features fill this in). */
-export type NormalizedArticle = {
-  url: string;
-  title: string;
-  summary?: string;
-  author?: string;
-  publishedAt?: Date;
-  raw?: unknown;
-  contentHash?: string;
-};
-
-export interface SourceAdapter {
-  readonly type: SourceType;
-  fetchRecent(): Promise<NormalizedArticle[]>;
-}
-
-/** No-op stub — live HN/Substack/Bluesky adapters land in later features. */
-export class StubSourceAdapter implements SourceAdapter {
-  constructor(readonly type: SourceType) {}
-
-  async fetchRecent(): Promise<NormalizedArticle[]> {
-    return [];
-  }
-}
+export type {
+  SourceType,
+  NormalizedArticle,
+  SourceAdapter,
+} from "./types.js";
+export { StubSourceAdapter } from "./stub.js";
+export { normalizeCanonicalUrl } from "./url.js";
+export { hashArticleContent } from "./hash.js";
+export {
+  HackerNewsAdapter,
+  HN_FETCH_LIMIT,
+  type HackerNewsConfig,
+  type HackerNewsAdapterOptions,
+} from "./hackernews.js";
+export {
+  SubstackAdapter,
+  type SubstackConfig,
+  type SubstackAdapterOptions,
+} from "./substack.js";
+export {
+  createSourceAdapter,
+  type AdapterConfig,
+  type CreateAdapterOptions,
+} from "./create-adapter.js";

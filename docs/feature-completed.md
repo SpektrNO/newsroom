@@ -13,6 +13,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | Date | ID | Feature | GitHub | Notes |
 |------|-----|---------|--------|-------|
 | 2026-07-24 | `scaffold-monorepo` | Turborepo apps/packages, Compose, auth, health | #6 | auth + health monorepo scaffold |
+| 2026-07-24 | `ingest-hn-substack` | HN + Substack adapters, article upsert | #12 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -20,3 +21,9 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | ID | Feature | Completed | Spec | Notes |
 |----|---------|-----------|------|-------|
 | `scaffold-monorepo` | Turborepo apps/packages, Compose, auth, health | 2026-07-24 | `docs/architecture.md` | auth + health monorepo scaffold |
+
+## B. Ingest and ranking
+
+| ID | Feature | Completed | Spec | Notes |
+|----|---------|-----------|------|-------|
+| `ingest-hn-substack` | HN + Substack adapters, article upsert | 2026-07-24 | `docs/architecture.md` | Completed via spec→implement pipeline |
