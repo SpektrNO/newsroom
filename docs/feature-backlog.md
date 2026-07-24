@@ -24,7 +24,7 @@ Architecture: [architecture.md](./architecture.md)
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `scaffold-monorepo` | Turborepo apps/packages, Compose, auth, health | ⬜ | `docs/architecture.md` |
+| `scaffold-monorepo` | Turborepo apps/packages, Compose, auth, health | ✅ | `docs/architecture.md` |
 
 ## B. Ingest and ranking
 

@@ -1,9 +1,9 @@
 # Handoff: scaffold-monorepo
 
-**Status:** spec  
+**Status:** done  
 **Created:** 2026-07-24  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,7 +11,7 @@
 |-------|-------|
 | Feature id | `scaffold-monorepo` |
 | Parent issue | #6 — https://github.com/SpektrNO/newsroom/issues/6 |
-| Open tasks | `db` (#8), `api` (#9), `verify` (#10), `docs` (#11) |
+| Open tasks | _(none — db #8, api #9, verify #10, docs #11 closed)_ |
 
 Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`
 
@@ -134,24 +134,41 @@ Postgres-backed job queue is the architecture default for v1, but **job table + 
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- Root pnpm + Turborepo workspace (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`)
+- `docker-compose.yml` — Postgres always; Ollama via `--profile ollama`
+- `packages/db` — Better Auth `user`/`session`/`account`/`verification` schema + migration `0000_*`, `pnpm db:migrate`
+- `packages/ai` — `AiProvider`, `OllamaProvider`, unit tests + `smoke` script
+- `packages/sources` — `SourceAdapter` / `NormalizedArticle` + `StubSourceAdapter`
+- `packages/api-client` — `health()` typed client
+- `apps/web` — Next.js App Router, Better Auth email/password, `/sign-up` `/sign-in`, `GET /api/health`
+- `apps/mobile` — Expo Router shell calling health via api-client
+- `apps/worker` — stub entry (exit or idle)
+- `scripts/verify-scaffold.sh` — local acceptance smoke
+- `README.md` + `docs/ops-local.md` — onboarding and health contract
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `pnpm db:migrate` on Compose Postgres
+- [x] Better Auth sign-up → session; sign-in → session (curl + `./scripts/verify-scaffold.sh`)
+- [x] `GET /api/health` → `degraded` with `database: ok`, `ollama: error` when Ollama down (no crash)
+- [x] `pnpm --filter @newsroom/ai test` pass; smoke skips when Ollama unreachable
+- [x] `pnpm --filter @newsroom/web build`; worker stub exits; mobile `typecheck`
+- [ ] Live Ollama complete() — requires host/Compose Ollama + model pull (`OLLAMA_SMOKE=1 pnpm ai:smoke`)
+- [ ] Expo interactive `start` on device/simulator — typecheck only in CI-like verify
 
 ### Deviations from spec
 
-- None / list with rationale
+- None material. Chose **pnpm** as workspace package manager (recommended in handoff).
+- Bumped `drizzle-orm` to `^0.45.2` for Better Auth peer range.
+- Health returns HTTP 503 only when both checks fail; single-dep failure stays 200 + `degraded`.
 
 ### Follow-ups
 
-- 
+- Parent #6 stays open until PR merges (`Closes #6`).
+- Next backlog: `ingest-hn-substack`, then ranking/feed UI features.
+- Operators should set `BETTER_AUTH_SECRET` ≥ 32 chars in local `.env` / `apps/web/.env.local`.
 
 ---
 
