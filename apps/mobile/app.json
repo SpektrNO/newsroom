@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Newsroom",
+    "slug": "newsroom",
+    "scheme": "newsroom",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android", "web"],
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

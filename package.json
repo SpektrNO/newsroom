@@ -9,7 +9,12 @@
     "typecheck": "turbo run typecheck",
     "db:generate": "pnpm --filter @newsroom/db generate",
     "db:migrate": "pnpm --filter @newsroom/db migrate",
-    "db:studio": "pnpm --filter @newsroom/db studio"
+    "db:studio": "pnpm --filter @newsroom/db studio",
+    "ai:test": "pnpm --filter @newsroom/ai test",
+    "ai:smoke": "pnpm --filter @newsroom/ai smoke",
+    "web:dev": "pnpm --filter @newsroom/web dev",
+    "worker:start": "pnpm --filter @newsroom/worker start",
+    "mobile:start": "pnpm --filter @newsroom/mobile start"
   },
   "devDependencies": {
     "turbo": "^2.5.4",
@@ -17,5 +22,11 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.1.8",
+      "@types/react-dom": "^19.1.6"
+    }
   }
 }
