@@ -10,15 +10,16 @@
 | Field | Value |
 |-------|-------|
 | Feature id | `web-feed-topics-sources` |
-| Parent issue | UNKNOWN — GitHub Issues API returns 403 (`Resource not accessible by integration`) for this environment’s `gh` token. PRs/git push work; issue read/write does not. Do **not** invent issue numbers. |
+| Parent issue | #26 — https://github.com/SpektrNO/newsroom/issues/26 |
 | Open tasks | _(none)_ |
-| Closed tasks | `spec` (handoff authoritative), `api`, `web`, `verify`, `docs` — Issues close/status scripts skipped (403) |
+| Closed tasks | `spec` (#27), `api` (#28), `web` (#29), `verify` (#30), `docs` (#31) |
 | Backlog | `docs/feature-backlog.md` § C — marked ✅ via `record-feature-complete.sh` |
+| PR | #59 — https://github.com/SpektrNO/newsroom/pull/59 |
 
 Task order for this **web** feature (from `create-feature-issues.sh`): `spec` → `api` → `web` → `verify` → `docs`  
 (No `audit`, `db`, `worker`, or `mobile` slugs.)
 
-Phase-1 note: Issues status scripts/`gh issue` blocked by 403. Spec handoff is authoritative; reopen/close task issues when token gains Issues access.
+Closed Phase 1: `spec` (#27). Follow-up: task issues closed and parent `#26` linked after Issues API access was restored (`GH_PAT`).
 
 ## Intent
 
@@ -231,7 +232,6 @@ PostgreSQL-backed; Better Auth for identity. **Domain schema already shipped** (
 - Push notifications, keyboard shortcuts, PWA install
 - Redesigning Better Auth email/password contracts
 - Showing raw rank scores or AI debug panels
-- Closing or inventing GitHub parent/task issue numbers while Issues API is 403
 
 ## Open questions / non-blocking defaults
 
@@ -267,13 +267,12 @@ PostgreSQL-backed; Better Auth for identity. **Domain schema already shipped** (
 ### Deviations from spec
 
 - None material. Empty feed supporting copy includes the seed/ingest/rank hint from the empty-state table (in addition to the short Copy-table body).
-- GitHub Issues status/`gh issue close` skipped due to 403; progress tracked only in this handoff.
 
 ### Follow-ups
 
-- Close/reopen GitHub task issues when Issues token works.
 - Manual browser checklist above against seeded demo user.
 - Expo `mobile-feed-topics` remains backlog next for mobile surfaces.
+- GitHub housekeeping done: tasks #27–#31 closed; parent #26 status/done; PR #59 uses `Closes #26`.
 
 ---
 
@@ -283,4 +282,4 @@ PostgreSQL-backed; Better Auth for identity. **Domain schema already shipped** (
 - **Routes:** `/` feed (signed-in) / brand landing (signed-out); `/topics`, `/sources`, `/settings`; protect with sign-in redirect; evolve Fraunces/Source Sans + atmospheric CSS.
 - **Feed behavior:** story rows with title→external URL + seen, reason, Save/Dismiss, topic/source filters, Load more; Saved view needs thin `GET /api/feed?status=saved` (+ api-client) — **no new DB tables**.
 - **Topics/Sources:** full CRUD UX against existing endpoints; singleton HN messaging; map `duplicate` / validation errors to specified copy.
-- **Pipeline next:** `api` (thin) → `web` → `verify` → `docs`; GitHub task issue close/reopen blocked (403) until Issues token works — track by slug in this handoff.
+- **GitHub:** Parent #26 · tasks #27–#31 closed · PR #59 `Closes #26`.
