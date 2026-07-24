@@ -8,6 +8,13 @@
       "when": 1784884460329,
       "tag": "0000_spotty_tyrannus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784890259564,
+      "tag": "0001_ancient_vampiro",
+      "breakpoints": true
     }
   ]
 }
