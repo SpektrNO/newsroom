@@ -4,7 +4,6 @@ import Link from "next/link";
 import { FormEvent, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import "../globals.css";
 
 export default function SignUpPage(): ReactNode {
   const router = useRouter();
