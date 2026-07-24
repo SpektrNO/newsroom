@@ -1,9 +1,9 @@
 # Handoff: ingest-hn-substack
 
-**Status:** spec  
+**Status:** done  
 **Created:** 2026-07-24  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,7 +11,8 @@
 |-------|-------|
 | Feature id | `ingest-hn-substack` |
 | Parent issue | #12 — https://github.com/SpektrNO/newsroom/issues/12 |
-| Open tasks | `db` (#14), `api` (#15), `worker` (#16), `verify` (#17), `docs` (#18) |
+| Open tasks | _(none — all closed)_ |
+| Closed tasks | `spec` (#13), `db` (#14), `api` (#15), `worker` (#16), `verify` (#17), `docs` (#18) |
 
 Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`  
 (This feature has no `web` / `mobile` tasks — skip those slugs.)
@@ -252,24 +253,32 @@ Pure env-only config **without** `source_subscriptions` rows is **rejected** —
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- **DB:** `source_subscriptions`, `articles`, `article_sources`, `jobs` + migration `0001_ancient_vampiro.sql`; seed script (`pnpm db:seed`).
+- **Sources:** `HackerNewsAdapter` (Firebase, ≤100), `SubstackAdapter` (RSS), `normalizeCanonicalUrl`, `createSourceAdapter`.
+- **API:** Session-scoped `GET/POST /api/sources`, `PATCH/DELETE /api/sources/:id`; `packages/api-client` sources helpers.
+- **Worker:** Postgres job claim (`FOR UPDATE SKIP LOCKED`), ingest upsert by canonical URL, ~12 min self-schedule, `pnpm worker:ingest` one-shot.
+- **Verify:** Fixture tests in `@newsroom/sources` + mocked ingest integration in `@newsroom/worker`.
+- **Docs:** README/ops-local commands; ADR `docs/decisions/001-ingest-url-and-hn.md`.
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `pnpm --filter @newsroom/sources test` — 5 pass (URL + HN + Substack fixtures)
+- [x] `pnpm --filter @newsroom/worker test` — ingest upserts ≥1 article + `article_sources` (mocked HTTP, local Postgres)
+- [x] `pnpm db:migrate` / `pnpm db:seed` against Compose Postgres
+- [x] `pnpm --filter @newsroom/db|sources|worker typecheck` (and web typecheck during API)
+- [ ] Manual: live one-shot `pnpm worker:ingest` against real HN/Substack; exercise `/api/sources` with a signed-in browser session
 
 ### Deviations from spec
 
-- None / list with rationale
+- None material. HN uses Firebase only (Algolia not wired) — documented default. Architecture diagram still lists topics/feed as future; this feature did not add them.
 
 ### Follow-ups
 
-- 
+- Parallelize HN item hydration (currently sequential).
+- Ranking jobs / `hybrid-rank-feed`; feed UI features.
+- Optionally close idle Postgres clients in tests without `--test-force-exit`.
 
 ---
 
