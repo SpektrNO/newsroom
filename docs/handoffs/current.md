@@ -1,9 +1,9 @@
 # Handoff: Elegant feed, topics, sources UI
 
-**Status:** implementing  
+**Status:** done  
 **Created:** 2026-07-24  
 **Specifier agent:** spec complete  
-**Developer agent:** in progress
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,9 +11,9 @@
 |-------|-------|
 | Feature id | `web-feed-topics-sources` |
 | Parent issue | UNKNOWN — GitHub Issues API returns 403 (`Resource not accessible by integration`) for this environment’s `gh` token. PRs/git push work; issue read/write does not. Do **not** invent issue numbers. |
-| Open tasks | `web`, `verify`, `docs` (no issue numbers; Issues inaccessible) |
-| Closed tasks | `spec` (handoff authoritative), `api` (in progress → close on commit) |
-| Backlog | `docs/feature-backlog.md` § C — status ⬜ (no `audit` task) |
+| Open tasks | _(none)_ |
+| Closed tasks | `spec` (handoff authoritative), `api`, `web`, `verify`, `docs` — Issues close/status scripts skipped (403) |
+| Backlog | `docs/feature-backlog.md` § C — marked ✅ via `record-feature-complete.sh` |
 
 Task order for this **web** feature (from `create-feature-issues.sh`): `spec` → `api` → `web` → `verify` → `docs`  
 (No `audit`, `db`, `worker`, or `mobile` slugs.)
@@ -249,24 +249,31 @@ PostgreSQL-backed; Better Auth for identity. **Domain schema already shipped** (
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- **api:** Optional `GET /api/feed?status=` (`new`\|`seen`\|`saved`\|`dismissed`); invalid → `400 invalid_filter`. `parseFeedStatusFilter` + unit tests. `ListFeedOptions.status` in `@newsroom/api-client`.
+- **web:** Brand landing (signed-out `/`); authenticated `AppShell` masthead (Newsroom + Feed/Topics/Sources/Settings + sign-out). Feed client with filters, story rows, Save/Dismiss/seen-on-title, pagination. Topics/Sources CRUD pages; Settings email + health. Session guards via `requirePageSession` + `callbackUrl` on sign-in. Browser calls via `getBrowserApiClient()` (`credentials: "include"`). Evolved `globals.css` (editorial rows, masthead/row/landing motion).
+- **docs:** README feed UI walkthrough; architecture feed `status=` note; backlog ✅ via `record-feature-complete.sh`.
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `pnpm --filter @newsroom/web typecheck` — pass
+- [x] `pnpm --filter @newsroom/web exec tsx --test --test-force-exit src/lib/feed.test.ts src/lib/topics.test.ts` — pass (status parser included)
+- [x] `DATABASE_URL=… BETTER_AUTH_*=… pnpm --filter @newsroom/web build` — pass (routes `/`, `/topics`, `/sources`, `/settings`)
+- [x] `pnpm --filter @newsroom/api-client typecheck` — pass
+- [ ] Manual (needs Postgres + seed + ingest/rank): sign-in → feed rows, topic/source/Saved filters, Topics/Sources CRUD, Settings health with Ollama down
+- Note: bare `pnpm build` (turbo) fails without `DATABASE_URL` at Next page-data collect — pre-existing env requirement, not introduced here. Isolation tests in `web:test` need live Postgres.
 
 ### Deviations from spec
 
-- None / list with rationale
+- None material. Empty feed supporting copy includes the seed/ingest/rank hint from the empty-state table (in addition to the short Copy-table body).
+- GitHub Issues status/`gh issue close` skipped due to 403; progress tracked only in this handoff.
 
 ### Follow-ups
 
-- 
+- Close/reopen GitHub task issues when Issues token works.
+- Manual browser checklist above against seeded demo user.
+- Expo `mobile-feed-topics` remains backlog next for mobile surfaces.
 
 ---
 
