@@ -18,9 +18,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
+    "seed": "tsx src/seed.ts",
     "studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@newsroom/sources": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.7"
   },
