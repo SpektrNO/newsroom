@@ -1,0 +1,15 @@
+# Ignore local secrets and tooling noise
+.env
+.env.local
+*.local
+
+node_modules/
+.turbo/
+dist/
+.next/
+.expo/
+coverage/
+
+# OS / editor
+.DS_Store
+*.swp
