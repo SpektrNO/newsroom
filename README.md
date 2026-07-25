@@ -139,4 +139,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, and `web-topics-tree` are implemented (auth, sources, ingest, topics/feed APIs, curated topic-tree Topics UX, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, and `web-topics-catalog` are implemented (auth, sources, ingest, topics/feed APIs, curated topic-tree Topics UX with catalog browse + one-click Follow, worker rank, editorial web UI). Expo feed UI is next per the backlog.

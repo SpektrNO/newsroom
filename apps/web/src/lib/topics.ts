@@ -18,6 +18,48 @@ export type TopicJson = {
   updatedAt: string;
 };
 
+/** Body for one-click Follow from a catalog leaf (POST /api/topics). */
+export type FollowTopicDefaults = {
+  name: string;
+  keywords: string[];
+  weight: number;
+  enabled: boolean;
+};
+
+/**
+ * Normative create payload when following a curated catalog leaf:
+ * name = label, keywords = [label], weight = 1, enabled = true.
+ */
+export function followDefaultsForLabel(label: string): FollowTopicDefaults {
+  const name = label.trim();
+  return {
+    name,
+    keywords: [name],
+    weight: 1,
+    enabled: true,
+  };
+}
+
+/** Case-insensitive match of a catalog leaf label to a user topic name. */
+export function isFollowingLabel(
+  topics: ReadonlyArray<{ name: string }>,
+  label: string,
+): boolean {
+  const needle = label.trim().toLowerCase();
+  if (!needle) return false;
+  return topics.some((t) => t.name.trim().toLowerCase() === needle);
+}
+
+/** Find the signed-in user's topic row for a catalog leaf label, if any. */
+export function findTopicByLabel<T extends { name: string }>(
+  topics: ReadonlyArray<T>,
+  label: string,
+): T | undefined {
+  const needle = label.trim().toLowerCase();
+  if (!needle) return undefined;
+  return topics.find((t) => t.name.trim().toLowerCase() === needle);
+}
+
 export type TopicRow = {
   id: string;
   name: string;
