@@ -39,6 +39,7 @@ Architecture: [architecture.md](./architecture.md)
 |----|---------|--------|------|
 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | ✅ | `docs/architecture.md` |
 | `web-topics-tree` | Topics UX: tree picker, keywords, weight help | ✅ | `docs/architecture.md` |
+| `web-topics-catalog` | Browse full topic catalog (not only my topics) | ⬜ | `docs/architecture.md` |
 
 Notes for `web-topics-tree` (shipped):
 
@@ -46,6 +47,13 @@ Notes for `web-topics-tree` (shipped):
 - **Keywords** are free-text chips/tokens; matching remains **case-insensitive** via ranking keyword pass.
 - **Weight** has in-UI help for keyword scoring / hybrid blend (see `docs/decisions/002-hybrid-ranking.md`).
 - Thin `GET /api/topic-tree` serves catalog v1; create/patch validate `name` against selectable labels. Mobile can follow later via `mobile-feed-topics`.
+
+Notes for `web-topics-catalog`:
+
+- Today `/topics` mainly lists **topics the signed-in user has registered**. Users should also be able to **browse the full curated catalog** (all selectable leaves / tree), not only their own rows.
+- Mark which catalog topics the user already follows; affordance to **add** (follow) one that isn’t registered yet (reuse create flow / defaults for keywords+weight as specified in handoff).
+- **Out of scope:** viewing *other users’* personal topic rows or keywords (privacy / multi-user). Catalog = shared curated tree from `GET /api/topic-tree`, not a global dump of `topics` table.
+- Primarily `apps/web`; thin API only if a “my followed ids/labels” join is cleaner than client-side merge.
 
 ## D. Mobile client
 
