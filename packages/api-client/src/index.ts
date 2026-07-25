@@ -152,6 +152,19 @@ export type RankFeedLatestResponse = {
   aiBatchFailures: number;
 };
 
+export type FeedCatalogEntry = {
+  id: string;
+  label: string;
+  rssUrl: string;
+  blurb: string;
+  topicTags: string[];
+};
+
+export type FeedCatalogResponse = {
+  version: number;
+  feeds: FeedCatalogEntry[];
+};
+
 export type ApiClientOptions = {
   baseUrl: string;
   fetch?: typeof fetch;
@@ -224,6 +237,10 @@ export class ApiClient {
 
   async listTopicTree(): Promise<TopicTreeResponse> {
     return this.requestJson("GET", "/api/topic-tree");
+  }
+
+  async listFeedCatalog(): Promise<FeedCatalogResponse> {
+    return this.requestJson("GET", "/api/feed-catalog");
   }
 
   /**
