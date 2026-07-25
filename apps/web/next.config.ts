@@ -10,8 +10,17 @@ const nextConfig: NextConfig = {
     "@newsroom/db",
     "@newsroom/ai",
     "@newsroom/api-client",
+    "@newsroom/sources",
     "@newsroom/worker",
   ],
+  webpack: (config) => {
+    // Worker sources use ESM `.js` import specifiers that map to `.ts` files (tsx).
+    config.resolve.extensionAlias = {
+      ...(config.resolve.extensionAlias ?? {}),
+      ".js": [".ts", ".tsx", ".js"],
+    };
+    return config;
+  },
 };
 
 export default nextConfig;

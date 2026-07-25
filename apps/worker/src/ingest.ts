@@ -14,6 +14,7 @@ import {
   type NormalizedArticle,
   type SourceType,
 } from "@newsroom/sources";
+import { completeJob } from "./jobs.js";
 
 /** ~12 minutes — within the 10–15 min ingest cadence. */
 export const INGEST_INTERVAL_MS = 12 * 60 * 1000;
@@ -172,21 +173,6 @@ export async function claimNextIngestJob(
   const rows = result as unknown as Array<{ id: string }>;
   const first = rows[0];
   return first?.id ? { id: String(first.id) } : null;
-}
-
-export async function completeJob(
-  db: Database,
-  jobId: string,
-  outcome: { status: "completed" | "failed"; lastError: string | null },
-): Promise<void> {
-  await db
-    .update(jobs)
-    .set({
-      status: outcome.status,
-      finishedAt: new Date(),
-      lastError: outcome.lastError,
-    })
-    .where(eq(jobs.id, jobId));
 }
 
 /** Ensure a single pending/running ingest exists (single-flight). */

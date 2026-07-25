@@ -15,7 +15,7 @@ import {
   topics,
   userArticleScores,
 } from "@newsroom/db";
-import { completeJob } from "./ingest.js";
+import { completeJob } from "./jobs.js";
 
 export const CANDIDATE_CAP_PER_USER = 200;
 const DEFAULT_BATCH_SIZE = 30;

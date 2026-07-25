@@ -1,4 +1,4 @@
-import { normalizeCanonicalUrl } from "@newsroom/sources";
+import { normalizeCanonicalUrl } from "@newsroom/sources/url";
 
 /** Normalize RSS URL for subscription matching; null if invalid. */
 export function tryNormalizeRssUrl(url: string): string | null {
