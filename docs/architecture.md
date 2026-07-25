@@ -88,6 +88,8 @@ Personal mode = one user row. Multi-user = same schema.
 
 Never call Ollama from UI code.
 
+**Scale path (backlog B2):** Keep shared articles + per-user scores. Evolve off “one rank pass walks every user” via `rank-dirty-incremental` → `rank-per-user-queue` → `rank-ai-budgets` → `rank-score-retention` (see `docs/feature-backlog.md`). Hosted AI provider swap stays under `multiuser-harden`.
+
 ## Source adapters
 
 | Source | Approach | Status |
