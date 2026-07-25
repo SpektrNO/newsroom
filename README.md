@@ -26,7 +26,7 @@ pnpm db:seed                  # demo user + HN + Platformer Substack + example t
 pnpm --filter @newsroom/web dev
 ```
 
-Open http://localhost:3000 — sign up / sign in. Default seed login after `pnpm db:seed`: **demo@example.com** / **newsroom-demo**. Authenticated home is the ranked **Feed**; use **Topics**, **Sources**, and **Settings** in the masthead.
+Open http://localhost:3000 — sign up / sign in. Default seed login after `pnpm db:seed`: **demo@example.com** / **newsroom-demo**. Authenticated home is the ranked **Feed**; use **Topics**, **Advisor**, **Sources**, and **Settings** in the masthead.
 
 Scores are per user: after seed + ingest + rank, sign in as the seeded demo user (or run `SEED_USER_ID=<your-user-id> pnpm db:seed` then `pnpm worker:rank`) to see story rows.
 
@@ -139,4 +139,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, and `web-topics-catalog` are implemented (auth, sources, ingest, topics/feed APIs, curated topic-tree Topics UX with catalog browse + one-click Follow, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, and `web-ai-advisor-chat` are implemented (auth, sources, ingest, topics/feed APIs, curated Topics UX, Advisor chat via BFF → Ollama, worker rank, editorial web UI). Expo feed UI is next per the backlog.
