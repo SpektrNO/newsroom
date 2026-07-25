@@ -17,6 +17,7 @@ export {
 export {
   adviseTopics,
   parseAdvisorResponse,
+  looksLikeRankPayload,
   type AdvisorChatMessage,
   type AdvisorFollowingTopic,
   type AdvisorSuggestion,

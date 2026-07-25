@@ -32,6 +32,9 @@ export type AdviseTopicsResult = {
 const MAX_KEYWORDS = 50;
 const MAX_KEYWORD_LEN = 64;
 
+const FRIENDLY_PARSE_FAIL =
+  "I couldn’t format that answer correctly. Try asking again in a sentence or two about what you want to follow.";
+
 function buildPrompt(input: AdviseTopicsInput): string {
   const catalog = input.catalogLabels.map((label, i) => {
     const crumb = input.catalogCrumbs?.[i];
@@ -39,12 +42,15 @@ function buildPrompt(input: AdviseTopicsInput): string {
   });
 
   return [
-    "Help the user choose Newsroom topics and keywords.",
+    "You advise the user on which Newsroom topics to follow and which keywords to use.",
+    "This is NOT article ranking. Do not score articles. Do not invent article titles.",
+    "Never return a JSON array. Never use keys articleId, aiScore, nearDuplicateOfArticleId, or finalRank.",
     "Topic names should prefer catalog leaf labels when suggesting Follow targets.",
-    "Keywords must be short substring-friendly tokens (e.g. llm, postgres), not full multi-word catalog phrases alone.",
+    "Keywords must be short substring-friendly tokens (e.g. llm, postgres, flower), not full multi-word catalog phrases alone.",
     "User topics/keywords are a guide only; synonyms or otherwise related words may be suggested as in-scope.",
-    "Reply with a JSON object only:",
-    '{"reply":"markdown-free prose","suggestions":[{"topicLabel":"…","keywords":["…"],"rationale":"…"}]}',
+    "If the user’s interests are outside the catalog, say so in reply and still suggest the closest catalog leaves and useful keywords when possible.",
+    "Reply with a single JSON object only, shaped exactly like:",
+    '{"reply":"markdown-free prose for the user","suggestions":[{"topicLabel":"LLMs & agents","keywords":["llm","agent"],"rationale":"why"}]}',
     "suggestions may be an empty array. Prefer 1–5 high-quality suggestions.",
     "",
     `catalogLeaves: ${JSON.stringify(catalog)}`,
@@ -53,7 +59,7 @@ function buildPrompt(input: AdviseTopicsInput): string {
   ].join("\n");
 }
 
-function extractJsonObject(text: string): unknown {
+function extractJsonValue(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) throw new Error("no_json");
 
@@ -63,13 +69,46 @@ function extractJsonObject(text: string): unknown {
   try {
     return JSON.parse(candidate) as unknown;
   } catch {
-    const start = candidate.indexOf("{");
-    const end = candidate.lastIndexOf("}");
-    if (start !== -1 && end > start) {
-      return JSON.parse(candidate.slice(start, end + 1)) as unknown;
+    const objStart = candidate.indexOf("{");
+    const objEnd = candidate.lastIndexOf("}");
+    const arrStart = candidate.indexOf("[");
+    const arrEnd = candidate.lastIndexOf("]");
+    if (objStart !== -1 && objEnd > objStart) {
+      try {
+        return JSON.parse(candidate.slice(objStart, objEnd + 1)) as unknown;
+      } catch {
+        /* fall through */
+      }
+    }
+    if (arrStart !== -1 && arrEnd > arrStart) {
+      return JSON.parse(candidate.slice(arrStart, arrEnd + 1)) as unknown;
     }
     throw new Error("no_json");
   }
+}
+
+/** True when model output looks like ranking JSON, not advisor JSON. */
+export function looksLikeRankPayload(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return false;
+    return value.every((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+      const rec = item as Record<string, unknown>;
+      return (
+        rec.articleId !== undefined ||
+        rec.article_id !== undefined ||
+        rec.aiScore !== undefined ||
+        rec.ai_score !== undefined
+      );
+    });
+  }
+  if (value && typeof value === "object") {
+    const rec = value as Record<string, unknown>;
+    if (rec.articleId !== undefined || rec.aiScore !== undefined) return true;
+    const items = rec.suggestions ?? rec.items ?? rec.results;
+    if (Array.isArray(items) && looksLikeRankPayload(items)) return true;
+  }
+  return false;
 }
 
 function normalizeKeywords(raw: unknown): string[] {
@@ -92,6 +131,7 @@ function normalizeKeywords(raw: unknown): string[] {
 function parseSuggestion(raw: unknown): AdvisorSuggestion | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const rec = raw as Record<string, unknown>;
+  if (rec.articleId !== undefined || rec.aiScore !== undefined) return null;
   const labelRaw = rec.topicLabel ?? rec.topic_label ?? rec.name;
   if (typeof labelRaw !== "string" || !labelRaw.trim()) return null;
   const keywords = normalizeKeywords(rec.keywords);
@@ -108,9 +148,17 @@ function parseSuggestion(raw: unknown): AdvisorSuggestion | null {
   };
 }
 
+function looksLikeRawJsonDump(text: string): boolean {
+  const t = text.trim();
+  return t.startsWith("{") || t.startsWith("[");
+}
+
 /** Parse advisor model JSON into reply + suggestions. */
 export function parseAdvisorResponse(text: string): AdviseTopicsResult {
-  const parsed = extractJsonObject(text);
+  const parsed = extractJsonValue(text);
+  if (looksLikeRankPayload(parsed)) {
+    throw new Error("rank_shaped_response");
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("invalid_advisor_json");
   }
@@ -157,7 +205,7 @@ export async function adviseTopics(
 
   const result = await provider.complete({
     system:
-      "You are Newsroom’s topic advisor. Reply with a JSON object only. No markdown fences.",
+      "You are Newsroom’s topic and keyword advisor — not a feed ranker. Reply with one JSON object only: {\"reply\":\"…\",\"suggestions\":[…]}. Never return a JSON array. Never include articleId or aiScore. No markdown fences.",
     prompt: buildPrompt(input),
     json: true,
     maxTokens: 2048,
@@ -165,14 +213,35 @@ export async function adviseTopics(
 
   try {
     return parseAdvisorResponse(result.text);
-  } catch {
+  } catch (err) {
     console.warn(
       `[newsroom/ai] advisor: could not parse JSON (len=${result.text.length}): ${result.text.slice(0, 280)}`,
+      err instanceof Error ? err.message : err,
     );
-    const fallback = result.text.trim().slice(0, 2000);
-    if (fallback) {
-      return { reply: fallback, suggestions: [] };
+
+    // One repair pass when the model used ranking shape or invalid JSON.
+    try {
+      const repair = await provider.complete({
+        system:
+          "Convert the prior model output into Newsroom advisor JSON only. Return one object: {\"reply\":\"prose\",\"suggestions\":[{\"topicLabel\":\"…\",\"keywords\":[\"…\"],\"rationale\":\"…\"}]}. No arrays at the top level. No articleId or aiScore.",
+        prompt: [
+          "User messages:",
+          JSON.stringify(input.messages),
+          "Catalog leaf labels:",
+          JSON.stringify(input.catalogLabels),
+          "Bad model output to rewrite:",
+          result.text.slice(0, 4000),
+        ].join("\n"),
+        json: true,
+        maxTokens: 2048,
+      });
+      return parseAdvisorResponse(repair.text);
+    } catch {
+      const fallback = result.text.trim().slice(0, 2000);
+      if (fallback && !looksLikeRawJsonDump(fallback)) {
+        return { reply: fallback, suggestions: [] };
+      }
+      return { reply: FRIENDLY_PARSE_FAIL, suggestions: [] };
     }
-    throw new Error("ai_unavailable");
   }
 }
