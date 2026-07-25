@@ -1027,6 +1027,115 @@ button.danger-text {
   }
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chat-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.1rem 1.15rem;
+}
+
+.chat-log {
+  display: grid;
+  gap: 0.85rem;
+  min-height: 12rem;
+  max-height: min(55vh, 28rem);
+  overflow: auto;
+}
+
+.chat-bubble {
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--paper) 88%, var(--ink) 12%);
+  animation: rise-in 0.35s ease both;
+}
+
+.chat-bubble.user {
+  background: color-mix(in srgb, var(--accent) 12%, var(--paper));
+}
+
+.chat-role {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chat-content {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.chat-suggestions {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.chat-suggestions > li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.65rem 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.chat-suggestion-title {
+  margin: 0 0 0.25rem;
+  font-weight: 650;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  align-items: center;
+}
+
+.chat-suggestion-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.chat-suggestion-meta,
+.chat-suggestion-rationale {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.chat-suggestion-rationale {
+  margin-top: 0.25rem;
+}
+
+.chat-suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chat-composer textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
 @media (max-width: 560px) {
   .masthead-aside {
     width: 100%;

@@ -110,12 +110,12 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `GET/POST/DELETE /api/sources`
 - `GET /api/feed?cursor=&topic=&source=&status=`
 - `POST /api/feed/:id/seen|saved|dismissed`
+- `POST /api/chat` — session chat for topic/keyword advice via `AiProvider` (`web-ai-advisor-chat`)
 - `GET /api/health` — includes Ollama reachability
-- `POST /api/chat` — planned (`web-ai-advisor-chat`); session chat for topic/keyword advice via `AiProvider`
 
 ## Clients
 
-**Web:** feed home, topics, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). Planned: in-app **AI advisor chat** (`web-ai-advisor-chat`) for topic/keyword suggestions via BFF → `AiProvider` (never from the browser).
+**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords.
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 

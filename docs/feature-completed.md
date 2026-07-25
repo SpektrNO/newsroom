@@ -18,6 +18,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-24 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | #26 | editorial web feed/topics/sources/settings; PR #59 |
 | 2026-07-25 | `web-topics-tree` | Topics UX: tree picker, keywords, weight help | #60 | Completed via spec→implement pipeline |
 | 2026-07-25 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | #67 | Catalog browse + one-click Follow on /topics (client merge) |
+| 2026-07-26 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | #74 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -40,3 +41,4 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | 2026-07-24 | `docs/architecture.md` | editorial web feed/topics/sources/settings; PR #59 |
 | `web-topics-tree` | Topics UX: tree picker, keywords, weight help | 2026-07-25 | `docs/architecture.md` | Completed via spec→implement pipeline |
 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | 2026-07-25 | `docs/architecture.md` | Catalog browse + one-click Follow on /topics (client merge) |
+| `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | 2026-07-26 | `docs/architecture.md` | Completed via spec→implement pipeline |

@@ -99,7 +99,7 @@ Notes for `rank-score-retention`:
 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | ✅ | `docs/architecture.md` |
 | `web-topics-tree` | Topics UX: tree picker, keywords, weight help | ✅ | `docs/architecture.md` |
 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | ✅ | `docs/architecture.md` |
-| `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ⬜ | `docs/architecture.md` |
+| `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
 
 Notes for `web-topics-tree` (shipped):
 
