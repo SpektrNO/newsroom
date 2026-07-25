@@ -847,6 +847,16 @@ button.danger-text {
   max-width: 36rem;
 }
 
+.catalog-tag-filter {
+  margin-bottom: 0.85rem;
+}
+
+.catalog-feed-tags {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .topic-catalog {
   border: 1px solid var(--border);
   border-radius: 12px;
