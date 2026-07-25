@@ -118,6 +118,7 @@ Notes for `ai-token-metering`:
 | `web-topics-tree` | Topics UX: tree picker, keywords, weight help | ✅ | `docs/architecture.md` |
 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | ✅ | `docs/architecture.md` |
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
+| `web-source-discovery` | Discover/add feeds without knowing URLs | ⬜ | `docs/architecture.md` |
 
 Notes for `web-topics-tree` (shipped):
 
@@ -147,6 +148,14 @@ Notes for `web-ai-advisor-chat`:
 - **Privacy:** Session user only; never send other users’ topics or chat history.
 - **Depends on:** Existing topic tree + Follow APIs. Stronger with hosted AI (`multiuser-harden`) for latency/quality; works locally via Ollama. Token reveal/cap → `ai-token-metering`.
 - **Does not replace:** Catalog browse / Follow; advisor **suggests**, user still owns Following.
+
+Notes for `web-source-discovery` (next):
+
+- **Problem:** Ranking only filters what you already ingest. HN is a shared firehose (discovery built-in); Substack-style sources today require the user to **already know** an RSS URL — which undercuts Newsroom’s “filter interesting from noise” promise for newsletters.
+- **Goal:** Help users find and add high-signal feeds without prior URL knowledge — grounded in their topics/keywords when possible.
+- **v1 direction (prefer in order):** (1) **Curated feed catalog** (static/editorial list of RSS URLs + labels + optional topic tags; Browse / Add on Sources, mirror Topics catalog UX); (2) extend **Advisor** to suggest catalog feeds (and optional non-catalog URLs as text-only until validated); (3) later: slug/search resolve to `…/feed`, or usage-based suggestions from what matches well in aggregate.
+- **Actions:** One-click **Add feed** with confirm → existing `POST /api/sources` `{ sourceType: "substack", config: { rssUrl } }`; show Already added when subscribed.
+- **Out of scope v1:** Scraping paywalled bodies; scraping Substack’s entire network; social “popular with other Newsroom users” graphs; auto-subscribe without confirm.
 
 ## D. Mobile client
 

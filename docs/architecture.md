@@ -98,7 +98,7 @@ Never call Ollama from UI code.
 | Source | Approach | Status |
 |--------|----------|--------|
 | Hacker News | Firebase API + Algolia HN Search | v1 |
-| Substack | User-added RSS URLs | v1 |
+| Substack | User-added RSS URLs (discovery via `web-source-discovery`) | v1 ingest; discovery planned |
 | Bluesky | AT Proto public endpoints | later (`source-bluesky`) |
 | X | Paid API | deferred |
 
@@ -118,7 +118,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Clients
 
-**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords.
+**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Source discovery** (`web-source-discovery`, planned): curated feed catalog + Advisor suggestions so users need not already know RSS URLs — HN remains the shared firehose; newsletters need explicit discovery.
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 
