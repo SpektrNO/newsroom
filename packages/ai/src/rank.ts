@@ -51,6 +51,7 @@ function buildPrompt(
 ): string {
   return [
     "Rank each article for relevance to the user topics.",
+    "User topics is guide only, synonyms or otherwise related words are to be interpreted as in-scope.",
     "The top-level JSON value MUST be an array (not a single object).",
     'Each element: {"articleId":"r0","aiScore":0.0,"reason":"one line","nearDuplicateOfArticleId":null}',
     "aiScore is a number from 0 to 1. Use the exact articleId values from the input (r0, r1, …).",

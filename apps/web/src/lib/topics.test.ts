@@ -12,16 +12,16 @@ describe("followDefaultsForLabel", () => {
   it("builds one-click Follow create body from catalog label", () => {
     assert.deepEqual(followDefaultsForLabel("AI & infra"), {
       name: "AI & infra",
-      keywords: ["AI & infra"],
+      keywords: ["AI", "infra"],
       weight: 1,
       enabled: true,
     });
   });
 
-  it("trims label for name and starter keyword", () => {
+  it("trims label and tokenizes multi-word leaves", () => {
     assert.deepEqual(followDefaultsForLabel("  Developer tools  "), {
       name: "Developer tools",
-      keywords: ["Developer tools"],
+      keywords: ["Developer", "tools"],
       weight: 1,
       enabled: true,
     });
@@ -33,7 +33,7 @@ describe("followDefaultsForLabel", () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     assert.equal(parsed.name, "LLMs & agents");
-    assert.deepEqual(parsed.keywords, ["LLMs & agents"]);
+    assert.deepEqual(parsed.keywords, ["LLMs", "agents"]);
     assert.equal(parsed.weight, 1);
     assert.equal(parsed.enabled, true);
   });
