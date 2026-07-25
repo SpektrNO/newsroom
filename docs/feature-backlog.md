@@ -83,7 +83,7 @@ Notes for `rank-ai-budgets`:
 - **Budgets:** Per-user (and optionally global) max AI-scored articles per run/day; prefer **active** dirty users (see Cadence policy).
 - **Degrade:** Over budget → keyword-only `final_rank` (existing `combineFinalRank` null-AI path); inactive dirty users skip AI until they return (catch-up on activity).
 - **Depends on:** Dirty/incremental ranking + activity gate so budgets aren’t burned re-scoring everyone every ingest tick.
-- **Related:** `multiuser-harden` (host AI / provider swap) — budgets apply to whichever `AiProvider` is configured.
+- **Related:** `multiuser-harden` (host AI / provider swap); token accounting via `ai-token-metering` (prefer meter before or with this feature).
 
 Notes for `rank-score-retention`:
 
@@ -91,6 +91,24 @@ Notes for `rank-score-retention`:
 - **GC:** Drop or archive old `new`/`seen` rows past TTL or outside top-N by `final_rank`; **keep** `saved` (and document `dismissed` policy).
 - **Worker:** Periodic cleanup job or rank-adjacent prune; feed/API behavior unchanged for remaining rows.
 - **Can ship after** dirty incremental; independent of AI budgets if storage pressure appears earlier.
+
+### B3. AI token metering
+
+Shared foundation for Advisor and ranking cost control. **Prefer before or alongside** `rank-ai-budgets` so article caps and chat limits use the same meter.
+
+| ID | Feature | Status | Spec |
+|----|---------|--------|------|
+| `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | ⬜ | `docs/architecture.md` |
+
+Notes for `ai-token-metering`:
+
+- **Goal:** Every `AiProvider.complete` call reports **prompt / completion / total** tokens; Newsroom **persists** usage per user (and optionally global), **shows** it in the product, and **enforces** soft/hard caps so local Ollama and later hosted models cannot run unbounded.
+- **Count (`packages/ai`):** Extend `AiCompleteResult` with `usage?: { promptTokens, completionTokens, totalTokens }` (and optional `estimated: boolean`). `OllamaProvider` maps `prompt_eval_count` / `eval_count` from `/api/generate` when present; otherwise a documented estimator (e.g. chars/4) marked `estimated: true`. Rank + advisor helpers must not drop usage on the way to callers.
+- **Persist:** Per-user ledger — at least daily rollups by purpose (`rank` \| `chat` \| `other`); optional append-only event rows for audit. Session user only; never mix users. Schema in `packages/db` (decide tables in spec; no chat transcript required).
+- **Reveal:** Settings (primary) shows used vs limit for today / period (prompt+completion or total — pick one display unit in spec). Optional: Advisor composer footer or chat response meta (`tokens` on `POST /api/chat`); ops/logs for worker rank batches. Absolute timestamps / hover detail allowed; keep UI calm (no dashboard card wall).
+- **Cap:** Configurable per-user (and optional global) token budget per day (env + later settings). Over soft cap → warn in UI; over hard cap → `429` `{ "error": "token_budget_exceeded" }` for chat; rank path **degrades** (keyword-only / skip AI batch) rather than failing the whole job. Align purpose splits so chat spam cannot silently exhaust rank budget unless product chooses a shared pool (default: **shared daily pool** with purpose breakdown in the UI).
+- **Relation to other features:** `rank-ai-budgets` remains **article/batch** caps and active-user priority; this feature is **token** accounting. Advisor v1 message rate limit stays; token cap is the durable budget. Hosted billing/`multiuser-harden` should consume the same meter.
+- **Out of scope v1:** Dollar pricing UI, per-model price tables, streaming token ticks, admin multi-tenant consoles.
 
 ## C. Web client
 
@@ -125,9 +143,9 @@ Notes for `web-ai-advisor-chat`:
 - **Structured suggestions (required):** Model may reply in prose, but must also return machine-readable suggestions the UI can act on, e.g. `{ "replies": "...", "suggestions": [{ "topicLabel": "LLMs & agents", "keywords": ["llm","agent","tool use"], "rationale": "…" }] }`. Prefer catalog labels; if the model invents a non-catalog name, UI shows it as text-only (no one-click Follow) or maps to nearest leaf — decide in spec.
 - **Actions:** One-click **Follow** / **Add keywords** to an existing followed topic from a suggestion chip (reuse `POST /api/topics` / `PATCH`); user confirms before write.
 - **Primary use cases (v1):** interest → suggested topics + keywords; refine keywords for a followed topic; explain why a keyword is too broad/narrow. **Out of scope v1:** chatting about individual feed articles, multi-turn tool use that mutates DB without confirm, long-term memory across devices beyond short server-side transcript (optional: persist last N turns per user in Postgres — decide in spec; default **ephemeral session transcript** in client + request history window).
-- **Limits:** Per-user rate limit (messages/min and/or tokens/day); shared or separate budget from `rank-ai-budgets` / `multiuser-harden`. Fail soft when provider down (same health story as rank).
+- **Limits:** Per-user message rate limit (v1); token day-caps via `ai-token-metering`. Soft-fail when provider down (same health story as rank).
 - **Privacy:** Session user only; never send other users’ topics or chat history.
-- **Depends on:** Existing topic tree + Follow APIs. Stronger with hosted AI (`multiuser-harden`) for latency/quality; works locally via Ollama.
+- **Depends on:** Existing topic tree + Follow APIs. Stronger with hosted AI (`multiuser-harden`) for latency/quality; works locally via Ollama. Token reveal/cap → `ai-token-metering`.
 - **Does not replace:** Catalog browse / Follow; advisor **suggests**, user still owns Following.
 
 ## D. Mobile client
