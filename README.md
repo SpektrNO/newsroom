@@ -62,7 +62,7 @@ pnpm --filter @newsroom/worker start
 | `packages/db` | Drizzle schema + migrations (auth, ingest, topics, scores) |
 | `packages/ai` | `AiProvider` + keyword/`rankArticleBatch` helpers |
 | `packages/sources` | HN + Substack adapters (`SourceAdapter`) |
-| `packages/api-client` | Typed client (health, sources, topics, feed) |
+| `packages/api-client` | Typed client (health, sources, topics, topic-tree, feed) |
 
 ## Commands
 
@@ -96,7 +96,8 @@ Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `GET/POST` | `/api/topics` | List / create (caller’s topics only) |
+| `GET` | `/api/topic-tree` | Curated catalog `{ version, nodes[] }` (selectable leaves for topic names) |
+| `GET/POST` | `/api/topics` | List / create (caller’s topics only; `name` = catalog leaf label) |
 | `PATCH/DELETE` | `/api/topics/:id` | Update / delete own topic |
 | `GET` | `/api/feed?cursor=&topic=&source=&status=&limit=` | Ranked scores; default excludes `dismissed`; `status=saved` (etc.) filters to that status |
 | `POST` | `/api/feed/:articleId/seen\|saved\|dismissed` | Update status; `404` if no score row |
@@ -138,4 +139,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, and `web-feed-topics-sources` are implemented (auth, sources, ingest, topics/feed APIs, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, and `web-topics-tree` are implemented (auth, sources, ingest, topics/feed APIs, curated topic-tree Topics UX, worker rank, editorial web UI). Expo feed UI is next per the backlog.

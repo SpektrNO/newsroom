@@ -1,9 +1,9 @@
 # Handoff: Topics UX — tree picker, keywords, weight help
 
-**Status:** implementing  
+**Status:** done  
 **Created:** 2026-07-25  
 **Specifier agent:** spec complete  
-**Developer agent:** in progress
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `web-topics-tree` |
 | Parent issue | #60 — https://github.com/SpektrNO/newsroom/issues/60 |
-| Open tasks | `api` (#62), `web` (#63), `verify` (#64), `docs` (#65) |
-| Closed tasks | `spec` (#61) |
+| Open tasks | *(none — all task sub-issues closed; parent stays open for PR)* |
+| Closed tasks | `spec` (#61), `api` (#62), `web` (#63), `verify` (#64), `docs` (#65) |
 | Backlog | `docs/feature-backlog.md` § C — Notes for `web-topics-tree` |
 
 Task order for this **web** feature (from parent #60): `spec` → `api` → `web` → `verify` → `docs`  
@@ -236,24 +236,25 @@ Must not contradict `docs/architecture.md` or `docs/decisions/002-hybrid-ranking
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- **api:** `apps/web/src/lib/topic-tree.ts` curated catalog v1; `GET /api/topic-tree` (session); create/patch validate `name` against selectable leaf labels (canonical casing); `packages/api-client` `listTopicTree` + types; unit tests in `topic-tree.test.ts` / `topics.test.ts`.
+- **web:** Topics page tree picker (expand/collapse + search), keyword chips, normative weight help, exact handoff copy; list shows optional path crumbs; legacy non-catalog names guided to re-pick.
+- **docs:** `docs/architecture.md` API + Clients; `docs/feature-backlog.md` ✅; `README.md` topic-tree endpoint + status.
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `npx tsx --test` topics + topic-tree + feed unit tests; `pnpm --filter @newsroom/ai test` (case-insensitive keyword match); web + api-client typecheck
+- [ ] Manual: signed-in `/topics` create/edit/enable/delete with tree + chips (UI smoke not automated); Postgres isolation suite needs live DB
 
 ### Deviations from spec
 
-- None / list with rationale
+- None
 
 ### Follow-ups
 
-- 
+- Supervisor Phase 3: PR with `Closes #60`
+- Optional later: Expo Topics via `mobile-feed-topics` 
 
 ---
 

@@ -102,7 +102,8 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 ## API surface
 
 - `POST /api/auth/*` — Better Auth
-- `GET/POST/PATCH/DELETE /api/topics`
+- `GET /api/topic-tree` — curated hierarchical topic catalog (session; static v1)
+- `GET/POST/PATCH/DELETE /api/topics` — topic CRUD; `name` must be a selectable catalog leaf label
 - `GET/POST/DELETE /api/sources`
 - `GET /api/feed?cursor=&topic=&source=&status=`
 - `POST /api/feed/:id/seen|saved|dismissed`
@@ -110,7 +111,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Clients
 
-**Web:** feed home, topics, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Planned: Topics page refactor (`web-topics-tree`) — curated topic-tree picker instead of free-text names; free-text keywords (case-insensitive); in-UI weight explanation tied to hybrid ranking.
+**Web:** feed home, topics, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002).
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 
