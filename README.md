@@ -139,4 +139,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, and `web-ai-advisor-chat` are implemented (auth, sources, ingest, topics/feed APIs, curated Topics UX, Advisor chat via BFF → Ollama, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, `web-ai-advisor-chat`, and `web-source-discovery` are implemented (auth, sources, ingest, topics/feed APIs, curated Topics + feed catalog, Advisor chat via BFF → Ollama, worker rank, editorial web UI). Expo feed UI is next per the backlog.

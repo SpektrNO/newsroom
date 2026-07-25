@@ -98,7 +98,7 @@ Never call Ollama from UI code.
 | Source | Approach | Status |
 |--------|----------|--------|
 | Hacker News | Firebase API + Algolia HN Search | v1 |
-| Substack | User-added RSS URLs (discovery via `web-source-discovery`) | v1 ingest; discovery planned |
+| Substack | User-added RSS URLs + curated catalog (`web-source-discovery`) | v1 |
 | Bluesky | AT Proto public endpoints | later (`source-bluesky`) |
 | X | Paid API | deferred |
 
@@ -110,6 +110,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `GET /api/topic-tree` — curated hierarchical topic catalog (session; static v1)
 - `GET/POST/PATCH/DELETE /api/topics` — topic CRUD; `name` must be a selectable catalog leaf label
 - `GET/POST/DELETE /api/sources`
+- `GET /api/feed-catalog` — curated RSS feed catalog (session; static v1)
 - `GET /api/feed?cursor=&topic=&source=&status=`
 - `POST /api/feed/rank` — session; run keyword + AI rank for the current user only (may take minutes)
 - `POST /api/feed/:id/seen|saved|dismissed`
@@ -118,7 +119,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Clients
 
-**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Source discovery** (`web-source-discovery`, planned): curated feed catalog + Advisor suggestions so users need not already know RSS URLs — HN remains the shared firehose; newsletters need explicit discovery.
+**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Sources** (`web-source-discovery`): curated feed catalog (`GET /api/feed-catalog`) with one-click Add feed alongside manual RSS URL entry — HN remains the shared firehose; newsletters are discoverable without prior URL knowledge.
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 
