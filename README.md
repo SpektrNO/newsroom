@@ -28,7 +28,7 @@ pnpm --filter @newsroom/web dev
 
 Open http://localhost:3000 — sign up / sign in. Default seed login after `pnpm db:seed`: **demo@example.com** / **newsroom-demo**. Authenticated home is the ranked **Feed**; use **Topics**, **Advisor**, **Sources**, and **Settings** in the masthead.
 
-Scores are per user: after seed + ingest + rank, sign in as the seeded demo user (or run `SEED_USER_ID=<your-user-id> pnpm db:seed` then `pnpm worker:rank`) to see story rows.
+Scores are per user: after seed + ingest + rank, sign in as the seeded demo user (or run `SEED_USER_ID=<your-user-id> pnpm db:seed` then `pnpm worker:rank`, or use **Rank latest** on the Feed) to see story rows.
 
 Check health:
 
@@ -44,7 +44,7 @@ pnpm worker:rank              # keyword shortlist + Ollama batches → user_arti
 # or: NEWSROOM_WORKER_ONCE=ingest|rank pnpm --filter @newsroom/worker start
 ```
 
-After ingest + rank, refresh the Feed on http://localhost:3000 — story rows appear with Save / Dismiss; filter by topic, source, or Saved.
+After ingest + rank, refresh the Feed on http://localhost:3000 — story rows appear with Save / Dismiss; filter by topic, source, or Saved. Signed-in users can also click **Rank latest** on the Feed to re-run ranking for themselves (Ollama must be up; CLI `pnpm worker:rank` still works for all users).
 
 Long-running worker (claims `ingest` and `rank` jobs; ingest cadence ~12 minutes):
 

@@ -111,6 +111,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `GET/POST/PATCH/DELETE /api/topics` — topic CRUD; `name` must be a selectable catalog leaf label
 - `GET/POST/DELETE /api/sources`
 - `GET /api/feed?cursor=&topic=&source=&status=`
+- `POST /api/feed/rank` — session; run keyword + AI rank for the current user only (may take minutes)
 - `POST /api/feed/:id/seen|saved|dismissed`
 - `POST /api/chat` — session chat for topic/keyword advice via `AiProvider` (`web-ai-advisor-chat`)
 - `GET /api/health` — includes Ollama reachability

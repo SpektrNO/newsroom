@@ -137,6 +137,8 @@ export function FeedClient(): ReactNode {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [lastIngestAt, setLastIngestAt] = useState<string | null>(null);
   const [lastRankedAt, setLastRankedAt] = useState<string | null>(null);
+  const [ranking, setRanking] = useState(false);
+  const [rankNote, setRankNote] = useState<string | null>(null);
 
   const topicGroups = useMemo(
     () => groupTopics(topics, treeNodes),
@@ -288,21 +290,70 @@ export function FeedClient(): ReactNode {
     setSelectedTopicIds(new Set());
   }
 
+  async function onRankLatest() {
+    if (ranking) return;
+    setRanking(true);
+    setRankNote(null);
+    setError(null);
+    try {
+      const result = await api.rankFeedLatest();
+      setRankNote(
+        result.scored > 0
+          ? `Ranked ${result.scored} article${result.scored === 1 ? "" : "s"}.`
+          : "No new articles to rank.",
+      );
+      await loadPage();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.push("/sign-in?callbackUrl=%2F");
+        return;
+      }
+      if (err instanceof ApiError && err.code === "rate_limited") {
+        setRankNote("Too many rank requests — wait a few minutes.");
+      } else if (err instanceof ApiError && err.code === "no_topics") {
+        setRankNote("Follow an enabled topic before ranking.");
+      } else if (err instanceof ApiError && err.code === "ai_unavailable") {
+        setRankNote(
+          "Ranking unavailable — check Settings / Ollama, then retry.",
+        );
+      } else {
+        setRankNote("Couldn't rank — try again.");
+      }
+    } finally {
+      setRanking(false);
+    }
+  }
+
   const hasFilters = Boolean(topicFilterActive || source || view === "saved");
 
   return (
     <section className="feed-page">
-      <p className="feed-pipeline" aria-live="polite">
-        <span title={absoluteTimeTitle(lastIngestAt)}>
-          Ingested {formatPipelineTime(lastIngestAt)}
-        </span>
-        <span className="feed-pipeline-sep" aria-hidden>
-          ·
-        </span>
-        <span title={absoluteTimeTitle(lastRankedAt)}>
-          Ranked {formatPipelineTime(lastRankedAt)}
-        </span>
-      </p>
+      <div className="feed-pipeline-row">
+        <p className="feed-pipeline" aria-live="polite">
+          <span title={absoluteTimeTitle(lastIngestAt)}>
+            Ingested {formatPipelineTime(lastIngestAt)}
+          </span>
+          <span className="feed-pipeline-sep" aria-hidden>
+            ·
+          </span>
+          <span title={absoluteTimeTitle(lastRankedAt)}>
+            Ranked {formatPipelineTime(lastRankedAt)}
+          </span>
+        </p>
+        <button
+          type="button"
+          className="ghost feed-rank-btn"
+          disabled={ranking}
+          onClick={() => void onRankLatest()}
+        >
+          {ranking ? "Ranking…" : "Rank latest"}
+        </button>
+      </div>
+      {rankNote ? (
+        <p className="feed-rank-note" aria-live="polite">
+          {rankNote}
+        </p>
+      ) : null}
       <div className="feed-filters" role="group" aria-label="Feed filters">
         <div className="topic-filter" role="group" aria-label="Topics">
           <div className="topic-filter-header">

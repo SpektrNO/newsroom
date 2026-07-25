@@ -301,17 +301,36 @@ button.danger-text {
 }
 
 /* Feed */
-.feed-pipeline {
+.feed-pipeline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.85rem;
   margin: 0 0 0.85rem;
+  animation: rise-in 0.45s ease both;
+}
+
+.feed-pipeline {
+  margin: 0;
   font-size: 0.82rem;
   color: var(--muted);
   letter-spacing: 0.01em;
-  animation: rise-in 0.45s ease both;
 }
 
 .feed-pipeline-sep {
   margin: 0 0.4rem;
   opacity: 0.7;
+}
+
+.feed-rank-btn {
+  font-size: 0.82rem;
+  padding: 0.15rem 0.45rem;
+}
+
+.feed-rank-note {
+  margin: -0.45rem 0 0.85rem;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .feed-filters {

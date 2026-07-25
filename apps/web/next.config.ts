@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     "@newsroom/db",
     "@newsroom/ai",
     "@newsroom/api-client",
+    "@newsroom/worker",
   ],
 };
 

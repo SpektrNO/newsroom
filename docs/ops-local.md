@@ -62,6 +62,7 @@ pnpm db:seed                 # demo@example.com / newsroom-demo + HN + Platforme
 
 pnpm worker:ingest           # one-shot ingest; enqueues pending rank (does not wait on Ollama)
 pnpm worker:rank             # one-shot keyword + AI rank → user_article_scores
+# Or: Feed UI → Rank latest (current user only; requires Ollama)
 pnpm --filter @newsroom/worker start   # poll Postgres jobs (ingest ~12 min + rank)
 
 pnpm sources:test            # mocked adapter fixtures

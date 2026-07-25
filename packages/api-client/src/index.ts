@@ -145,6 +145,13 @@ export type ChatResponse = {
   suggestions: ChatSuggestion[];
 };
 
+export type RankFeedLatestResponse = {
+  scored: number;
+  users: number;
+  aiBatches: number;
+  aiBatchFailures: number;
+};
+
 export type ApiClientOptions = {
   baseUrl: string;
   fetch?: typeof fetch;
@@ -288,6 +295,11 @@ export class ApiClient {
 
   async postChat(input: ChatRequest): Promise<ChatResponse> {
     return this.requestJson("POST", "/api/chat", input);
+  }
+
+  /** Run keyword + AI rank for the signed-in user (may take minutes). */
+  async rankFeedLatest(): Promise<RankFeedLatestResponse> {
+    return this.requestJson("POST", "/api/feed/rank");
   }
 
   private async requestJson<T>(
