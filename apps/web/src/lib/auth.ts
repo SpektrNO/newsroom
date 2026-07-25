@@ -27,6 +27,12 @@ export const auth = betterAuth({
   },
   secret: requireEnv("BETTER_AUTH_SECRET"),
   baseURL: requireEnv("BETTER_AUTH_URL"),
+  // Local dev often switches between localhost / 127.0.0.1 / WSL hostnames.
+  trustedOrigins: [
+    requireEnv("BETTER_AUTH_URL"),
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ],
 });
 
 export type Session = typeof auth.$Infer.Session;

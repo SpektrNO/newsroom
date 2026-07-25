@@ -110,7 +110,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Clients
 
-**Web:** feed home, topics, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall.
+**Web:** feed home, topics, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Planned: Topics page refactor (`web-topics-tree`) — curated topic-tree picker instead of free-text names; free-text keywords (case-insensitive); in-UI weight explanation tied to hybrid ranking.
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 

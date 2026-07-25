@@ -73,10 +73,20 @@ export function FeedClient(): ReactNode {
         setItems((prev) => (append ? [...prev, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
       } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
+        const status =
+          err instanceof ApiError
+            ? err.status
+            : err &&
+                typeof err === "object" &&
+                "status" in err &&
+                typeof (err as { status: unknown }).status === "number"
+              ? (err as { status: number }).status
+              : null;
+        if (status === 401) {
           router.push("/sign-in?callbackUrl=%2F");
           return;
         }
+        console.error("[newsroom] feed load failed", err);
         setError("Couldn't load your feed.");
         if (!append) setItems([]);
       } finally {

@@ -26,7 +26,9 @@ pnpm db:seed                  # demo user + HN + Platformer Substack + example t
 pnpm --filter @newsroom/web dev
 ```
 
-Open http://localhost:3000 — sign up / sign in (seeded demo from `pnpm db:seed` if you used the default seed user). Authenticated home is the ranked **Feed**; use **Topics**, **Sources**, and **Settings** in the masthead.
+Open http://localhost:3000 — sign up / sign in. Default seed login after `pnpm db:seed`: **demo@example.com** / **newsroom-demo**. Authenticated home is the ranked **Feed**; use **Topics**, **Sources**, and **Settings** in the masthead.
+
+Scores are per user: after seed + ingest + rank, sign in as the seeded demo user (or run `SEED_USER_ID=<your-user-id> pnpm db:seed` then `pnpm worker:rank`) to see story rows.
 
 Check health:
 

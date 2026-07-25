@@ -38,6 +38,14 @@ Architecture: [architecture.md](./architecture.md)
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | ✅ | `docs/architecture.md` |
+| `web-topics-tree` | Topics UX: tree picker, keywords, weight help | ⬜ | `docs/architecture.md` |
+
+Notes for `web-topics-tree`:
+
+- Replace free-text topic **name** with a selectable **topic tree** (curated hierarchy); avoid inventing names in a blank field.
+- **Keywords** stay free-text chips/tokens; matching remains **case-insensitive** (align with ranking keyword pass).
+- **Weight** needs in-UI explanation: what it does in keyword scoring / feed priority, and the effect of setting it high vs low (see `docs/decisions/002-hybrid-ranking.md`).
+- Scope is primarily `apps/web` Topics page (+ thin API only if the tree catalog needs a server source). Mobile can follow later via `mobile-feed-topics`.
 
 ## D. Mobile client
 

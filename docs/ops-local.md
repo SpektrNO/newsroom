@@ -56,8 +56,9 @@ OLLAMA_SMOKE=1 pnpm --filter @newsroom/ai smoke   # fail if unreachable
 
 ```bash
 pnpm db:migrate
-pnpm db:seed                 # demo@localhost + HN + Platformer RSS + "AI & infra" topic
+pnpm db:seed                 # demo@example.com / newsroom-demo + HN + Platformer RSS + "AI & infra" topic
 # Or: SEED_USER_ID=<better-auth-user-id> pnpm db:seed
+# Then ingest + rank so that user gets feed rows:
 
 pnpm worker:ingest           # one-shot ingest; enqueues pending rank (does not wait on Ollama)
 pnpm worker:rank             # one-shot keyword + AI rank → user_article_scores
