@@ -124,6 +124,27 @@ export type ListFeedOptions = {
   limit?: number;
 };
 
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatSuggestion = {
+  topicLabel: string;
+  keywords: string[];
+  rationale: string;
+  inCatalog: boolean;
+};
+
+export type ChatRequest = {
+  messages: ChatMessage[];
+};
+
+export type ChatResponse = {
+  reply: string;
+  suggestions: ChatSuggestion[];
+};
+
 export type ApiClientOptions = {
   baseUrl: string;
   fetch?: typeof fetch;
@@ -263,6 +284,10 @@ export class ApiClient {
       "POST",
       `/api/feed/${encodeURIComponent(articleId)}/dismissed`,
     );
+  }
+
+  async postChat(input: ChatRequest): Promise<ChatResponse> {
+    return this.requestJson("POST", "/api/chat", input);
   }
 
   private async requestJson<T>(

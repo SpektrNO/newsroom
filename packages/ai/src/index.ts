@@ -14,3 +14,12 @@ export {
   type RankedItem,
   type RankArticleBatchInput,
 } from "./rank.js";
+export {
+  adviseTopics,
+  parseAdvisorResponse,
+  type AdvisorChatMessage,
+  type AdvisorFollowingTopic,
+  type AdvisorSuggestion,
+  type AdviseTopicsInput,
+  type AdviseTopicsResult,
+} from "./advisor.js";
