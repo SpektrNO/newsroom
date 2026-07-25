@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray, lt, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import {
   articleSources,
   articles,
   getDb,
+  jobs,
   sourceSubscriptions,
   topics,
   userArticleScores,
@@ -21,6 +22,37 @@ import {
 } from "@/lib/feed";
 
 export const dynamic = "force-dynamic";
+
+async function loadPipelineTimes(userId: string): Promise<{
+  lastIngestAt: string | null;
+  lastRankedAt: string | null;
+}> {
+  const db = getDb();
+  const [[ingestRow], [rankRow]] = await Promise.all([
+    db
+      .select({ at: sql<Date | string | null>`max(${jobs.finishedAt})` })
+      .from(jobs)
+      .where(and(eq(jobs.type, "ingest"), eq(jobs.status, "completed"))),
+    db
+      .select({
+        at: sql<Date | string | null>`max(${userArticleScores.scoredAt})`,
+      })
+      .from(userArticleScores)
+      .where(eq(userArticleScores.userId, userId)),
+  ]);
+
+  return {
+    lastIngestAt: toIsoOrNull(ingestRow?.at ?? null),
+    lastRankedAt: toIsoOrNull(rankRow?.at ?? null),
+  };
+}
+
+function toIsoOrNull(value: Date | string | null): string | null {
+  if (value == null) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
 
 export async function GET(request: Request) {
   const authResult = await requireSessionUserId();
@@ -99,30 +131,38 @@ export async function GET(request: Request) {
   const fetchLimit =
     topicKeywords !== null || sourceFilter !== null ? Math.min(200, limit * 10) : limit + 1;
 
-  const scoreRows = await getDb()
-    .select({
-      articleId: userArticleScores.articleId,
-      title: articles.title,
-      summary: articles.summary,
-      canonicalUrl: articles.canonicalUrl,
-      author: articles.author,
-      publishedAt: articles.publishedAt,
-      keywordScore: userArticleScores.keywordScore,
-      aiScore: userArticleScores.aiScore,
-      finalRank: userArticleScores.finalRank,
-      reason: userArticleScores.reason,
-      nearDuplicateOfArticleId: userArticleScores.nearDuplicateOfArticleId,
-      status: userArticleScores.status,
-      scoredAt: userArticleScores.scoredAt,
-    })
-    .from(userArticleScores)
-    .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
-    .where(and(...conditions))
-    .orderBy(desc(userArticleScores.finalRank), desc(userArticleScores.articleId))
-    .limit(fetchLimit);
+  const [scoreRows, pipeline] = await Promise.all([
+    getDb()
+      .select({
+        articleId: userArticleScores.articleId,
+        title: articles.title,
+        summary: articles.summary,
+        canonicalUrl: articles.canonicalUrl,
+        author: articles.author,
+        publishedAt: articles.publishedAt,
+        keywordScore: userArticleScores.keywordScore,
+        aiScore: userArticleScores.aiScore,
+        finalRank: userArticleScores.finalRank,
+        reason: userArticleScores.reason,
+        nearDuplicateOfArticleId: userArticleScores.nearDuplicateOfArticleId,
+        status: userArticleScores.status,
+        scoredAt: userArticleScores.scoredAt,
+      })
+      .from(userArticleScores)
+      .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
+      .where(and(...conditions))
+      .orderBy(desc(userArticleScores.finalRank), desc(userArticleScores.articleId))
+      .limit(fetchLimit),
+    loadPipelineTimes(authResult.userId),
+  ]);
 
   if (scoreRows.length === 0) {
-    return Response.json({ items: [], nextCursor: null });
+    return Response.json({
+      items: [],
+      nextCursor: null,
+      lastIngestAt: pipeline.lastIngestAt,
+      lastRankedAt: pipeline.lastRankedAt,
+    });
   }
 
   const articleIds = scoreRows.map((r) => r.articleId);
@@ -211,5 +251,7 @@ export async function GET(request: Request) {
       }),
     ),
     nextCursor,
+    lastIngestAt: pipeline.lastIngestAt,
+    lastRankedAt: pipeline.lastRankedAt,
   });
 }

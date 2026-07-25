@@ -48,6 +48,18 @@ function formatPublished(iso: string | null): string | null {
   });
 }
 
+function formatPipelineTime(iso: string | null | undefined): string {
+  if (!iso) return "never";
+  return formatPublished(iso) ?? "never";
+}
+
+function absoluteTimeTitle(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toLocaleString();
+}
+
 function formatRank(score: number): string {
   if (!Number.isFinite(score)) return "—";
   return score.toFixed(2);
@@ -123,6 +135,8 @@ export function FeedClient(): ReactNode {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [lastIngestAt, setLastIngestAt] = useState<string | null>(null);
+  const [lastRankedAt, setLastRankedAt] = useState<string | null>(null);
 
   const topicGroups = useMemo(
     () => groupTopics(topics, treeNodes),
@@ -151,6 +165,10 @@ export function FeedClient(): ReactNode {
         });
         setItems((prev) => (append ? [...prev, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
+        if (!append) {
+          setLastIngestAt(page.lastIngestAt ?? null);
+          setLastRankedAt(page.lastRankedAt ?? null);
+        }
       } catch (err) {
         const status =
           err instanceof ApiError
@@ -274,6 +292,17 @@ export function FeedClient(): ReactNode {
 
   return (
     <section className="feed-page">
+      <p className="feed-pipeline" aria-live="polite">
+        <span title={absoluteTimeTitle(lastIngestAt)}>
+          Ingested {formatPipelineTime(lastIngestAt)}
+        </span>
+        <span className="feed-pipeline-sep" aria-hidden>
+          ·
+        </span>
+        <span title={absoluteTimeTitle(lastRankedAt)}>
+          Ranked {formatPipelineTime(lastRankedAt)}
+        </span>
+      </p>
       <div className="feed-filters" role="group" aria-label="Feed filters">
         <div className="topic-filter" role="group" aria-label="Topics">
           <div className="topic-filter-header">

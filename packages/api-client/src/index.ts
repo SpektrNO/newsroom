@@ -106,6 +106,10 @@ export type FeedItem = {
 export type FeedPage = {
   items: FeedItem[];
   nextCursor: string | null;
+  /** ISO time of the last completed ingest job, if any. */
+  lastIngestAt?: string | null;
+  /** ISO time of the latest score write for this user, if any. */
+  lastRankedAt?: string | null;
 };
 
 export type ListFeedOptions = {
