@@ -191,6 +191,10 @@ export class ApiClient {
     return this.requestJson("GET", "/api/topic-tree");
   }
 
+  /**
+   * Create a per-user topic. Also the one-click catalog Follow path:
+   * `{ name: label, keywords: [label], weight: 1, enabled: true }`.
+   */
   async createTopic(input: CreateTopicInput): Promise<TopicResponse> {
     return this.requestJson("POST", "/api/topics", input);
   }

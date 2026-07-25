@@ -1,6 +1,46 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseTopicCreateBody, parseTopicPatchBody } from "./topics.js";
+import {
+  findTopicByLabel,
+  followDefaultsForLabel,
+  isFollowingLabel,
+  parseTopicCreateBody,
+  parseTopicPatchBody,
+} from "./topics.js";
+
+describe("followDefaultsForLabel", () => {
+  it("builds one-click Follow create body from catalog label", () => {
+    assert.deepEqual(followDefaultsForLabel("AI & infra"), {
+      name: "AI & infra",
+      keywords: ["AI & infra"],
+      weight: 1,
+      enabled: true,
+    });
+  });
+
+  it("trims label for name and starter keyword", () => {
+    assert.deepEqual(followDefaultsForLabel("  Developer tools  "), {
+      name: "Developer tools",
+      keywords: ["Developer tools"],
+      weight: 1,
+      enabled: true,
+    });
+  });
+});
+
+describe("isFollowingLabel / findTopicByLabel", () => {
+  const topics = [
+    { id: "1", name: "AI & infra" },
+    { id: "2", name: "Developer tools" },
+  ];
+
+  it("matches case-insensitively", () => {
+    assert.equal(isFollowingLabel(topics, "ai & INFRA"), true);
+    assert.equal(isFollowingLabel(topics, "Politics"), false);
+    assert.equal(findTopicByLabel(topics, "developer TOOLS")?.id, "2");
+    assert.equal(findTopicByLabel(topics, "missing"), undefined);
+  });
+});
 
 describe("parseTopicCreateBody", () => {
   it("accepts valid catalog leaf topic", () => {

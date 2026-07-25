@@ -1,9 +1,9 @@
 # Handoff: Browse full topic catalog (following vs available)
 
-**Status:** spec  
+**Status:** implementing  
 **Created:** 2026-07-25  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** in progress
 
 ## GitHub tracking
 
