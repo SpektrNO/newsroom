@@ -26,6 +26,17 @@ describe("followDefaultsForLabel", () => {
       enabled: true,
     });
   });
+
+  it("produces a body accepted by parseTopicCreateBody", () => {
+    const body = followDefaultsForLabel("LLMs & agents");
+    const parsed = parseTopicCreateBody(body);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.name, "LLMs & agents");
+    assert.deepEqual(parsed.keywords, ["LLMs & agents"]);
+    assert.equal(parsed.weight, 1);
+    assert.equal(parsed.enabled, true);
+  });
 });
 
 describe("isFollowingLabel / findTopicByLabel", () => {
