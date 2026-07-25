@@ -1,7 +1,7 @@
-# Handoff: Elegant feed, topics, sources UI
+# Handoff: Topics UX — tree picker, keywords, weight help
 
 **Status:** done  
-**Created:** 2026-07-24  
+**Created:** 2026-07-25  
 **Specifier agent:** spec complete  
 **Developer agent:** complete
 
@@ -9,241 +9,228 @@
 
 | Field | Value |
 |-------|-------|
-| Feature id | `web-feed-topics-sources` |
-| Parent issue | #26 — https://github.com/SpektrNO/newsroom/issues/26 |
-| Open tasks | _(none)_ |
-| Closed tasks | `spec` (#27), `api` (#28), `web` (#29), `verify` (#30), `docs` (#31) |
-| Backlog | `docs/feature-backlog.md` § C — marked ✅ via `record-feature-complete.sh` |
-| PR | #59 — https://github.com/SpektrNO/newsroom/pull/59 |
+| Feature id | `web-topics-tree` |
+| Parent issue | #60 — https://github.com/SpektrNO/newsroom/issues/60 |
+| Open tasks | *(none — all task sub-issues closed; parent stays open for PR)* |
+| Closed tasks | `spec` (#61), `api` (#62), `web` (#63), `verify` (#64), `docs` (#65) |
+| Backlog | `docs/feature-backlog.md` § C — Notes for `web-topics-tree` |
 
-Task order for this **web** feature (from `create-feature-issues.sh`): `spec` → `api` → `web` → `verify` → `docs`  
+Task order for this **web** feature (from parent #60): `spec` → `api` → `web` → `verify` → `docs`  
 (No `audit`, `db`, `worker`, or `mobile` slugs.)
-
-Closed Phase 1: `spec` (#27). Follow-up: task issues closed and parent `#26` linked after Issues API access was restored (`GH_PAT`).
 
 ## Intent
 
-Signed-in users read a calm, editorial personal feed and manage topics and sources in the Next.js web app — using the existing session-scoped feed/topics/sources APIs — without a dashboard card wall.
+On the web Topics page, signed-in users pick a topic from a curated hierarchical tree (instead of inventing a free-text name), enter free-text keywords, and understand weight via in-UI help tied to hybrid keyword ranking — while keep create / edit / enable-disable / delete working as today.
 
 ## User-facing spec
 
 | Field | Value |
 |-------|-------|
-| Trigger | After Better Auth sign-in; user opens web app (`apps/web`) to read ranked stories and configure topics/sources. |
-| Surfaces | **Web only** (`apps/web` UI + thin `api` glue if needed). Consumes existing `/api/feed*`, `/api/topics*`, `/api/sources*`, `/api/health`, Better Auth. Prefer `packages/api-client` from the browser (credentials include). **No** worker/mobile work. **No** new domain tables. |
+| Trigger | Signed-in user opens `/topics` to add or edit topics. |
+| Surfaces | **Web** (`apps/web` Topics UI) + **thin API** for the curated topic-tree catalog. Existing `GET/POST/PATCH/DELETE /api/topics*` unchanged in semantics. **No** worker, mobile, or DB schema work. |
 | Copy | Exact strings in **Copy** below. |
 | Acceptance | See **Acceptance criteria** below. |
 
-### Routes & information architecture
+### Routes & surfaces
 
-| Route | Auth | Purpose |
-|-------|------|---------|
-| `/` | Public landing if signed out; **Feed home** if signed in | Brand-first entry; authenticated users land on the ranked feed |
-| `/sign-in`, `/sign-up` | Public | Keep existing email/password flows; after success → redirect to `/` (feed) |
-| `/topics` | Session required | List / create / edit / enable-disable / delete topics |
-| `/sources` | Session required | List / add / enable-disable / delete HN + Substack subscriptions |
-| `/settings` | Session required | Account email, sign out, read-only system health |
+| Route / surface | Auth | Change |
+|-----------------|------|--------|
+| `/topics` | Session required | Replace free-text **Name** with hierarchical **topic-tree picker**. Keywords → free-text chips/tokens. Weight → control + inline help. Preserve list + CRUD actions. |
+| `GET /api/topic-tree` | Session required | **New** thin catalog endpoint (see contract). |
+| Feed / Sources / Settings | — | Unchanged. |
+| Mobile | — | Out of scope (`mobile-feed-topics` later). |
 
-**Chrome (authenticated):** Persistent top masthead with brand **Newsroom** (display weight — not a tiny nav label), primary nav links `Feed` · `Topics` · `Sources` · `Settings`, and a quiet sign-out affordance (Settings and/or masthead). Unauthenticated `/` keeps a brand-first composition (no app chrome).
+### Topic name → tree picker
 
-**Guards:** Unauthenticated visits to `/topics`, `/sources`, `/settings` → redirect to `/sign-in` (preserve `callbackUrl` or equivalent so post-login returns). Signed-in `/` shows feed, not the placeholder “Feed UI arrives later” panel.
+**Problem:** Blank free-text names are clunky and inconsistent.
 
-### Visual direction (normative)
+**Behavior:**
 
-Align with `docs/architecture.md` Clients note and the shipped auth aesthetic (Fraunces + Source Sans 3, teal accent, soft atmospheric gradients in `globals.css`):
+1. **Create:** Primary control is a hierarchical topic-tree picker. User expands categories and selects a **selectable** (leaf) node. There is **no** blank free-text name field on create.
+2. **Edit:** Same picker. Pre-select the catalog node whose `label` matches the topic’s stored `name` (case-insensitive). If no match (legacy / seed drift), show the current name as a muted “Current: {name}” note and require the user to pick a tree node before save (or allow save only if they select a node that updates `name`).
+3. **Stored value:** Continue storing the selected node’s **`label`** in `topics.name` (existing column + unique `lower(name)` per user). Do **not** add a `catalog_node_id` column (no `db` task).
+4. **Display path:** In the form and optionally in the list meta, show breadcrumb path (e.g. `Technology · AI & Machine Learning · AI & infra`) for clarity; list title remains the leaf label.
+5. **Duplicates:** Unchanged — selecting a label the user already has → API `409` → copy below.
+6. **Non-selectable parents:** Category nodes are for navigation only; only nodes with `selectable: true` can be chosen as the topic name.
 
-1. **One editorial composition** — Feed reads as a reading list / broadsheet *feel without* dense newspaper columns, hairline-rule grids, or a wall of equal cards.
-2. **Brand first** — On feed home, **Newsroom** is a hero-level masthead signal; no competing marketing headline that overpowers the brand.
-3. **No card wall** — Story rows use typography + spacing + optional hairline separators. Do **not** wrap each story in bordered/shadowed cards. Forms on Topics/Sources may use a single restrained panel where interaction needs a container (match existing `.panel` sparingly).
-4. **Atmosphere** — Keep soft multi-stop background (gradients / subtle wash). Avoid flat single-color page fills. Avoid purple/indigo “AI default,” glow stacks, and dark-mode-as-default.
-5. **Motion** — At least 2–3 intentional motions (e.g. masthead/nav appear, feed rows fade/slide in staggered lightly, button/status feedback). No noise animations.
-6. **Responsive** — Usable on mobile viewport: single column feed; nav collapses cleanly (simple wrap or compact links — no hamburger mega-menu required).
+### Keywords
 
-Evolve CSS variables from existing `:root` rather than inventing a second design system. Do not call Ollama or ranking from UI packages.
+1. Free-text entry via **chips / tokens** (preferred) or equivalent tokenizing input. Enter / comma / semicolon / newline create a chip; Backspace removes the last chip when the draft is empty.
+2. At least one keyword required when creating or when the topic is/remains enabled (align with existing `invalid_topic` rules).
+3. Limits unchanged: ≤ 50 keywords, ≤ 64 chars each after trim; empty tokens dropped.
+4. **Matching:** Case-insensitive substring on title/summary — already implemented in `packages/ai` `scoreKeywordMatch`. Do not change ranking code unless a bug blocks case-insensitive behavior. Storage may keep user casing; UI may display as entered.
+5. Placeholder: `Add keywords…`
 
-### Feed home (`/`)
+### Weight + help
 
-**Layout (first viewport):** Brand masthead + nav; then the feed list begins. Do **not** pack stats strips, schedule callouts, or multi-widget dashboards above the fold.
+Keep numeric control (default `1`, clamp `0.1`–`10`, step `0.1`) and add always-visible (or disclosure-default-open) help next to the Weight label.
 
-**Filters (secondary, under masthead):**
+**Normative help copy** (must appear; wording may wrap for layout but keep meaning):
 
-- Topic: “All topics” + one option per user topic (filter via `GET /api/feed?topic=<topicId>`).
-- Source: “All sources” · “Hacker News” · “Substack” (`?source=hackernews|substack`).
-- View: “Feed” (default — excludes `dismissed`) · “Saved” (only `status=saved` — requires thin API support; see contract).
+> **What weight does:** When a keyword from this topic matches an article’s title or summary, that hit adds `weight × 0.25` toward the keyword score (capped at 1). Keyword score is part of hybrid ranking: final rank blends keyword score (35%) with the AI score (65%). See hybrid ranking.
+>
+> **Higher weight** (e.g. 2–10): matching keywords push this topic’s stories harder toward the shortlist ceiling — use for interests you care about most.
+>
+> **Lower weight** (e.g. 0.1–0.5): matches still count, but contribute less to keyword score — use for weaker or exploratory interests.
 
-**Story row** (each `FeedItem`):
+Do **not** show raw formula symbols in the primary help if they hurt scanability; the `weight × 0.25` / 35%–65% language above is enough. Link or footnote “See hybrid ranking” may point to in-app Settings note or omit the link if there is no public docs route — inline text alone satisfies acceptance.
 
-| Element | Behavior |
-|---------|----------|
-| Title | Link to `canonicalUrl` (`target="_blank"` `rel="noopener noreferrer"`). Opening title → fire `POST .../seen` (optimistic OK; ignore duplicate). |
-| Reason | Show `reason` when non-null, muted one-line under title. |
-| Meta | Source label(s) from `sources[].sourceType` (`Hacker News` / `Substack`), optional `author`, relative or short `publishedAt`. |
-| Status | Quiet indicator for `saved` (and optionally `seen`). Do not show raw scores (`keywordScore` / `aiScore` / `finalRank`) in v1 UI. |
-| Near-dup | If `nearDuplicateOfArticleId` set, show muted note: “Similar to another story in your feed.” (no need to resolve peer title). |
-| Actions | **Save** → `markFeedSaved`; **Dismiss** → `markFeedDismissed` and remove row from default Feed view. Saved view: allow **Dismiss** and optionally un-save by… **v1:** Dismiss only from Saved (no toggle-off-saved API beyond setting another status — use **Seen** control “Remove from saved” → `markFeedSeen` to leave Saved filter). |
+### CRUD preserved
 
-**Pagination:** When `nextCursor` non-null, show **Load more** that appends `listFeed({ cursor, topic?, source?, status? })`.
+| Action | Behavior |
+|--------|----------|
+| List | Name (leaf label), optional path crumb, keywords, weight, enabled state, Edit / Disable|Enable / Delete |
+| Create | Tree selection + keywords + weight + enabled → `POST /api/topics` |
+| Edit | Same fields → `PATCH /api/topics/:id` |
+| Enable / Disable | `PATCH` `{ enabled }` only (unchanged) |
+| Delete | Confirm then `DELETE /api/topics/:id` |
 
-**Empty / loading / error:**
+Empty, loading, and error states stay equivalent to the current Topics page (updated lede copy below).
 
-| State | UI |
-|-------|-----|
-| Loading initial | Soft placeholder lines or “Loading your feed…” — not a spinner-only void. |
-| Empty feed (no items, no filters) | “Your feed is quiet.” + supporting: “Add topics and sources, then let ingest and ranking run. Seeded demos: try Topics and Sources after `pnpm db:seed` and `pnpm worker:ingest` / `pnpm worker:rank`.” CTAs: links to `/topics` and `/sources`. |
-| Empty with filters | “No stories match these filters.” + control to clear filters. |
-| Error (network / 401 / 5xx) | “Couldn’t load your feed.” + **Try again**. On 401 → redirect sign-in. |
-| Action failure | Inline error on the row: “Couldn’t update — try again.” |
-
-### Topics (`/topics`)
-
-- List topics: name, keywords (comma-separated chips or plain text — **not** card grid), weight, enabled toggle, edit/delete.
-- **Create:** form fields Name, Keywords (comma- or enter-separated → string[]), Weight (default 1, clamp 0.1–10), Enabled (default on).
-- **Edit:** same fields via inline expand or same-page form (no heavy modal required).
-- **Delete:** confirm (“Delete topic “{name}”?”) then `DELETE /api/topics/:id`.
-- **Duplicate name** (`409`): “You already have a topic with that name.”
-- **Validation** (`400`): “Check the name and keywords.” Map `invalid_topic` / API codes to that copy.
-- Empty: “No topics yet. Create one so ranking knows what you care about.”
-
-### Sources (`/sources`)
-
-- List subscriptions: type label, config summary (HN mode `top`/`new` if set; Substack `rssUrl`), enabled toggle, delete.
-- **Add Hacker News:** allow at most one HN subscription (API `409` duplicate) — if one exists, hide/disable Add HN and show helper text “Hacker News is already connected.”
-- **Add Substack:** require RSS URL field; POST `{ sourceType: "substack", config: { rssUrl } }`.
-- Enable/disable via `PATCH`; delete with confirm.
-- Errors: `duplicate` → “That source is already added.”; `invalid_config` / bad URL → “Check the RSS URL.”; `unsupported_source_type` → “That source isn’t available yet.”
-- Empty: “No sources yet. Connect Hacker News or a Substack RSS feed.”
-- Bluesky/X: not offered in UI (no teaser required).
-
-### Settings (`/settings`)
-
-- Show signed-in email (from Better Auth session).
-- **Sign out** button → `authClient.signOut()` → `/sign-in`.
-- **System** read-only: `GET /api/health` — show Database and Ollama as Ok / Unavailable (map `ok`/`error`). Do not imply the user can fix Ollama from UI.
-- No password change / OAuth / profile edit in this feature.
-
-### Copy (exact UI strings)
+### Copy
 
 | Context | String |
 |---------|--------|
-| Brand | `Newsroom` |
-| Nav | `Feed`, `Topics`, `Sources`, `Settings` |
-| Feed empty title | `Your feed is quiet.` |
-| Feed empty body | `Add topics and sources, then let ingest and ranking run.` |
-| Feed load error | `Couldn't load your feed.` |
-| Feed retry | `Try again` |
-| Load more | `Load more` |
-| Save action | `Save` |
-| Dismiss action | `Dismiss` |
-| Remove from saved | `Remove from saved` |
-| Near-dup note | `Similar to another story in your feed.` |
-| Filter all topics | `All topics` |
-| Filter all sources | `All sources` |
-| Source HN label | `Hacker News` |
-| Source Substack label | `Substack` |
-| View Feed | `Feed` |
-| View Saved | `Saved` |
-| Topics empty | `No topics yet. Create one so ranking knows what you care about.` |
-| Topics create CTA | `Add topic` |
-| Topics delete confirm | `Delete topic "{name}"?` |
-| Topics duplicate | `You already have a topic with that name.` |
-| Topics invalid | `Check the name and keywords.` |
-| Sources empty | `No sources yet. Connect Hacker News or a Substack RSS feed.` |
-| Sources add HN | `Add Hacker News` |
-| Sources add Substack | `Add Substack` |
-| Sources HN exists | `Hacker News is already connected.` |
-| Sources delete confirm | `Remove this source?` |
-| Sources duplicate | `That source is already added.` |
-| Sources invalid | `Check the RSS URL.` |
-| Settings heading | `Settings` |
-| Settings sign out | `Sign out` |
-| Settings health | `System` |
-| Unauth landing lede (keep/evolve) | `Focused stories for topics you care about.` |
-| Sign-in lede (existing) | `Sign in with your email and password.` |
+| Page title | `Topics` |
+| Page lede | `Pick a topic from the tree, add keywords, and set how strongly matches should rank.` |
+| Form heading (create) | `Add topic` |
+| Form heading (edit) | `Edit topic` |
+| Tree label | `Topic` |
+| Tree empty / none selected | `Choose a topic…` |
+| Tree search (if implemented) | Placeholder `Search topics…` |
+| Legacy unmatched name | `Current name isn’t in the catalog: “{name}”. Pick a topic from the tree.` |
+| Keywords label | `Keywords` |
+| Keywords placeholder | `Add keywords…` |
+| Weight label | `Weight` |
+| Weight help | (see **Weight + help** normative copy) |
+| Enabled | `Enabled` |
+| Submit create | `Add topic` |
+| Submit edit | `Save changes` |
+| Cancel edit | `Cancel` |
+| Pending | `Saving…` |
+| Duplicate (`409`) | `You already have a topic with that name.` |
+| Validation (`400`) | `Check the topic and keywords.` |
+| Generic save failure | `Couldn't save topic — try again.` |
+| Load failure | `Couldn't load topics.` |
+| Empty list | `No topics yet. Pick one from the tree so ranking knows what you care about.` |
+| Delete confirm | `Delete topic "{name}"?` |
+| Delete / toggle failure | `Couldn't update topic — try again.` / `Couldn't delete topic — try again.` (keep existing patterns) |
+| Disable / Enable buttons | `Disable` / `Enable` |
+| Edit / Delete buttons | `Edit` / `Delete` |
+
+### Visual direction
+
+Stay within the shipped web aesthetic (Fraunces + Source Sans 3, teal accent, soft atmosphere from `web-feed-topics-sources`). Topics form may use one restrained panel. Tree picker: expand/collapse hierarchy or combobox-with-tree — not a wall of equal cards. Chips are interaction affordances, not decorative pills clusters. Mobile viewport: tree usable in a single column (full mobile product polish is later).
 
 ### Acceptance criteria
 
-1. **Auth routing:** Signed-out users see brand landing on `/` with Sign up / Sign in; signed-in users see the feed on `/`. Protected routes redirect to sign-in.
-2. **Feed list:** Authenticated `/` loads `listFeed` (default page size OK, e.g. 20) and renders story rows per spec (title link, reason, meta, actions) — **not** a card grid.
-3. **Interactions:** Save / Dismiss / Seen (on title open) call existing status endpoints; UI updates without full page reload. Dismissed items leave the default Feed view.
-4. **Filters:** Topic and source filters call `GET /api/feed` with query params; Saved view lists only saved items (thin `status` query — see contract).
-5. **Pagination:** Load more uses `nextCursor` until null.
-6. **Topics CRUD:** Full create/edit/toggle/delete against existing topics API; duplicate/validation errors show specified copy.
-7. **Sources CRUD:** Add HN (singleton UX), add Substack RSS, toggle, delete against existing sources API; errors mapped as specified.
-8. **Settings:** Shows email, sign-out works, health checks displayed without crashing if Ollama is down.
-9. **api-client:** Browser calls go through `@newsroom/api-client` (or thin wrappers) with `credentials: "include"` — no ad-hoc `fetch` duplication of contract types.
-10. **api task thin:** No new Postgres tables/migrations. Only optional feed `status` filter + any session layout/BFF glue. No Ollama calls from UI.
-11. **Visual bar:** Masthead brand-first; atmospheric background retained/evolved; no purple glow theme; no dashboard card wall; mobile-usable.
-12. **Verify:** `pnpm --filter @newsroom/web typecheck` (and `pnpm web:test` if touched); `pnpm build` or turbo build graph green; manual checklist in Implementation result.
-13. **Docs:** README notes how to open feed UI after seed + ingest/rank; backlog status → ✅ via `docs` task / `record-feature-complete.sh`; architecture Clients note remains accurate (no contradictory API inventing).
+1. **Create:** User cannot submit a new topic without selecting a selectable tree node; there is no primary free-text name field on create.
+2. **Tree:** Catalog matches the **Curated catalog (v1)** below (ids/labels); parents non-selectable; leaves selectable; UI shows hierarchy (expand/collapse and/or path).
+3. **Name persistence:** Selected leaf `label` is sent as `name` on create/patch; list shows that name; duplicate leaf for same user → `409` + duplicate copy.
+4. **Keywords:** Chips/tokens (or equivalent); stored as `string[]`; case-insensitive matching still works for ranking (no regression in keyword pass).
+5. **Weight:** Control + normative help visible on the form; range still 0.1–10 default 1.
+6. **CRUD:** Enable/disable, edit, delete behave as before (session-scoped, confirm on delete).
+7. **Legacy:** Topics whose `name` is not in the catalog still list/edit/delete; edit requires choosing a catalog node to update the name (or clear guidance as in Copy).
+8. **API:** `GET /api/topic-tree` returns the catalog for a signed-in user; `401` when signed out. Existing topics endpoints keep request/response shapes.
+9. **Scope:** No mobile app changes; no Postgres migration; no ranking formula changes unless fixing a documented bug.
+10. **Seed:** Seed topic label `AI & infra` remains a selectable leaf in the catalog so demo seed stays coherent.
 
-## API / DB contract (if any)
+### Curated catalog (v1)
 
-PostgreSQL-backed; Better Auth for identity. **Domain schema already shipped** (`hybrid-rank-feed`, `ingest-hn-substack`). This feature primarily **consumes** existing HTTP APIs.
+Static, versioned catalog (repo module). Thin API returns this JSON shape. Implementer may add a small number of extra leaves if needed for UX balance, but **must** include every id/label below.
 
-### Existing endpoints (consume as-is)
+| id | parentId | label | selectable |
+|----|----------|-------|------------|
+| `tech` | `null` | Technology | no |
+| `tech.ai` | `tech` | AI & Machine Learning | no |
+| `tech.ai.infra` | `tech.ai` | AI & infra | **yes** |
+| `tech.ai.llms` | `tech.ai` | LLMs & agents | **yes** |
+| `tech.ai.mlops` | `tech.ai` | MLOps & data | **yes** |
+| `tech.eng` | `tech` | Software Engineering | no |
+| `tech.eng.languages` | `tech.eng` | Languages & runtimes | **yes** |
+| `tech.eng.databases` | `tech.eng` | Databases & storage | **yes** |
+| `tech.eng.devtools` | `tech.eng` | Developer tools | **yes** |
+| `tech.security` | `tech` | Security & privacy | **yes** |
+| `business` | `null` | Business & Startups | no |
+| `business.funding` | `business` | Funding & markets | **yes** |
+| `business.product` | `business` | Product & growth | **yes** |
+| `science` | `null` | Science | no |
+| `science.bio` | `science` | Biology & health | **yes** |
+| `science.climate` | `science` | Climate & energy | **yes** |
+| `culture` | `null` | Culture & Society | no |
+| `culture.design` | `culture` | Design & media | **yes** |
+| `culture.policy` | `culture` | Policy & society | **yes** |
+
+`version`: integer `1`.
+
+## API / DB contract
+
+PostgreSQL-backed topics rows **unchanged**. Better Auth session required for all endpoints below. No new tables / migrations.
+
+### Existing topics API (preserve)
+
+| Endpoint | Notes |
+|----------|-------|
+| `GET /api/topics` | `{ topics: Topic[] }` — unchanged |
+| `POST /api/topics` | Body `{ name, keywords, weight?, enabled? }` — `name` must be a catalog leaf **label** from the client; server may optionally validate against catalog (recommended) and reject unknown names with `400` `invalid_topic` |
+| `PATCH /api/topics/:id` | Partial `{ name?, keywords?, weight?, enabled? }` — same optional name validation |
+| `DELETE /api/topics/:id` | `204` — unchanged |
+
+Errors unchanged: `401`, `400` `{ error: "invalid_topic" }`, `409` `{ error: "duplicate" }`, `404` `{ error: "not_found" }`.
+
+**Optional server validation (preferred for `api` task):** Shared catalog module imported by the route; on create/patch when `name` is present, require `name` to equal some selectable node’s `label` (case-insensitive). Legacy rows with non-catalog names remain readable until the user patches `name`.
+
+### New: topic tree catalog
 
 | Field / Endpoint | Type | Source | Notes |
 |------------------|------|--------|-------|
-| `POST /api/auth/*` | Better Auth | session cookies | Sign-up / sign-in / sign-out |
-| `GET/POST /api/topics` | JSON | `topics` | Session-scoped list/create |
-| `PATCH/DELETE /api/topics/:id` | JSON / 204 | `topics` | Update / delete own |
-| `GET/POST /api/sources` | JSON | `source_subscriptions` | List/create HN \| Substack |
-| `PATCH/DELETE /api/sources/:id` | JSON / 204 | `source_subscriptions` | Enable/config / delete |
-| `GET /api/feed?cursor=&topic=&source=&limit=` | `FeedPage` | `user_article_scores` ⨝ articles | Default excludes `dismissed` |
-| `POST /api/feed/:articleId/seen\|saved\|dismissed` | `{ item }` | score status | `404` if no score row |
-| `GET /api/health` | JSON | probes | Unauthenticated; Settings display |
+| `GET /api/topic-tree` | JSON | Static catalog module | Session required. No DB. |
+| Response | object | — | `{ version: 1, nodes: TopicTreeNode[] }` |
+| `TopicTreeNode` | object | — | `{ id: string, parentId: string \| null, label: string, selectable: boolean }` |
+| Auth failure | `401` | Better Auth | Same pattern as other APIs |
 
-**`FeedItem` / `Topic` / `Source` shapes:** as in `packages/api-client` (camelCase JSON). Do not rename fields in UI-only DTOs.
+**api-client:** Add `listTopicTree(): Promise<TopicTreeResponse>` (and types). Web Topics UI should prefer the client over ad-hoc fetch.
 
-### Thin API gap (allowed in `api` task)
-
-| Field / Endpoint | Type | Source | Notes |
-|------------------|------|--------|-------|
-| `GET /api/feed?status=` | optional query | scores | **Add** optional `status=saved` (and optionally `seen` \| `new`). When `status` omitted → current behavior (exclude `dismissed`). When `status=saved` → only that status (still session-scoped). Invalid value → `400` `{ "error": "invalid_filter" }`. Wire through `ListFeedOptions.status` in `packages/api-client`. |
-| Auth layout / RSC session helpers | N/A | Better Auth | Not a new public API — shared layout loading session for chrome + guards. |
-
-**Explicitly not required:** new tables, new ranking endpoints, admin triggers, password-change API, feed search, infinite SSR of all articles, Bluesky.
+**Architecture note:** `docs/architecture.md` Clients section already plans this Topics refactor. Add `GET /api/topic-tree` to the API surface list in the **docs** task (not required to edit architecture during `api`/`web` unless convenient). Does **not** contradict hybrid ranking ADR — weight help documents existing formula only.
 
 ### DB
 
-| Concern | Notes |
-|---------|-------|
-| Migrations | **None** expected |
-| Seed | No change required; UI must work with existing `pnpm db:seed` demo user + topic + HN + Platformer |
+| Field | Change |
+|-------|--------|
+| `topics.name` | Still free-form text at the DB layer; product UX constrains values to catalog labels |
+| New columns / tables | **None** |
 
 ## Touchpoints
 
-- `apps/web/src/app/` — replace placeholder home; add `topics`, `sources`, `settings` routes; shared authenticated layout/chrome
-- `apps/web/src/app/globals.css` (+ optional component CSS modules) — editorial feed styles; evolve tokens
-- `apps/web/src/lib/` — client helpers wrapping `ApiClient`, auth redirect helpers
-- `apps/web/src/app/api/feed/route.ts` + `packages/api-client` — only if implementing `status` filter
-- `apps/web` tests — extend only if parsers/helpers added for feed status query
-- `README.md` — how to exercise UI after seed/ingest/rank
-- Must not contradict `docs/architecture.md` (Clients: calm editorial UI)
+- `apps/web/src/components/topics-client.tsx` — tree picker, keyword chips, weight help, copy
+- `apps/web/src/app/topics/page.tsx` — only if layout/wrapper needs adjustment
+- `apps/web/src/app/api/topic-tree/route.ts` — **new** GET
+- Catalog module — e.g. `apps/web/src/lib/topic-tree.ts` and/or `packages/api-client` / small shared module so API + client validation share one list (prefer one shared source of truth under `apps/web` or a tiny shared package path the API can import; avoid duplicating the table)
+- Optional: `apps/web/src/lib/topics.ts` — validate create/patch `name` against catalog
+- `packages/api-client/src/index.ts` — `listTopicTree` + types
+- Tests: extend `apps/web/src/lib/topics.test.ts` / API isolation tests for catalog endpoint + optional name validation; UI smoke if present
+- Docs task later: README / architecture API surface / backlog note as needed
+
+Must not contradict `docs/architecture.md` or `docs/decisions/002-hybrid-ranking.md`.
 
 ## Out of scope
 
-- Expo / mobile UI (`mobile-feed-topics`)
-- New ingest/rank worker behavior or Ollama-from-browser
-- Bluesky / X source types in UI
-- Multi-user admin, rate limits, OAuth (`multiuser-harden`)
-- Password reset / profile editing / avatars
-- Full-text paywalled Substack bodies / in-app article reader (open canonical URL only)
-- Push notifications, keyboard shortcuts, PWA install
-- Redesigning Better Auth email/password contracts
-- Showing raw rank scores or AI debug panels
+- Expo / `mobile-feed-topics` UI
+- Postgres migrations or storing `catalogNodeId` on topics
+- Changing keyword or final-rank formulas
+- Multi-select topics in one create, custom user-defined tree nodes, or admin taxonomy CMS
+- Renaming existing non-catalog topics automatically in a migration
+- Feed filter UX changes (still filters by topic id / name as today)
+- Bluesky / other sources work
 
-## Open questions / non-blocking defaults
+### Open questions (resolved for implementer)
 
-| Topic | Default for implementer |
-|-------|-------------------------|
-| Saved filter API | Implement `?status=saved` thin glue in `api` task; do not client-only filter across pages |
-| “Remove from saved” | `POST .../seen` (leaves Saved view); do not add PATCH status enum endpoint |
-| Unauth `/` | Keep brand + lede + Sign up / Sign in; no marketing sections below |
-| HN add when missing | Default `config: {}` or `{ mode: "top" }` — match sources API defaults |
-| Keywords input | Comma-separated string split/trim on submit |
-| Scores in UI | Hidden in v1 |
-| Middleware vs layout | Prefer Next.js layout + `auth.api.getSession` redirects; `middleware.ts` optional |
+| Question | Decision |
+|----------|----------|
+| Server vs client-only catalog? | Thin **`GET /api/topic-tree`** + shared static module (supports later mobile; matches `api` task). |
+| Store node id in DB? | **No** — store leaf `label` in `topics.name` only. |
+| Custom free-text names on create? | **No** — curated picker only. |
+| Validate name on API? | **Yes, recommended** against selectable labels when `name` is sent. |
 
 ---
 
@@ -251,35 +238,30 @@ PostgreSQL-backed; Better Auth for identity. **Domain schema already shipped** (
 
 ### Changes
 
-- **api:** Optional `GET /api/feed?status=` (`new`\|`seen`\|`saved`\|`dismissed`); invalid → `400 invalid_filter`. `parseFeedStatusFilter` + unit tests. `ListFeedOptions.status` in `@newsroom/api-client`.
-- **web:** Brand landing (signed-out `/`); authenticated `AppShell` masthead (Newsroom + Feed/Topics/Sources/Settings + sign-out). Feed client with filters, story rows, Save/Dismiss/seen-on-title, pagination. Topics/Sources CRUD pages; Settings email + health. Session guards via `requirePageSession` + `callbackUrl` on sign-in. Browser calls via `getBrowserApiClient()` (`credentials: "include"`). Evolved `globals.css` (editorial rows, masthead/row/landing motion).
-- **docs:** README feed UI walkthrough; architecture feed `status=` note; backlog ✅ via `record-feature-complete.sh`.
+- **api:** `apps/web/src/lib/topic-tree.ts` curated catalog v1; `GET /api/topic-tree` (session); create/patch validate `name` against selectable leaf labels (canonical casing); `packages/api-client` `listTopicTree` + types; unit tests in `topic-tree.test.ts` / `topics.test.ts`.
+- **web:** Topics page tree picker (expand/collapse + search), keyword chips, normative weight help, exact handoff copy; list shows optional path crumbs; legacy non-catalog names guided to re-pick.
+- **docs:** `docs/architecture.md` API + Clients; `docs/feature-backlog.md` ✅; `README.md` topic-tree endpoint + status.
 
 ### Verification
 
-- [x] `pnpm --filter @newsroom/web typecheck` — pass
-- [x] `pnpm --filter @newsroom/web exec tsx --test --test-force-exit src/lib/feed.test.ts src/lib/topics.test.ts` — pass (status parser included)
-- [x] `DATABASE_URL=… BETTER_AUTH_*=… pnpm --filter @newsroom/web build` — pass (routes `/`, `/topics`, `/sources`, `/settings`)
-- [x] `pnpm --filter @newsroom/api-client typecheck` — pass
-- [ ] Manual (needs Postgres + seed + ingest/rank): sign-in → feed rows, topic/source/Saved filters, Topics/Sources CRUD, Settings health with Ollama down
-- Note: bare `pnpm build` (turbo) fails without `DATABASE_URL` at Next page-data collect — pre-existing env requirement, not introduced here. Isolation tests in `web:test` need live Postgres.
+- [x] `npx tsx --test` topics + topic-tree + feed unit tests; `pnpm --filter @newsroom/ai test` (case-insensitive keyword match); web + api-client typecheck
+- [ ] Manual: signed-in `/topics` create/edit/enable/delete with tree + chips (UI smoke not automated); Postgres isolation suite needs live DB
 
 ### Deviations from spec
 
-- None material. Empty feed supporting copy includes the seed/ingest/rank hint from the empty-state table (in addition to the short Copy-table body).
+- None
 
 ### Follow-ups
 
-- Manual browser checklist above against seeded demo user.
-- Expo `mobile-feed-topics` remains backlog next for mobile surfaces.
-- GitHub housekeeping done: tasks #27–#31 closed; parent #26 status/done; PR #59 uses `Closes #26`.
+- Supervisor Phase 3: PR with `Closes #60`
+- Optional later: Expo Topics via `mobile-feed-topics` 
 
 ---
 
-## Handoff summary (for developer agent)
+## Handoff summary
 
-- **Ship polished web UI only:** authenticated Feed + Topics + Sources + Settings; calm editorial reading list (no card-wall dashboard); reuse existing session APIs via `packages/api-client`.
-- **Routes:** `/` feed (signed-in) / brand landing (signed-out); `/topics`, `/sources`, `/settings`; protect with sign-in redirect; evolve Fraunces/Source Sans + atmospheric CSS.
-- **Feed behavior:** story rows with title→external URL + seen, reason, Save/Dismiss, topic/source filters, Load more; Saved view needs thin `GET /api/feed?status=saved` (+ api-client) — **no new DB tables**.
-- **Topics/Sources:** full CRUD UX against existing endpoints; singleton HN messaging; map `duplicate` / validation errors to specified copy.
-- **GitHub:** Parent #26 · tasks #27–#31 closed · PR #59 `Closes #26`.
+- Replace Topics free-text **name** with a curated hierarchical **tree picker**; store selected leaf **label** in existing `topics.name` (no DB migration).
+- **Keywords** stay free-text chips/tokens; ranking match remains case-insensitive; CRUD enable/edit/delete preserved.
+- **Weight** keeps 0.1–10 control plus normative in-UI help explaining `weight × 0.25` keyword hits and 35%/65% hybrid blend (ADR 002).
+- Thin **`GET /api/topic-tree`** (+ api-client) serves static catalog v1; optional API validation that `name` is a selectable label.
+- Out of scope: mobile, schema changes, ranking formula edits; implement `api` → `web` → `verify` → `docs`.

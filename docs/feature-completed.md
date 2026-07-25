@@ -16,6 +16,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-24 | `ingest-hn-substack` | HN + Substack adapters, article upsert | #12 | Completed via spec→implement pipeline |
 | 2026-07-24 | `hybrid-rank-feed` | Keyword shortlist, Ollama rank, feed API | #19 | topics/feed APIs + worker rank; no UI polish |
 | 2026-07-24 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | #26 | editorial web feed/topics/sources/settings; PR #59 |
+| 2026-07-25 | `web-topics-tree` | Topics UX: tree picker, keywords, weight help | #60 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -36,3 +37,4 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | ID | Feature | Completed | Spec | Notes |
 |----|---------|-----------|------|-------|
 | `web-feed-topics-sources` | Elegant feed, topics, sources UI | 2026-07-24 | `docs/architecture.md` | editorial web feed/topics/sources/settings; PR #59 |
+| `web-topics-tree` | Topics UX: tree picker, keywords, weight help | 2026-07-25 | `docs/architecture.md` | Completed via spec→implement pipeline |

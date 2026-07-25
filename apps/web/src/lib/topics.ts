@@ -1,4 +1,5 @@
 import { isUniqueViolation } from "./sources";
+import { resolveSelectableTopicLabel } from "./topic-tree";
 
 export { isUniqueViolation };
 
@@ -76,7 +77,10 @@ export function parseTopicCreateBody(body: unknown): ParsedTopicCreate {
   if (typeof record.name !== "string" || !record.name.trim()) {
     return { ok: false, error: "invalid_topic" };
   }
-  const name = record.name.trim();
+  const name = resolveSelectableTopicLabel(record.name);
+  if (!name) {
+    return { ok: false, error: "invalid_topic" };
+  }
 
   const keywords = normalizeKeywords(record.keywords);
   if (keywords === null || keywords.length === 0) {
@@ -127,7 +131,11 @@ export function parseTopicPatchBody(body: unknown): ParsedTopicPatch {
     if (typeof record.name !== "string" || !record.name.trim()) {
       return { ok: false, error: "invalid_topic" };
     }
-    result.name = record.name.trim();
+    const name = resolveSelectableTopicLabel(record.name);
+    if (!name) {
+      return { ok: false, error: "invalid_topic" };
+    }
+    result.name = name;
   }
 
   if (record.keywords !== undefined) {

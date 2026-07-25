@@ -53,6 +53,18 @@ export type Topic = {
 export type TopicsListResponse = { topics: Topic[] };
 export type TopicResponse = { topic: Topic };
 
+export type TopicTreeNode = {
+  id: string;
+  parentId: string | null;
+  label: string;
+  selectable: boolean;
+};
+
+export type TopicTreeResponse = {
+  version: number;
+  nodes: TopicTreeNode[];
+};
+
 export type CreateTopicInput = {
   name: string;
   keywords: string[];
@@ -171,6 +183,10 @@ export class ApiClient {
 
   async listTopics(): Promise<TopicsListResponse> {
     return this.requestJson("GET", "/api/topics");
+  }
+
+  async listTopicTree(): Promise<TopicTreeResponse> {
+    return this.requestJson("GET", "/api/topic-tree");
   }
 
   async createTopic(input: CreateTopicInput): Promise<TopicResponse> {
