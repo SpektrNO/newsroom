@@ -1,9 +1,9 @@
 # Handoff: Topics UX — tree picker, keywords, weight help
 
-**Status:** spec  
+**Status:** implementing  
 **Created:** 2026-07-25  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** in progress
 
 ## GitHub tracking
 
