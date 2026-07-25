@@ -32,6 +32,17 @@ describe("parseTopicCreateBody", () => {
       false,
     );
   });
+
+  it("accepts numeric string weight", () => {
+    const parsed = parseTopicCreateBody({
+      name: "Developer tools",
+      keywords: ["vite"],
+      weight: "1.5",
+    });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.weight, 1.5);
+  });
 });
 
 describe("parseTopicPatchBody", () => {

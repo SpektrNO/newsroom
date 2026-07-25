@@ -58,6 +58,18 @@ function clampWeight(n: number): number {
   return Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, n));
 }
 
+/** Accept JSON numbers or numeric strings from clients. */
+function parseWeightValue(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return clampWeight(raw);
+  }
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return clampWeight(n);
+  }
+  return null;
+}
+
 export type ParsedTopicCreate =
   | {
       ok: true;
@@ -89,10 +101,11 @@ export function parseTopicCreateBody(body: unknown): ParsedTopicCreate {
 
   let weight = 1;
   if (record.weight !== undefined) {
-    if (typeof record.weight !== "number" || !Number.isFinite(record.weight)) {
+    const parsedWeight = parseWeightValue(record.weight);
+    if (parsedWeight === null) {
       return { ok: false, error: "invalid_topic" };
     }
-    weight = clampWeight(record.weight);
+    weight = parsedWeight;
   }
 
   const enabled =
@@ -147,10 +160,11 @@ export function parseTopicPatchBody(body: unknown): ParsedTopicPatch {
   }
 
   if (record.weight !== undefined) {
-    if (typeof record.weight !== "number" || !Number.isFinite(record.weight)) {
+    const parsedWeight = parseWeightValue(record.weight);
+    if (parsedWeight === null) {
       return { ok: false, error: "invalid_topic" };
     }
-    result.weight = clampWeight(record.weight);
+    result.weight = parsedWeight;
   }
 
   if (record.enabled !== undefined) {

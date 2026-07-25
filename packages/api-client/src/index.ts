@@ -140,7 +140,9 @@ export class ApiClient {
 
   constructor(options: ApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
-    this.fetchImpl = options.fetch ?? fetch;
+    // Detached `fetch` throws "Illegal invocation" in browsers; keep `this` bound.
+    this.fetchImpl =
+      options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   }
 
   async health(): Promise<HealthResponse> {

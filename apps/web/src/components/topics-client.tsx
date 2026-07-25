@@ -18,8 +18,33 @@ import {
 import { getBrowserApiClient } from "@/lib/api";
 import {
   findNodeByLabel,
+  getTopicTree,
   topicPathLabels,
 } from "@/lib/topic-tree";
+
+function readApiError(
+  err: unknown,
+): { status: number; code: string } | null {
+  if (err instanceof ApiError) {
+    return { status: err.status, code: err.code };
+  }
+  // Bundled copies of api-client can break `instanceof`.
+  if (!err || typeof err !== "object") return null;
+  const rec = err as { status?: unknown; code?: unknown; name?: unknown };
+  if (typeof rec.status !== "number") return null;
+  if (typeof rec.code === "string") {
+    return { status: rec.status, code: rec.code };
+  }
+  if (rec.name === "ApiError") {
+    return { status: rec.status, code: "error" };
+  }
+  return null;
+}
+
+/** Map key for roots — treats null/undefined parentId the same. */
+function parentKey(parentId: string | null | undefined): string {
+  return parentId ?? "";
+}
 
 const WEIGHT_HELP = (
   <>
@@ -74,7 +99,7 @@ function formatPath(path: string[] | null): string | null {
 
 type TreeItemProps = {
   node: TopicTreeNode;
-  childrenByParent: Map<string | null, TopicTreeNode[]>;
+  childrenByParent: Map<string, TopicTreeNode[]>;
   expanded: Set<string>;
   selectedId: string | null;
   search: string;
@@ -91,7 +116,7 @@ function TreeItem({
   onToggle,
   onSelect,
 }: TreeItemProps): ReactNode {
-  const kids = childrenByParent.get(node.id) ?? [];
+  const kids = childrenByParent.get(parentKey(node.id)) ?? [];
   const hasKids = kids.length > 0;
   const isOpen = expanded.has(node.id);
   const q = search.trim().toLowerCase();
@@ -103,7 +128,7 @@ function TreeItem({
 
   function matchesBranch(n: TopicTreeNode): boolean {
     if (matchesSelf(n)) return true;
-    return (childrenByParent.get(n.id) ?? []).some(matchesBranch);
+    return (childrenByParent.get(parentKey(n.id)) ?? []).some(matchesBranch);
   }
 
   if (q && !matchesBranch(node)) return null;
@@ -179,9 +204,9 @@ function TopicTreePicker({
   legacyName,
 }: TopicTreePickerProps): ReactNode {
   const childrenByParent = useMemo(() => {
-    const map = new Map<string | null, TopicTreeNode[]>();
+    const map = new Map<string, TopicTreeNode[]>();
     for (const n of nodes) {
-      const key = n.parentId;
+      const key = parentKey(n.parentId);
       const list = map.get(key) ?? [];
       list.push(n);
       map.set(key, list);
@@ -201,6 +226,19 @@ function TopicTreePicker({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+
+  const roots = childrenByParent.get("") ?? [];
+
+  /** Expand every non-leaf so categories are browsable without hunting. */
+  function expandBranches(base?: Set<string>) {
+    const next = new Set(base ?? []);
+    for (const n of nodes) {
+      if (!n.selectable && (childrenByParent.get(parentKey(n.id))?.length ?? 0) > 0) {
+        next.add(n.id);
+      }
+    }
+    return next;
+  }
 
   useEffect(() => {
     if (!selectedNode) return;
@@ -238,7 +276,6 @@ function TopicTreePicker({
     });
   }, [search, nodes]);
 
-  const roots = childrenByParent.get(null) ?? [];
   const pathCrumb = formatPath(
     selectedLabel ? pathFromNodes(nodes, selectedLabel) : null,
   );
@@ -250,6 +287,11 @@ function TopicTreePicker({
       else next.add(id);
       return next;
     });
+  }
+
+  function openPanel() {
+    setOpen(true);
+    setExpanded((prev) => expandBranches(prev));
   }
 
   return (
@@ -265,7 +307,7 @@ function TopicTreePicker({
         type="button"
         className="topic-picker-trigger"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openPanel())}
       >
         {selectedNode ? selectedNode.label : "Choose a topic…"}
       </button>
@@ -282,24 +324,28 @@ function TopicTreePicker({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search topics"
           />
-          <ul className="topic-tree-root">
-            {roots.map((node) => (
-              <TreeItem
-                key={node.id}
-                node={node}
-                childrenByParent={childrenByParent}
-                expanded={expanded}
-                selectedId={selectedNode?.id ?? null}
-                search={search}
-                onToggle={toggle}
-                onSelect={(n) => {
-                  onSelectLabel(n.label);
-                  setOpen(false);
-                  setSearch("");
-                }}
-              />
-            ))}
-          </ul>
+          {roots.length === 0 ? (
+            <p className="legacy-note">No topics in the catalog.</p>
+          ) : (
+            <ul className="topic-tree-root">
+              {roots.map((node) => (
+                <TreeItem
+                  key={node.id}
+                  node={node}
+                  childrenByParent={childrenByParent}
+                  expanded={expanded}
+                  selectedId={selectedNode?.id ?? null}
+                  search={search}
+                  onToggle={toggle}
+                  onSelect={(n) => {
+                    onSelectLabel(n.label);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                />
+              ))}
+            </ul>
+          )}
         </div>
       ) : null}
     </div>
@@ -393,7 +439,9 @@ export function TopicsClient(): ReactNode {
   const router = useRouter();
   const api = getBrowserApiClient();
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [treeNodes, setTreeNodes] = useState<TopicTreeNode[]>([]);
+  const [treeNodes, setTreeNodes] = useState<TopicTreeNode[]>(
+    () => getTopicTree().nodes,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -412,15 +460,19 @@ export function TopicsClient(): ReactNode {
     try {
       const [topicsRes, treeRes] = await Promise.all([
         api.listTopics(),
-        api.listTopicTree(),
+        api.listTopicTree().catch(() => getTopicTree()),
       ]);
       setTopics(topicsRes.topics);
-      setTreeNodes(treeRes.nodes);
+      const nodes =
+        treeRes.nodes?.length > 0 ? treeRes.nodes : getTopicTree().nodes;
+      setTreeNodes(nodes);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push("/sign-in?callbackUrl=%2Ftopics");
         return;
       }
+      // Still offer the static catalog so the picker is never blank.
+      setTreeNodes(getTopicTree().nodes);
       setError("Couldn't load topics.");
     } finally {
       setLoading(false);
@@ -491,15 +543,17 @@ export function TopicsClient(): ReactNode {
       resetForm();
       await refresh();
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.code === "duplicate" || err.status === 409) {
-          setFormError("You already have a topic with that name.");
-        } else if (err.code === "invalid_topic" || err.status === 400) {
-          setFormError("Check the topic and keywords.");
-        } else {
-          setFormError("Couldn't save topic — try again.");
-        }
+      const apiErr = readApiError(err);
+      if (apiErr?.status === 401) {
+        router.push("/sign-in?callbackUrl=%2Ftopics");
+        return;
+      }
+      if (apiErr?.code === "duplicate" || apiErr?.status === 409) {
+        setFormError("You already have a topic with that name.");
+      } else if (apiErr?.code === "invalid_topic" || apiErr?.status === 400) {
+        setFormError("Check the topic and keywords.");
       } else {
+        console.error("[newsroom] topic save failed", err);
         setFormError("Couldn't save topic — try again.");
       }
     } finally {
@@ -537,63 +591,65 @@ export function TopicsClient(): ReactNode {
         </p>
       </header>
 
-      <form className="manage-form panel-soft" onSubmit={onSubmit}>
-        <h2 className="form-heading">
-          {editingId ? "Edit topic" : "Add topic"}
-        </h2>
-
-        <TopicTreePicker
-          nodes={treeNodes}
-          selectedLabel={selectedLabel}
-          onSelectLabel={(label) => {
-            setSelectedLabel(label);
-            setLegacyName(null);
-          }}
-          legacyName={legacyName}
-        />
-
-        <KeywordChips keywords={keywords} onChange={setKeywords} />
-
-        <div className="weight-field">
-          <label className="weight-label" htmlFor="topic-weight">
-            Weight
-          </label>
-          <input
-            id="topic-weight"
-            type="number"
-            min={0.1}
-            max={10}
-            step={0.1}
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-          />
-          <div className="weight-help">{WEIGHT_HELP}</div>
-        </div>
-
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-          />
-          Enabled
-        </label>
-        {formError ? <p className="error">{formError}</p> : null}
-        <div className="form-actions">
-          <button type="submit" disabled={pending}>
-            {pending ? "Saving…" : editingId ? "Save changes" : "Add topic"}
-          </button>
-          {editingId ? (
-            <button type="button" className="ghost" onClick={resetForm}>
-              Cancel
-            </button>
-          ) : null}
-        </div>
-      </form>
-
       {loading ? (
         <p className="feed-placeholder">Loading topics…</p>
-      ) : error ? (
+      ) : (
+        <form className="manage-form panel-soft" onSubmit={onSubmit}>
+          <h2 className="form-heading">
+            {editingId ? "Edit topic" : "Add topic"}
+          </h2>
+
+          <TopicTreePicker
+            nodes={treeNodes}
+            selectedLabel={selectedLabel}
+            onSelectLabel={(label) => {
+              setSelectedLabel(label);
+              setLegacyName(null);
+            }}
+            legacyName={legacyName}
+          />
+
+          <KeywordChips keywords={keywords} onChange={setKeywords} />
+
+          <div className="weight-field">
+            <label className="weight-label" htmlFor="topic-weight">
+              Weight
+            </label>
+            <input
+              id="topic-weight"
+              type="number"
+              min={0.1}
+              max={10}
+              step={0.1}
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+            />
+            <div className="weight-help">{WEIGHT_HELP}</div>
+          </div>
+
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            Enabled
+          </label>
+          {formError ? <p className="error">{formError}</p> : null}
+          <div className="form-actions">
+            <button type="submit" disabled={pending}>
+              {pending ? "Saving…" : editingId ? "Save changes" : "Add topic"}
+            </button>
+            {editingId ? (
+              <button type="button" className="ghost" onClick={resetForm}>
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        </form>
+      )}
+
+      {loading ? null : error ? (
         <p className="error">{error}</p>
       ) : topics.length === 0 ? (
         <p className="empty-copy">
