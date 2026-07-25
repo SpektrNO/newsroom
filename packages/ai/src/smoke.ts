@@ -9,7 +9,10 @@ import { OllamaProvider } from "./ollama.js";
 const requireLive = process.env.OLLAMA_SMOKE === "1";
 
 async function main() {
-  const provider = new OllamaProvider({ timeoutMs: 15_000 });
+  const provider = new OllamaProvider({
+    timeoutMs: 5_000,
+    completeTimeoutMs: 180_000,
+  });
   const reachable = await provider.health();
 
   if (!reachable) {

@@ -15,7 +15,7 @@ Feed ranking needs a deterministic keyword shortlist (no Ollama) plus a batch AI
 
 3. **Final rank** — `0.35 * keyword_score + 0.65 * (ai_score ?? keyword_score)`. Implemented as `combineFinalRank`.
 
-4. **AI batching** — Default batch size **30**, env `RANK_BATCH_SIZE` clamped to **20–50**. Helper `rankArticleBatch` uses `AiProvider.complete` only (no DB/Next imports). Malformed items skipped; invalid near-dup ids ignored.
+4. **AI batching** — Default batch size **30**, env `RANK_BATCH_SIZE` clamped to **20–50**. Helper `rankArticleBatch` uses `AiProvider.complete` only (no DB/Next imports). Malformed items skipped; invalid near-dup ids ignored. Ollama generate timeout defaults to **5 minutes** (`OLLAMA_TIMEOUT_MS`); health probes stay short (~10s).
 
 5. **Jobs** — Successful ingest enqueues a pending `rank` job (single-flight). Worker claims earliest due `ingest` or `rank`. One-shot: `pnpm worker:rank` / `NEWSROOM_WORKER_ONCE=rank`.
 

@@ -17,12 +17,12 @@ services:
       timeout: 5s
       retries: 10
 
-  # Optional local Ollama. Postgres does not depend on this service.
-  # Prefer host Ollama instead: leave this commented and set OLLAMA_HOST=http://localhost:11434
+  # Default local Ollama (same `docker compose up -d` as Postgres).
+  # Host install is optional — mainly for easier GPU access (do not bind both to :11434).
+  # Postgres-only: docker compose up -d postgres
   ollama:
     image: ollama/ollama:latest
     container_name: newsroom-ollama
-    profiles: ["ollama"]
     restart: unless-stopped
     ports:
       - "11434:11434"

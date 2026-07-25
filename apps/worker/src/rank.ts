@@ -386,6 +386,11 @@ export async function runRank(
 ): Promise<RankResult> {
   const provider = options.provider ?? new OllamaProvider();
   const batchSize = options.batchSize ?? resolveRankBatchSize();
+  if (!options.provider) {
+    console.log(
+      `[newsroom-worker] Ollama model=${process.env.OLLAMA_MODEL ?? "llama3.2"} batch=${batchSize} (OLLAMA_TIMEOUT_MS default 300000 if unset)`,
+    );
+  }
   const result: RankResult = {
     users: 0,
     scored: 0,

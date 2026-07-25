@@ -8,6 +8,7 @@ import {
   runIngest,
 } from "./ingest.js";
 import {
+  claimNextRankJob,
   claimNextWorkerJob,
   enqueueRankNow,
   processRankJob,
@@ -52,15 +53,9 @@ async function runOnceRank(): Promise<number> {
   const db = loadDb();
   console.log("[newsroom-worker] one-shot rank starting");
   await enqueueRankNow(db);
-  const claimed = await claimNextWorkerJob(db);
-  if (!claimed || claimed.type !== "rank") {
-    // May have claimed ingest if both pending; fall back to inline rank.
-    if (claimed?.type === "ingest") {
-      // Put ingest back to pending? Simpler: process ingest then rank.
-      const ingestResult = await processIngestJob(db, claimed.id);
-      console.log("[newsroom-worker] processed pending ingest first:", ingestResult);
-      await ensureNextIngestJob(db, INGEST_INTERVAL_MS);
-    }
+  // Prefer rank-only claim so a due ingest job does not steal this one-shot.
+  const claimed = await claimNextRankJob(db);
+  if (!claimed) {
     const result = await runRank(db);
     console.log("[newsroom-worker] one-shot rank (inline):", result);
     const allAiFailed =

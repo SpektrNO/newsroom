@@ -8,8 +8,8 @@ Personal-first; multi-user-ready data model and APIs.
 
 - Node.js 20+
 - [pnpm](https://pnpm.io) 9 (`corepack enable` recommended)
-- Docker (Postgres; optional Ollama Compose profile)
-- Optional: [Ollama](https://ollama.com) on the host (`OLLAMA_HOST`)
+- Docker (Postgres + Ollama via Compose — `docker compose up -d`; see [docs/ops-local.md](docs/ops-local.md#ollama))
+- Optional: host [Ollama](https://ollama.com) only if you want easier **GPU** access — [docs/ops-local.md](docs/ops-local.md#optional-host-install-for-gpu)
 
 ## Quick start
 
@@ -19,9 +19,10 @@ cp .env.example .env
 # Copy the same app vars into apps/web/.env.local for Next.js
 
 pnpm install
-docker compose up -d postgres
+docker compose up -d          # Postgres + Ollama
 pnpm db:migrate
 pnpm db:seed                  # demo user + HN + Platformer Substack + example topic
+# First time: docker exec -it newsroom-ollama ollama pull llama3.2
 pnpm --filter @newsroom/web dev
 ```
 
@@ -62,8 +63,9 @@ pnpm --filter @newsroom/worker start
 | Command | Description |
 |---------|-------------|
 | `pnpm install` | Install workspace deps |
-| `docker compose up -d postgres` | Start Postgres (`DATABASE_URL` in `.env.example`) |
-| `docker compose --profile ollama up -d` | Optional Ollama container (Postgres does not depend on it) |
+| `docker compose up -d` | Start Postgres + Ollama |
+| `docker compose up -d postgres` | Postgres only (skip Ollama) |
+| `docker exec -it newsroom-ollama ollama pull llama3.2` | Pull ranking model into the Compose Ollama volume |
 | `pnpm db:generate` | Generate Drizzle migrations from schema |
 | `pnpm db:migrate` | Apply migrations to `DATABASE_URL` |
 | `pnpm db:seed` | Demo user + HN + Platformer Substack + `AI & infra` topic |
@@ -82,7 +84,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank`, `RANK_BATCH_SIZE` (clamped 20–50, default 30).
+Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000).
 
 ### Topics & feed API (session cookie)
 
@@ -100,7 +102,7 @@ Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/d
 | Doc | Purpose |
 |-----|---------|
 | [docs/architecture.md](docs/architecture.md) | System design, data model, APIs |
-| [docs/ops-local.md](docs/ops-local.md) | Local Compose / health / ingest / rank ops |
+| [docs/ops-local.md](docs/ops-local.md) | Local Compose / health / ingest / rank; Ollama via Compose (easy) or host (GPU) |
 | [docs/decisions/001-ingest-url-and-hn.md](docs/decisions/001-ingest-url-and-hn.md) | Canonical URL + HN Firebase choices |
 | [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md) | Keyword + AI rank formulas and jobs |
 | [docs/feature-backlog.md](docs/feature-backlog.md) | Feature segmentation index |
