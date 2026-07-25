@@ -117,6 +117,30 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
   };
 }
 
+/** Collect topic ids from `topic` (repeatable) and/or `topics` (comma-separated). */
+export function parseFeedTopicIds(url: URL): string[] | "invalid" {
+  const fromRepeat = url.searchParams.getAll("topic").flatMap((raw) =>
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const fromCsv = (url.searchParams.get("topics") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of [...fromRepeat, ...fromCsv]) {
+    if (seen.has(id)) continue;
+    // Basic sanity: topic ids are non-empty tokens without whitespace.
+    if (/\s/.test(id) || id.length > 128) return "invalid";
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 /** Re-check keyword overlap for topic= filter (no stored match set). */
 export function passesTopicFilter(
   title: string,

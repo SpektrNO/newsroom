@@ -14,6 +14,7 @@ import {
   parseFeedLimit,
   parseFeedSourceFilter,
   parseFeedStatusFilter,
+  parseFeedTopicIds,
   passesTopicFilter,
   toFeedItemJson,
   type FeedSourceJson,
@@ -28,11 +29,15 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = parseFeedLimit(url.searchParams.get("limit"));
   const cursorRaw = url.searchParams.get("cursor");
-  const topicId = url.searchParams.get("topic");
+  const topicIds = parseFeedTopicIds(url);
   const sourceFilter = parseFeedSourceFilter(url.searchParams.get("source"));
   const statusFilter = parseFeedStatusFilter(url.searchParams.get("status"));
 
-  if (sourceFilter === "invalid" || statusFilter === "invalid") {
+  if (
+    topicIds === "invalid" ||
+    sourceFilter === "invalid" ||
+    statusFilter === "invalid"
+  ) {
     return Response.json({ error: "invalid_filter" }, { status: 400 });
   }
 
@@ -45,18 +50,30 @@ export async function GET(request: Request) {
   }
 
   let topicKeywords: string[] | null = null;
-  if (topicId) {
-    const [topic] = await getDb()
+  if (topicIds.length > 0) {
+    const topicRows = await getDb()
       .select()
       .from(topics)
       .where(
-        and(eq(topics.id, topicId), eq(topics.userId, authResult.userId)),
-      )
-      .limit(1);
-    if (!topic) {
+        and(
+          eq(topics.userId, authResult.userId),
+          inArray(topics.id, topicIds),
+        ),
+      );
+    if (topicRows.length !== topicIds.length) {
       return Response.json({ error: "invalid_filter" }, { status: 400 });
     }
-    topicKeywords = topic.keywords ?? [];
+    const keywords: string[] = [];
+    const seenKw = new Set<string>();
+    for (const topic of topicRows) {
+      for (const kw of topic.keywords ?? []) {
+        const key = kw.trim().toLowerCase();
+        if (!key || seenKw.has(key)) continue;
+        seenKw.add(key);
+        keywords.push(kw.trim());
+      }
+    }
+    topicKeywords = keywords;
   }
 
   const conditions = [

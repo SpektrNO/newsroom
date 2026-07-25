@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -13,15 +14,22 @@ import {
   type FeedItem,
   type SourceTypeV1,
   type Topic,
+  type TopicTreeNode,
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
+import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
 
 type SourceFilter = "" | SourceTypeV1;
 type ViewFilter = "feed" | "saved";
 
+type TopicGroup = {
+  root: string;
+  topics: Topic[];
+};
+
 function sourceLabel(type: string): string {
   if (type === "hackernews") return "Hacker News";
-  if (type === "substack") return "Substack";
+  if (type === "substack") return "Feed";
   return type;
 }
 
@@ -40,20 +48,91 @@ function formatPublished(iso: string | null): string | null {
   });
 }
 
+function formatRank(score: number): string {
+  if (!Number.isFinite(score)) return "—";
+  return score.toFixed(2);
+}
+
+function rankDetail(item: FeedItem): string {
+  const parts = [`Keyword ${formatRank(item.keywordScore)}`];
+  if (item.aiScore !== null && item.aiScore !== undefined) {
+    parts.push(`AI ${formatRank(item.aiScore)}`);
+  } else {
+    parts.push("AI —");
+  }
+  parts.push(`Final ${formatRank(item.finalRank)}`);
+  return parts.join(" · ");
+}
+
+function groupRootForTopic(
+  topic: Topic,
+  treeNodes: TopicTreeNode[],
+): string {
+  const fromCatalog = topicPathLabels(topic.name);
+  if (fromCatalog?.[0]) return fromCatalog[0];
+  const byId = new Map(treeNodes.map((n) => [n.id, n]));
+  const needle = topic.name.trim().toLowerCase();
+  const node = treeNodes.find((n) => n.label.toLowerCase() === needle);
+  if (node) {
+    let current: TopicTreeNode | undefined = node;
+    let root = node.label;
+    while (current?.parentId) {
+      current = byId.get(current.parentId);
+      if (current) root = current.label;
+    }
+    return root;
+  }
+  return "Other";
+}
+
+function groupTopics(
+  topics: Topic[],
+  treeNodes: TopicTreeNode[],
+): TopicGroup[] {
+  const map = new Map<string, Topic[]>();
+  for (const topic of topics) {
+    const root = groupRootForTopic(topic, treeNodes);
+    const list = map.get(root) ?? [];
+    list.push(topic);
+    map.set(root, list);
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([root, groupTopicsList]) => ({
+      root,
+      topics: groupTopicsList.sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+}
+
 export function FeedClient(): ReactNode {
   const router = useRouter();
   const api = getBrowserApiClient();
 
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [treeNodes, setTreeNodes] = useState<TopicTreeNode[]>([]);
   const [items, setItems] = useState<FeedItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [topicId, setTopicId] = useState("");
+  /** Empty set = show all topics (no topic filter). */
+  const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [topicsReady, setTopicsReady] = useState(false);
   const [source, setSource] = useState<SourceFilter>("");
   const [view, setView] = useState<ViewFilter>("feed");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+
+  const topicGroups = useMemo(
+    () => groupTopics(topics, treeNodes),
+    [topics, treeNodes],
+  );
+
+  const allTopicIds = useMemo(() => topics.map((t) => t.id), [topics]);
+
+  const topicFilterActive =
+    selectedTopicIds.size > 0 && selectedTopicIds.size < allTopicIds.length;
 
   const loadPage = useCallback(
     async (cursor?: string, append = false) => {
@@ -65,7 +144,7 @@ export function FeedClient(): ReactNode {
       try {
         const page = await api.listFeed({
           cursor,
-          topic: topicId || undefined,
+          topics: topicFilterActive ? [...selectedTopicIds] : undefined,
           source: source || undefined,
           status: view === "saved" ? "saved" : undefined,
           limit: 20,
@@ -94,19 +173,36 @@ export function FeedClient(): ReactNode {
         setLoadingMore(false);
       }
     },
-    [api, router, source, topicId, view],
+    [api, router, source, selectedTopicIds, topicFilterActive, view],
   );
 
   useEffect(() => {
-    void api.listTopics().then(
-      (res) => setTopics(res.topics),
-      () => setTopics([]),
-    );
+    let cancelled = false;
+    void Promise.all([api.listTopics(), api.listTopicTree()])
+      .then(([topicsRes, treeRes]) => {
+        if (cancelled) return;
+        setTopics(topicsRes.topics);
+        setTreeNodes(treeRes.nodes);
+        setSelectedTopicIds(new Set(topicsRes.topics.map((t) => t.id)));
+        setTopicsReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const fallback = getTopicTree();
+        setTopics([]);
+        setTreeNodes(fallback.nodes);
+        setSelectedTopicIds(new Set());
+        setTopicsReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [api]);
 
   useEffect(() => {
+    if (!topicsReady) return;
     void loadPage();
-  }, [loadPage]);
+  }, [loadPage, topicsReady]);
 
   async function updateStatus(
     articleId: string,
@@ -143,25 +239,127 @@ export function FeedClient(): ReactNode {
     void updateStatus(item.articleId, "seen").catch(() => undefined);
   }
 
-  const hasFilters = Boolean(topicId || source || view === "saved");
+  function toggleTopic(id: string) {
+    setSelectedTopicIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleGroup(group: TopicGroup) {
+    const ids = group.topics.map((t) => t.id);
+    setSelectedTopicIds((prev) => {
+      const allOn = ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allOn) {
+        for (const id of ids) next.delete(id);
+      } else {
+        for (const id of ids) next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function selectAllTopics() {
+    setSelectedTopicIds(new Set(allTopicIds));
+  }
+
+  function selectNoTopics() {
+    setSelectedTopicIds(new Set());
+  }
+
+  const hasFilters = Boolean(topicFilterActive || source || view === "saved");
 
   return (
     <section className="feed-page">
       <div className="feed-filters" role="group" aria-label="Feed filters">
-        <label className="filter-field">
-          <span className="filter-label">Topic</span>
-          <select
-            value={topicId}
-            onChange={(e) => setTopicId(e.target.value)}
-          >
-            <option value="">All topics</option>
-            {topics.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="topic-filter" role="group" aria-label="Topics">
+          <div className="topic-filter-header">
+            <span className="filter-label">Topics</span>
+            {topics.length > 0 ? (
+              <span className="topic-filter-actions">
+                <button
+                  type="button"
+                  className="ghost topic-filter-link"
+                  onClick={selectAllTopics}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className="ghost topic-filter-link"
+                  onClick={selectNoTopics}
+                >
+                  None
+                </button>
+              </span>
+            ) : null}
+          </div>
+          {topics.length === 0 ? (
+            <p className="topic-filter-empty">
+              No topics yet.{" "}
+              <Link href="/topics">Follow topics</Link> to filter your feed.
+            </p>
+          ) : (
+            <ul className="topic-filter-groups">
+              {topicGroups.map((group) => {
+                const groupIds = group.topics.map((t) => t.id);
+                const selectedCount = groupIds.filter((id) =>
+                  selectedTopicIds.has(id),
+                ).length;
+                const groupAllOn = selectedCount === groupIds.length;
+                return (
+                  <li key={group.root} className="topic-filter-group">
+                    <button
+                      type="button"
+                      className={
+                        groupAllOn
+                          ? "topic-filter-group-toggle on"
+                          : "topic-filter-group-toggle"
+                      }
+                      aria-pressed={groupAllOn}
+                      onClick={() => toggleGroup(group)}
+                    >
+                      {group.root}
+                    </button>
+                    <div className="topic-filter-chips">
+                      {group.topics.map((topic) => {
+                        const on = selectedTopicIds.has(topic.id);
+                        return (
+                          <button
+                            key={topic.id}
+                            type="button"
+                            className={
+                              on
+                                ? "topic-filter-chip on"
+                                : "topic-filter-chip"
+                            }
+                            aria-pressed={on}
+                            onClick={() => toggleTopic(topic.id)}
+                          >
+                            {topic.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {topicFilterActive ? (
+            <p className="topic-filter-hint">
+              Showing {selectedTopicIds.size} of {allTopicIds.length} topics
+            </p>
+          ) : selectedTopicIds.size === 0 && topics.length > 0 ? (
+            <p className="topic-filter-hint">
+              No topics selected — showing the full feed
+            </p>
+          ) : null}
+        </div>
+
         <label className="filter-field">
           <span className="filter-label">Source</span>
           <select
@@ -170,7 +368,7 @@ export function FeedClient(): ReactNode {
           >
             <option value="">All sources</option>
             <option value="hackernews">Hacker News</option>
-            <option value="substack">Substack</option>
+            <option value="substack">Feed</option>
           </select>
         </label>
         <label className="filter-field">
@@ -185,7 +383,7 @@ export function FeedClient(): ReactNode {
         </label>
       </div>
 
-      {loading ? (
+      {loading || !topicsReady ? (
         <div className="feed-state" aria-busy="true">
           <p className="feed-placeholder">Loading your feed…</p>
           <div className="skeleton-lines" aria-hidden>
@@ -210,7 +408,7 @@ export function FeedClient(): ReactNode {
                 type="button"
                 className="ghost"
                 onClick={() => {
-                  setTopicId("");
+                  selectAllTopics();
                   setSource("");
                   setView("feed");
                 }}
@@ -251,15 +449,24 @@ export function FeedClient(): ReactNode {
                 style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
               >
                 <div className="story-main">
-                  <a
-                    className="story-title"
-                    href={item.canonicalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => onTitleOpen(item)}
-                  >
-                    {item.title}
-                  </a>
+                  <div className="story-heading">
+                    <a
+                      className="story-title"
+                      href={item.canonicalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => onTitleOpen(item)}
+                    >
+                      {item.title}
+                    </a>
+                    <span
+                      className="story-rank"
+                      title={rankDetail(item)}
+                      aria-label={`Rank ${formatRank(item.finalRank)}`}
+                    >
+                      {formatRank(item.finalRank)}
+                    </span>
+                  </div>
                   {item.reason ? (
                     <p className="story-reason">{item.reason}</p>
                   ) : null}
@@ -315,7 +522,7 @@ export function FeedClient(): ReactNode {
         </ul>
       )}
 
-      {!loading && !error && nextCursor ? (
+      {!loading && topicsReady && !error && nextCursor ? (
         <div className="feed-more">
           <button
             type="button"

@@ -5,6 +5,7 @@ Personal-first, multi-user-ready feed of stories matched to topics of interest. 
 ## Goals
 
 - Hybrid relevance: keyword/tag shortlist, then Ollama ranks, dedupes, and lightly explains matches
+- In-app AI advisor chat for topic/keyword guidance (planned)
 - Elegant Next.js website + Expo (iOS/Android)
 - Same APIs and data model for one user today and many users later
 
@@ -88,7 +89,7 @@ Personal mode = one user row. Multi-user = same schema.
 
 Never call Ollama from UI code.
 
-**Scale path (backlog B2):** Keep shared articles + per-user scores. Evolve off “one rank pass walks every user” via `rank-dirty-incremental` → `rank-per-user-queue` → `rank-ai-budgets` → `rank-score-retention` (see `docs/feature-backlog.md`). Hosted AI provider swap stays under `multiuser-harden`.
+**Scale path (backlog B2):** Keep shared articles + per-user scores. Evolve off “one rank pass walks every user” via `rank-dirty-incremental` → `rank-per-user-queue` → `rank-ai-budgets` → `rank-score-retention` (see `docs/feature-backlog.md`). Cadence: mark users dirty on ingest/preference change; run AI rank for **dirty ∩ active** (recent feed activity, not merely a session cookie); catch-up on feed load when dirty; coalesce per user around the ingest interval (~10–15 min). Hosted AI provider swap stays under `multiuser-harden`.
 
 ## Source adapters
 
@@ -110,10 +111,11 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `GET /api/feed?cursor=&topic=&source=&status=`
 - `POST /api/feed/:id/seen|saved|dismissed`
 - `GET /api/health` — includes Ollama reachability
+- `POST /api/chat` — planned (`web-ai-advisor-chat`); session chat for topic/keyword advice via `AiProvider`
 
 ## Clients
 
-**Web:** feed home, topics, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords).
+**Web:** feed home, topics, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). Planned: in-app **AI advisor chat** (`web-ai-advisor-chat`) for topic/keyword suggestions via BFF → `AiProvider` (never from the browser).
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 

@@ -10,8 +10,8 @@ export type TopicTreeResponse = {
   nodes: TopicTreeNode[];
 };
 
-/** Curated hierarchical topic catalog (v1). */
-export const TOPIC_TREE_VERSION = 1;
+/** Curated hierarchical topic catalog (v2 — richer leaves under existing roots). */
+export const TOPIC_TREE_VERSION = 2;
 
 export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
   { id: "tech", parentId: null, label: "Technology", selectable: false },
@@ -40,6 +40,12 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
     selectable: true,
   },
   {
+    id: "tech.ai.evals",
+    parentId: "tech.ai",
+    label: "Evals & safety",
+    selectable: true,
+  },
+  {
     id: "tech.eng",
     parentId: "tech",
     label: "Software Engineering",
@@ -61,6 +67,24 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
     id: "tech.eng.devtools",
     parentId: "tech.eng",
     label: "Developer tools",
+    selectable: true,
+  },
+  {
+    id: "tech.eng.cloud",
+    parentId: "tech.eng",
+    label: "Cloud & devops",
+    selectable: true,
+  },
+  {
+    id: "tech.eng.oss",
+    parentId: "tech.eng",
+    label: "Open source",
+    selectable: true,
+  },
+  {
+    id: "tech.hardware",
+    parentId: "tech",
+    label: "Hardware & chips",
     selectable: true,
   },
   {
@@ -87,6 +111,18 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
     label: "Product & growth",
     selectable: true,
   },
+  {
+    id: "business.work",
+    parentId: "business",
+    label: "Work & leadership",
+    selectable: true,
+  },
+  {
+    id: "business.regulation",
+    parentId: "business",
+    label: "Regulation & antitrust",
+    selectable: true,
+  },
   { id: "science", parentId: null, label: "Science", selectable: false },
   {
     id: "science.bio",
@@ -98,6 +134,24 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
     id: "science.climate",
     parentId: "science",
     label: "Climate & energy",
+    selectable: true,
+  },
+  {
+    id: "science.physics",
+    parentId: "science",
+    label: "Physics & mathematics",
+    selectable: true,
+  },
+  {
+    id: "science.space",
+    parentId: "science",
+    label: "Space & matter",
+    selectable: true,
+  },
+  {
+    id: "science.neuro",
+    parentId: "science",
+    label: "Neuroscience & mind",
     selectable: true,
   },
   {
@@ -116,6 +170,24 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
     id: "culture.policy",
     parentId: "culture",
     label: "Policy & society",
+    selectable: true,
+  },
+  {
+    id: "culture.literature",
+    parentId: "culture",
+    label: "Literature & poesy",
+    selectable: true,
+  },
+  {
+    id: "culture.philosophy",
+    parentId: "culture",
+    label: "Philosophy & ideas",
+    selectable: true,
+  },
+  {
+    id: "culture.history",
+    parentId: "culture",
+    label: "History & archives",
     selectable: true,
   },
 ] as const;

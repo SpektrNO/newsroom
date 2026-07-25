@@ -307,6 +307,112 @@ button.danger-text {
   gap: 0.75rem 1rem;
   margin-bottom: 1.5rem;
   animation: rise-in 0.5s ease both;
+  align-items: flex-start;
+}
+
+.topic-filter {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.topic-filter-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.topic-filter-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.topic-filter-link {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.45rem;
+  min-height: auto;
+}
+
+.topic-filter-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.topic-filter-groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.topic-filter-group {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.topic-filter-group-toggle {
+  justify-self: start;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0;
+  cursor: pointer;
+}
+
+.topic-filter-group-toggle.on {
+  color: var(--ink);
+}
+
+.topic-filter-group-toggle:hover {
+  color: var(--ink);
+}
+
+.topic-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.topic-filter-chip {
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.35rem 0.7rem;
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.topic-filter-chip:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 35%, var(--hairline));
+}
+
+.topic-filter-chip.on {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 55%, var(--hairline));
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.topic-filter-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .filter-field {
@@ -348,7 +454,16 @@ button.danger-text {
   min-width: 0;
 }
 
+.story-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.75rem;
+  justify-content: space-between;
+}
+
 .story-title {
+  flex: 1 1 12rem;
   font-family: var(--font-display);
   font-size: 1.2rem;
   font-weight: 600;
@@ -360,6 +475,16 @@ button.danger-text {
 
 .story-title:hover {
   color: var(--accent);
+}
+
+.story-rank {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  cursor: help;
 }
 
 .story-reason {

@@ -25,7 +25,7 @@ import {
   findTopicByLabel,
   followDefaultsForLabel,
   isFollowingLabel,
-} from "@/lib/topics";
+} from "@/lib/topics-catalog";
 
 function readApiError(
   err: unknown,

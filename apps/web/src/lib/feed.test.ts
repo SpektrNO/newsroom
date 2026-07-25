@@ -6,6 +6,7 @@ import {
   parseFeedLimit,
   parseFeedSourceFilter,
   parseFeedStatusFilter,
+  parseFeedTopicIds,
 } from "./feed.js";
 
 describe("feed cursor", () => {
@@ -43,5 +44,15 @@ describe("feed query parsers", () => {
     assert.equal(parseFeedStatusFilter("new"), "new");
     assert.equal(parseFeedStatusFilter("dismissed"), "dismissed");
     assert.equal(parseFeedStatusFilter("archived"), "invalid");
+  });
+
+  it("parses multi topic ids from topic and topics params", () => {
+    const url = new URL("http://localhost/api/feed?topic=a&topic=b&topics=c,b");
+    assert.deepEqual(parseFeedTopicIds(url), ["a", "b", "c"]);
+    assert.deepEqual(parseFeedTopicIds(new URL("http://localhost/api/feed")), []);
+    assert.equal(
+      parseFeedTopicIds(new URL("http://localhost/api/feed?topic=bad%20id")),
+      "invalid",
+    );
   });
 });

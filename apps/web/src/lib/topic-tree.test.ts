@@ -9,15 +9,38 @@ import {
 } from "./topic-tree.js";
 
 describe("topic tree catalog", () => {
-  it("exposes version 1 with required seed leaf", () => {
+  it("exposes version 2 with required seed leaf", () => {
     const tree = getTopicTree();
     assert.equal(tree.version, TOPIC_TREE_VERSION);
-    assert.equal(tree.version, 1);
+    assert.equal(tree.version, 2);
     const infra = tree.nodes.find((n) => n.id === "tech.ai.infra");
     assert.ok(infra);
     assert.equal(infra.label, "AI & infra");
     assert.equal(infra.selectable, true);
     assert.equal(infra.parentId, "tech.ai");
+  });
+
+  it("includes science and culture leaves from catalog expansion", () => {
+    assert.equal(
+      resolveSelectableTopicLabel("Physics & mathematics"),
+      "Physics & mathematics",
+    );
+    assert.equal(
+      resolveSelectableTopicLabel("Space & matter"),
+      "Space & matter",
+    );
+    assert.equal(
+      resolveSelectableTopicLabel("Literature & poesy"),
+      "Literature & poesy",
+    );
+    assert.equal(
+      resolveSelectableTopicLabel("Philosophy & ideas"),
+      "Philosophy & ideas",
+    );
+    assert.deepEqual(topicPathLabels("Literature & poesy"), [
+      "Culture & Society",
+      "Literature & poesy",
+    ]);
   });
 
   it("marks parents non-selectable and leaves selectable", () => {

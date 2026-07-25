@@ -110,7 +110,10 @@ export type FeedPage = {
 
 export type ListFeedOptions = {
   cursor?: string;
+  /** Single topic id (legacy). Prefer `topics` for multi-select. */
   topic?: string;
+  /** Topic ids to include (OR). Omitted / empty = all topics. */
+  topics?: string[];
   source?: SourceTypeV1;
   /** When set, only items with this status. When omitted, API excludes dismissed. */
   status?: FeedItemStatus;
@@ -223,7 +226,13 @@ export class ApiClient {
   async listFeed(options: ListFeedOptions = {}): Promise<FeedPage> {
     const params = new URLSearchParams();
     if (options.cursor) params.set("cursor", options.cursor);
-    if (options.topic) params.set("topic", options.topic);
+    const topicIds = [
+      ...(options.topics ?? []),
+      ...(options.topic ? [options.topic] : []),
+    ].filter(Boolean);
+    for (const id of topicIds) {
+      params.append("topic", id);
+    }
     if (options.source) params.set("source", options.source);
     if (options.status) params.set("status", options.status);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
