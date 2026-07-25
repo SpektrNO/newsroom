@@ -1,9 +1,9 @@
 # Handoff: Browse full topic catalog (following vs available)
 
-**Status:** implementing  
+**Status:** done  
 **Created:** 2026-07-25  
 **Specifier agent:** spec complete  
-**Developer agent:** in progress
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `web-topics-catalog` |
 | Parent issue | #67 — https://github.com/SpektrNO/newsroom/issues/67 |
-| Open tasks | `api` (#69), `web` (#70), `verify` (#71), `docs` (#72) |
-| Closed tasks | `spec` (#68) |
+| Open tasks | *(none)* |
+| Closed tasks | `spec` (#68), `api` (#69), `web` (#70), `verify` (#71), `docs` (#72) |
 | Backlog | `docs/feature-backlog.md` § C — Notes for `web-topics-catalog` |
 
 Task order for this **web** feature (from parent #67): `spec` → `api` → `web` → `verify` → `docs`  
@@ -216,24 +216,28 @@ Must not contradict `docs/architecture.md` or `docs/decisions/002-hybrid-ranking
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- **api (#69):** `followDefaultsForLabel`, `isFollowingLabel`, `findTopicByLabel` in `apps/web/src/lib/topics.ts` (+ tests); JSDoc on `ApiClient.createTopic` as Follow path. No new routes/schema.
+- **web (#70):** `/topics` Catalog section (`TopicCatalogTree`) beside Following; Follow / Following / Manage; updated lede + section copy; styles in `globals.css`. Client merge of `listTopics` + `listTopicTree`.
+- **verify (#71):** Unit regression that Follow defaults pass `parseTopicCreateBody`; topics/topic-tree tests green; `tsc` clean.
+- **docs (#72):** Architecture Clients blurb, backlog notes (shipped), README shipped-features line; handoff closed.
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `npx tsx --test` on `topics.test.ts` + `topic-tree.test.ts` (+ feed parsers) — pass
+- [x] `pnpm --filter @newsroom/web exec tsc --noEmit` — clean
+- [ ] Manual in browser: Catalog Follow → Following row; Edit keywords; duplicate Follow → Following state; signed-out gate
+- [ ] `pnpm web:test` isolation suite needs running Postgres (env)
 
 ### Deviations from spec
 
-- None / list with rationale
+- None. Client-side merge only (no `followed` annotation on topic-tree). Optional catalog search included (picker pattern).
 
 ### Follow-ups
 
-- 
+- Browser smoke of Follow / Manage / CRUD on a live session
+- Parent #67 closes via PR `Closes #67`
 
 ---
 
