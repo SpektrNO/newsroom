@@ -65,6 +65,22 @@ export function parseFeedSourceFilter(
   return "invalid";
 }
 
+/** When omitted, feed excludes dismissed. When set, only that status. */
+export function parseFeedStatusFilter(
+  raw: string | null,
+): UserArticleScoreStatus | null | "invalid" {
+  if (raw === null || raw === "") return null;
+  if (
+    raw === "new" ||
+    raw === "seen" ||
+    raw === "saved" ||
+    raw === "dismissed"
+  ) {
+    return raw;
+  }
+  return "invalid";
+}
+
 export type FeedRowInput = {
   articleId: string;
   title: string;

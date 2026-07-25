@@ -104,7 +104,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `POST /api/auth/*` — Better Auth
 - `GET/POST/PATCH/DELETE /api/topics`
 - `GET/POST/DELETE /api/sources`
-- `GET /api/feed?cursor=&topic=&source=`
+- `GET /api/feed?cursor=&topic=&source=&status=`
 - `POST /api/feed/:id/seen|saved|dismissed`
 - `GET /api/health` — includes Ollama reachability
 

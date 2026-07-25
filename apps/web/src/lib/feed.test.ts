@@ -5,6 +5,7 @@ import {
   encodeFeedCursor,
   parseFeedLimit,
   parseFeedSourceFilter,
+  parseFeedStatusFilter,
 } from "./feed.js";
 
 describe("feed cursor", () => {
@@ -32,5 +33,15 @@ describe("feed query parsers", () => {
     assert.equal(parseFeedSourceFilter("hackernews"), "hackernews");
     assert.equal(parseFeedSourceFilter("nope"), "invalid");
     assert.equal(parseFeedSourceFilter(null), null);
+  });
+
+  it("validates status filter", () => {
+    assert.equal(parseFeedStatusFilter(null), null);
+    assert.equal(parseFeedStatusFilter(""), null);
+    assert.equal(parseFeedStatusFilter("saved"), "saved");
+    assert.equal(parseFeedStatusFilter("seen"), "seen");
+    assert.equal(parseFeedStatusFilter("new"), "new");
+    assert.equal(parseFeedStatusFilter("dismissed"), "dismissed");
+    assert.equal(parseFeedStatusFilter("archived"), "invalid");
   });
 });

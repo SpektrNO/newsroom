@@ -26,7 +26,9 @@ pnpm db:seed                  # demo user + HN + Platformer Substack + example t
 pnpm --filter @newsroom/web dev
 ```
 
-Open http://localhost:3000 — sign up / sign in, then check health:
+Open http://localhost:3000 — sign up / sign in (seeded demo from `pnpm db:seed` if you used the default seed user). Authenticated home is the ranked **Feed**; use **Topics**, **Sources**, and **Settings** in the masthead.
+
+Check health:
 
 ```bash
 curl -sS http://localhost:3000/api/health | jq
@@ -40,6 +42,8 @@ pnpm worker:rank              # keyword shortlist + Ollama batches → user_arti
 # or: NEWSROOM_WORKER_ONCE=ingest|rank pnpm --filter @newsroom/worker start
 ```
 
+After ingest + rank, refresh the Feed on http://localhost:3000 — story rows appear with Save / Dismiss; filter by topic, source, or Saved.
+
 Long-running worker (claims `ingest` and `rank` jobs; ingest cadence ~12 minutes):
 
 ```bash
@@ -50,7 +54,7 @@ pnpm --filter @newsroom/worker start
 
 | Path | Role |
 |------|------|
-| `apps/web` | Next.js — auth, health, `/api/sources`, `/api/topics`, `/api/feed` |
+| `apps/web` | Next.js — auth, editorial feed / topics / sources / settings UI, APIs |
 | `apps/mobile` | Expo Router shell (health via api-client) |
 | `apps/worker` | Postgres job poller + one-shot ingest/rank CLI |
 | `packages/db` | Drizzle schema + migrations (auth, ingest, topics, scores) |
@@ -92,7 +96,7 @@ Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH
 |--------|------|-------|
 | `GET/POST` | `/api/topics` | List / create (caller’s topics only) |
 | `PATCH/DELETE` | `/api/topics/:id` | Update / delete own topic |
-| `GET` | `/api/feed?cursor=&topic=&source=&limit=` | Ranked scores; default excludes `dismissed` |
+| `GET` | `/api/feed?cursor=&topic=&source=&status=&limit=` | Ranked scores; default excludes `dismissed`; `status=saved` (etc.) filters to that status |
 | `POST` | `/api/feed/:articleId/seen\|saved\|dismissed` | Update status; `404` if no score row |
 
 Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md). Health, seed, Compose: [docs/ops-local.md](docs/ops-local.md).
@@ -132,4 +136,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, and `hybrid-rank-feed` are implemented (auth, sources, ingest, topics/feed APIs, worker rank). Polished web/mobile feed UI is next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, and `web-feed-topics-sources` are implemented (auth, sources, ingest, topics/feed APIs, worker rank, editorial web UI). Expo feed UI is next per the backlog.
