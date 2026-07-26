@@ -4,23 +4,31 @@ import * as schema from "./schema/index.js";
 
 export type Database = ReturnType<typeof createDb>;
 
-export function createDb(connectionString = process.env.DATABASE_URL) {
+const DEFAULT_POOL_MAX = 5;
+
+export function createDb(
+  connectionString = process.env.DATABASE_URL,
+  options: { max?: number } = {},
+) {
   if (!connectionString) {
     throw new Error("DATABASE_URL is required");
   }
 
-  const client = postgres(connectionString, { max: 10 });
+  const max = options.max ?? DEFAULT_POOL_MAX;
+  const client = postgres(connectionString, { max });
   return drizzle(client, { schema });
 }
 
-let singleton: Database | undefined;
+const globalForDb = globalThis as typeof globalThis & {
+  __newsroomDb?: Database;
+};
 
-/** Shared app DB client (lazy). Prefer createDb() in workers/tests. */
+/** Shared app DB client (lazy). Survives Next.js HMR; prefer createDb() in workers/tests. */
 export function getDb(): Database {
-  if (!singleton) {
-    singleton = createDb();
+  if (!globalForDb.__newsroomDb) {
+    globalForDb.__newsroomDb = createDb();
   }
-  return singleton;
+  return globalForDb.__newsroomDb;
 }
 
 export * from "./schema/index.js";

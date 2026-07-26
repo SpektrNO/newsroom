@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createDb, account, session, user, verification } from "@newsroom/db";
+import { getDb, account, session, user, verification } from "@newsroom/db";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -10,7 +10,8 @@ function requireEnv(name: string): string {
   return value;
 }
 
-const db = createDb(requireEnv("DATABASE_URL"));
+// Reuse the process-wide pool (same as API routes) — do not createDb() again.
+const db = getDb();
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {

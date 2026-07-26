@@ -20,7 +20,7 @@ import { getBrowserApiClient } from "@/lib/api";
 import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
 
 type SourceFilter = "" | SourceTypeV1;
-type ViewFilter = "feed" | "saved";
+type ViewFilter = "feed" | "saved" | "dismissed";
 
 type TopicGroup = {
   root: string;
@@ -174,7 +174,12 @@ export function FeedClient(): ReactNode {
           cursor,
           topics: topicFilterActive ? [...selectedTopicIds] : undefined,
           source: source || undefined,
-          status: view === "saved" ? "saved" : undefined,
+          status:
+            view === "saved"
+              ? "saved"
+              : view === "dismissed"
+                ? "dismissed"
+                : undefined,
           q: search || undefined,
           limit: 20,
         });
@@ -262,7 +267,11 @@ export function FeedClient(): ReactNode {
       else if (action === "dismissed") await api.markFeedDismissed(articleId);
       else await api.markFeedSeen(articleId);
 
-      if (action === "dismissed" || (view === "saved" && action === "seen")) {
+      if (
+        action === "dismissed" ||
+        (view === "saved" && action === "seen") ||
+        (view === "dismissed" && (action === "seen" || action === "saved"))
+      ) {
         setItems((prev) => prev.filter((i) => i.articleId !== articleId));
         setMatchedCount((prev) => (prev == null ? prev : Math.max(0, prev - 1)));
         setTotalCount((prev) => (prev == null ? prev : Math.max(0, prev - 1)));
@@ -349,7 +358,11 @@ export function FeedClient(): ReactNode {
   }
 
   const hasFilters = Boolean(
-    topicFilterActive || source || view === "saved" || search,
+    topicFilterActive ||
+      source ||
+      view === "saved" ||
+      view === "dismissed" ||
+      search,
   );
 
   return (
@@ -509,6 +522,7 @@ export function FeedClient(): ReactNode {
           >
             <option value="feed">Feed</option>
             <option value="saved">Saved</option>
+            <option value="dismissed">Dismissed</option>
           </select>
         </label>
       </div>
@@ -610,9 +624,15 @@ export function FeedClient(): ReactNode {
                       Similar to another story in your feed.
                     </p>
                   ) : null}
-                  {item.status === "saved" || item.status === "seen" ? (
+                  {item.status === "saved" ||
+                  item.status === "seen" ||
+                  item.status === "dismissed" ? (
                     <p className="story-status">
-                      {item.status === "saved" ? "Saved" : "Seen"}
+                      {item.status === "saved"
+                        ? "Saved"
+                        : item.status === "dismissed"
+                          ? "Dismissed"
+                          : "Seen"}
                     </p>
                   ) : null}
                   {rowErrors[item.articleId] ? (
@@ -620,7 +640,27 @@ export function FeedClient(): ReactNode {
                   ) : null}
                 </div>
                 <div className="story-actions">
-                  {view === "saved" ? (
+                  {view === "dismissed" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void updateStatus(item.articleId, "seen")
+                        }
+                      >
+                        Restore
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() =>
+                          void updateStatus(item.articleId, "saved")
+                        }
+                      >
+                        Save
+                      </button>
+                    </>
+                  ) : view === "saved" ? (
                     <button
                       type="button"
                       className="ghost"
@@ -638,15 +678,17 @@ export function FeedClient(): ReactNode {
                       Save
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() =>
-                      void updateStatus(item.articleId, "dismissed")
-                    }
-                  >
-                    Dismiss
-                  </button>
+                  {view === "dismissed" ? null : (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void updateStatus(item.articleId, "dismissed")
+                      }
+                    >
+                      Dismiss
+                    </button>
+                  )}
                 </div>
               </li>
             );
