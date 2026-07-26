@@ -1,62 +1,69 @@
-# Handoff: Dirty users + preference invalidation + ingest fanout
+# Handoff: Per-user (or sharded) rank jobs; fair dequeue
 
-**Status:** done  
+**Status:** spec  
 **Created:** 2026-07-26  
 **Specifier agent:** lean (supervisor)  
-**Developer agent:** complete (lean)
+**Developer agent:** pending
 
 ## GitHub tracking
 
 | Field | Value |
 |-------|-------|
-| Feature id | `rank-dirty-incremental` |
-| Parent issue | #92 — https://github.com/SpektrNO/newsroom/issues/92 |
-| Open tasks | *(none)* |
-| Closed tasks | `spec` (#93), `db` (#94), `api` (#95), `worker` (#96), `verify` (#97), `docs` (#98) |
-| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-dirty-incremental` |
+| Feature id | `rank-per-user-queue` |
+| Parent issue | #109 — https://github.com/SpektrNO/newsroom/issues/109 |
+| Open tasks | `spec` (#110), `db` (#111), `api` (#112), `worker` (#113), `verify` (#114), `docs` (#115) |
+| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-per-user-queue` |
 
 Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`
 
 ## Intent
 
-Rank only users who need it (preference/ingest dirty) and are active on the feed, so topic changes and new articles refresh scores without walking every user every time.
+Enqueue one rank job per dirty∩active user (single-flight per user) so ranking no longer serializes everyone behind one global job.
 
 ## User-facing spec
 
-Curated dirty ∩ active ranking with preference invalidation and feed catch-up.
+| Field | Value |
+|-------|-------|
+| Trigger | Ingest marks users dirty; feed catch-up when dirty; CLI/worker drain |
+| Surfaces | worker jobs queue, feed catch-up enqueue, ingest post-hook |
+| Copy | None new (existing “Feed updating…” ok) |
+| Acceptance | See criteria below |
 
 ### Acceptance criteria
 
-1. `user.dirty_at` / `user.last_feed_at` exist (migration).
-2. Topic create/patch/delete and source create/patch/delete mark session user dirty; topic preference changes invalidate `new`/`seen` scores (keep `saved`/`dismissed`).
-3. Successful ingest marks **affected** subscription owners dirty (not every user).
-4. Default `runRank` / worker rank processes **dirty ∩ active** (last feed activity within 30m); explicit `userId` (feed Rank latest / CLI) always ranks that user; `--all-dirty` ignores activity gate.
-5. After a successful per-user rank pass, clear that user’s `dirty_at`.
-6. `GET /api/feed` touches `last_feed_at`; if dirty, enqueue rank (single-flight) and return `needsRank: true`.
-7. Tests cover dirty eligibility and preference invalidation; docs/backlog updated.
+1. Rank job `payload` includes `userId`; open job uniqueness is **per user** (pending/running), not global.
+2. After ingest dirty fanout, enqueue one pending rank job per **dirty ∩ active** user (coalesce if already open for that user).
+3. `GET /api/feed` catch-up calls `ensureNextRankJob` with the session `userId` only.
+4. Worker claim remains fair (`scheduled_at` ASC + `FOR UPDATE SKIP LOCKED`); multiple users can have pending rank jobs.
+5. `processRankJob` ranks that job’s `userId` only; clears dirty for that user on success (existing).
+6. Keep dirty∩active eligibility from `rank-dirty-incremental`. Out of scope: AI caps (`rank-ai-budgets`), hosted AI swap.
+
+## API / DB contract
+
+| Field / Endpoint | Notes |
+|------------------|-------|
+| `jobs` | Unique partial index on `(payload->>'userId')` where `type=rank` and status in (`pending`,`running`) and userId present |
+| `ensureNextRankJob(db, { userId, delayMs? })` | **Requires** `userId`; per-user single-flight |
+| `enqueueRankJobsForEligibleUsers(db, { allDirty?, delayMs? })` | Lists dirty∩active (or all dirty) with topics; ensures one job each |
+| Ingest success path | `markUsersDirty` then `enqueueRankJobsForEligibleUsers` (not a global rank job) |
+| `POST /api/feed/rank` | Remains synchronous inline `runRank({ userId })` (unchanged product behavior) |
+
+## Touchpoints
+
+- `packages/db` — migration + schema index on `jobs`
+- `apps/worker/src/rank.ts`, `ingest.ts`, `index.ts` — enqueue/claim/process
+- `apps/web` — feed catch-up already passes `userId`; tighten types if needed
+- Tests under `apps/worker`
+
+## Out of scope
+
+- AI token metering / article budgets
+- Multiple worker processes beyond SKIP LOCKED fairness
+- Changing Rank latest UX
+- Closing parent #109 (PR `Closes #109`)
+
+---
 
 ## Implementation result
 
-### Delivered
-
-- Migration `0003` + helpers in `packages/db/src/rank-dirty.ts`
-- Topic/source APIs mark dirty; topics invalidate new/seen scores
-- Feed GET: activity touch, catch-up enqueue, `needsRank` + muted “Feed updating…”
-- Worker: dirty∩active eligibility, ingest `affectedUserIds` fanout, `clearUserDirty`, `--all-dirty`
-- Tests: idle skip / allDirty / invalidatePreferenceScores; mock uses short id `r0`
-
-### Verification
-
-- `pnpm --filter @newsroom/db typecheck`
-- `pnpm --filter @newsroom/worker typecheck`
-- `pnpm --filter @newsroom/web typecheck`
-- `pnpm --filter @newsroom/worker test`
-
-### Deviations
-
-- No separate web task slug; light feed hint shipped with API.
-- Global single-flight rank jobs unchanged (`rank-per-user-queue` follow-up).
-
-### Follow-ups
-
-- `rank-per-user-queue`, `ai-token-metering`, `rank-ai-budgets`
+*(Developer agent fills this section.)*
