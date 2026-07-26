@@ -24,3 +24,14 @@ export function getDb(): Database {
 }
 
 export * from "./schema/index.js";
+export {
+  FEED_ACTIVE_WINDOW_MS,
+  markUserDirty,
+  markUsersDirty,
+  clearUserDirty,
+  touchFeedActivity,
+  invalidatePreferenceScores,
+  markUserPreferenceDirty,
+  isUserDirty,
+  listDirtyRankUserIds,
+} from "./rank-dirty.js";

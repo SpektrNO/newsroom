@@ -1,4 +1,4 @@
-import { getDb, topics } from "@newsroom/db";
+import { getDb, markUserPreferenceDirty, topics } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
 import {
   isUniqueViolation,
@@ -67,6 +67,8 @@ export async function POST(request: Request) {
     if (!row) {
       return Response.json({ error: "invalid_topic" }, { status: 400 });
     }
+
+    await markUserPreferenceDirty(getDb(), authResult.userId);
 
     return Response.json(
       {

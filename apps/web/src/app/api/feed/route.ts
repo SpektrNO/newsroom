@@ -1,27 +1,31 @@
-import { and, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
 import {
   articleSources,
   articles,
   getDb,
+  isUserDirty,
   jobs,
   sourceSubscriptions,
   topics,
+  touchFeedActivity,
   userArticleScores,
   type UserArticleScoreStatus,
 } from "@newsroom/db";
+import { ensureNextRankJob } from "@newsroom/worker/rank";
 import { requireSessionUserId } from "@/lib/session";
 import {
   countMatchingFeedRows,
   decodeFeedCursor,
   encodeFeedCursor,
+  escapeIlikePattern,
   parseFeedLimit,
   parseFeedSearchQuery,
   parseFeedSourceFilter,
   parseFeedStatusFilter,
   parseFeedTopicIds,
-  passesSearchFilter,
   passesTopicFilter,
   toFeedItemJson,
+  tokenizeFeedSearch,
   type FeedSourceJson,
 } from "@/lib/feed";
 
@@ -88,6 +92,18 @@ async function loadSourceTypesForUser(
   return sourceTypesByArticle;
 }
 
+/** AND of ILIKE token matches across title / summary / reason. */
+function feedSearchConditions(searchQuery: string) {
+  return tokenizeFeedSearch(searchQuery).map((token) => {
+    const pattern = `%${escapeIlikePattern(token)}%`;
+    return or(
+      ilike(articles.title, pattern),
+      ilike(articles.summary, pattern),
+      ilike(userArticleScores.reason, pattern),
+    )!;
+  });
+}
+
 async function loadFeedCounts(args: {
   userId: string;
   statusFilter: UserArticleScoreStatus | null;
@@ -119,6 +135,21 @@ async function loadFeedCounts(args: {
     return { matchedCount: totalCount, totalCount };
   }
 
+  const searchConds =
+    args.searchQuery !== null ? feedSearchConditions(args.searchQuery) : [];
+  const scoredWhere =
+    searchConds.length > 0 ? and(baseWhere, ...searchConds) : baseWhere;
+
+  // Search alone can be counted in SQL; topic/source still need an app scan.
+  if (args.topicKeywords === null && args.sourceFilter === null) {
+    const [matchedRow] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userArticleScores)
+      .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
+      .where(scoredWhere);
+    return { matchedCount: Number(matchedRow?.n ?? 0), totalCount };
+  }
+
   const scanRows = await db
     .select({
       articleId: userArticleScores.articleId,
@@ -128,7 +159,7 @@ async function loadFeedCounts(args: {
     })
     .from(userArticleScores)
     .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
-    .where(baseWhere)
+    .where(scoredWhere)
     .limit(MATCH_COUNT_SCAN_LIMIT);
 
   const sourceTypesByArticle =
@@ -142,7 +173,8 @@ async function loadFeedCounts(args: {
   const matchedCount = countMatchingFeedRows(scanRows, {
     topicKeywords: args.topicKeywords,
     sourceFilter: args.sourceFilter,
-    searchQuery: args.searchQuery,
+    // Search already applied in SQL.
+    searchQuery: null,
     sourceTypesByArticle,
   });
 
@@ -159,6 +191,15 @@ function toIsoOrNull(value: Date | string | null): string | null {
 export async function GET(request: Request) {
   const authResult = await requireSessionUserId();
   if ("error" in authResult) return authResult.error;
+
+  await touchFeedActivity(getDb(), authResult.userId);
+  const needsRank = await isUserDirty(getDb(), authResult.userId);
+  if (needsRank) {
+    await ensureNextRankJob(getDb(), {
+      userId: authResult.userId,
+      delayMs: 0,
+    });
+  }
 
   const url = new URL(request.url);
   const limit = parseFeedLimit(url.searchParams.get("limit"));
@@ -231,9 +272,12 @@ export async function GET(request: Request) {
     );
   }
 
-  // Over-fetch when filtering by topic/source/search in app layer.
-  const needsAppFilter =
-    topicKeywords !== null || sourceFilter !== null || searchQuery !== null;
+  if (searchQuery !== null) {
+    conditions.push(...feedSearchConditions(searchQuery));
+  }
+
+  // Over-fetch when filtering by topic/source in app layer (search is SQL).
+  const needsAppFilter = topicKeywords !== null || sourceFilter !== null;
   const fetchLimit = needsAppFilter ? Math.min(200, limit * 10) : limit + 1;
 
   const [scoreRows, pipeline, counts] = await Promise.all([
@@ -276,6 +320,7 @@ export async function GET(request: Request) {
       lastRankedAt: pipeline.lastRankedAt,
       matchedCount: counts.matchedCount,
       totalCount: counts.totalCount,
+      needsRank,
     });
   }
 
@@ -330,12 +375,6 @@ export async function GET(request: Request) {
       const types = sourceTypesByArticle.get(row.articleId);
       if (!types?.has(sourceFilter)) continue;
     }
-    if (
-      searchQuery !== null &&
-      !passesSearchFilter(row.title, row.summary, row.reason, searchQuery)
-    ) {
-      continue;
-    }
     filtered.push(row);
     if (filtered.length >= limit + 1) break;
   }
@@ -375,5 +414,6 @@ export async function GET(request: Request) {
     lastRankedAt: pipeline.lastRankedAt,
     matchedCount: counts.matchedCount,
     totalCount: counts.totalCount,
+    needsRank,
   });
 }

@@ -39,12 +39,13 @@ curl -sS http://localhost:3000/api/health | jq
 One-shot ingest then rank (requires migrate + seed or your own subscriptions/topics):
 
 ```bash
-pnpm worker:ingest            # upserts articles; enqueues a pending rank job
-pnpm worker:rank              # keyword shortlist + Ollama batches → user_article_scores
+pnpm worker:ingest            # upserts articles; marks affected users dirty; enqueues rank
+pnpm worker:rank              # ranks dirty ∩ active users (feed activity in last 30m)
+pnpm worker:rank -- --all-dirty  # rank all dirty users (ignore activity gate)
 # or: NEWSROOM_WORKER_ONCE=ingest|rank pnpm --filter @newsroom/worker start
 ```
 
-After ingest + rank, refresh the Feed on http://localhost:3000 — story rows appear with Save / Dismiss; filter by topic, source, or Saved. Signed-in users can also click **Rank latest** on the Feed to re-run ranking for themselves (Ollama must be up; CLI `pnpm worker:rank` still works for all users).
+After ingest + rank, refresh the Feed on http://localhost:3000 — story rows appear with Save / Dismiss; filter by topic, source, search, or Saved. Topic/source changes mark you dirty and clear unscored feed rows; opening the Feed records activity and enqueues catch-up rank when dirty. **Rank latest** always ranks the signed-in user.
 
 Long-running worker (claims `ingest` and `rank` jobs; ingest cadence ~12 minutes):
 

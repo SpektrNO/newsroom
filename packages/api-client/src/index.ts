@@ -115,6 +115,8 @@ export type FeedPage = {
   matchedCount?: number;
   /** Articles in feed for current status (ignores topic/source/search filters). */
   totalCount?: number;
+  /** True when the user is dirty and a catch-up rank was enqueued. */
+  needsRank?: boolean;
 };
 
 export type ListFeedOptions = {

@@ -4,12 +4,14 @@ import {
   countMatchingFeedRows,
   decodeFeedCursor,
   encodeFeedCursor,
+  escapeIlikePattern,
   parseFeedLimit,
   parseFeedSearchQuery,
   parseFeedSourceFilter,
   parseFeedStatusFilter,
   parseFeedTopicIds,
   passesSearchFilter,
+  tokenizeFeedSearch,
 } from "./feed.js";
 
 describe("feed cursor", () => {
@@ -81,6 +83,17 @@ describe("passesSearchFilter", () => {
       passesSearchFilter("Local LLM tools", null, null, "llm postgres"),
       false,
     );
+  });
+});
+
+describe("tokenizeFeedSearch / escapeIlikePattern", () => {
+  it("splits and lowercases tokens", () => {
+    assert.deepEqual(tokenizeFeedSearch("  LLM   Agents "), ["llm", "agents"]);
+    assert.deepEqual(tokenizeFeedSearch("   "), []);
+  });
+
+  it("escapes ILIKE wildcards", () => {
+    assert.equal(escapeIlikePattern("100%_done"), "100\\%\\_done");
   });
 });
 

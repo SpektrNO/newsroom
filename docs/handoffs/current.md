@@ -1,4 +1,4 @@
-# Handoff: Discover/add feeds without knowing URLs
+# Handoff: Dirty users + preference invalidation + ingest fanout
 
 **Status:** done  
 **Created:** 2026-07-26  
@@ -9,50 +9,54 @@
 
 | Field | Value |
 |-------|-------|
-| Feature id | `web-source-discovery` |
-| Parent issue | #85 — https://github.com/SpektrNO/newsroom/issues/85 |
+| Feature id | `rank-dirty-incremental` |
+| Parent issue | #92 — https://github.com/SpektrNO/newsroom/issues/92 |
 | Open tasks | *(none)* |
-| Closed tasks | `spec` (#86), `api` (#87), `web` (#88), `verify` (#89), `docs` (#90) |
-| Backlog | `docs/feature-backlog.md` § C — Notes for `web-source-discovery` |
+| Closed tasks | `spec` (#93), `db` (#94), `api` (#95), `worker` (#96), `verify` (#97), `docs` (#98) |
+| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-dirty-incremental` |
 
-Task order: `spec` → `api` → `web` → `verify` → `docs`
+Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`
 
 ## Intent
 
-Signed-in users browse a curated catalog of RSS feeds on Sources and add them with one click, so discovery does not require already knowing newsletter URLs.
+Rank only users who need it (preference/ingest dirty) and are active on the feed, so topic changes and new articles refresh scores without walking every user every time.
 
 ## User-facing spec
 
-Curated feed catalog v1 on `/sources` via `GET /api/feed-catalog`; one-click Add feed with confirm; Advisor suggestions deferred.
+Curated dirty ∩ active ranking with preference invalidation and feed catch-up.
 
 ### Acceptance criteria
 
-1. Signed-in `GET /api/feed-catalog` returns version + feeds; 401 when signed out.
-2. Sources Catalog shows feeds; already-subscribed show **Added**.
-3. Add feed confirms then creates via existing sources API.
-4. Manual URL form still works.
-5. Tests cover catalog helpers / URL match.
-6. No Ollama / Advisor changes in this feature.
+1. `user.dirty_at` / `user.last_feed_at` exist (migration).
+2. Topic create/patch/delete and source create/patch/delete mark session user dirty; topic preference changes invalidate `new`/`seen` scores (keep `saved`/`dismissed`).
+3. Successful ingest marks **affected** subscription owners dirty (not every user).
+4. Default `runRank` / worker rank processes **dirty ∩ active** (last feed activity within 30m); explicit `userId` (feed Rank latest / CLI) always ranks that user; `--all-dirty` ignores activity gate.
+5. After a successful per-user rank pass, clear that user’s `dirty_at`.
+6. `GET /api/feed` touches `last_feed_at`; if dirty, enqueue rank (single-flight) and return `needsRank: true`.
+7. Tests cover dirty eligibility and preference invalidation; docs/backlog updated.
 
 ## Implementation result
 
 ### Delivered
 
-- `apps/web/src/lib/feed-catalog.ts` — static editorial RSS catalog
-- `GET /api/feed-catalog` + `api-client.listFeedCatalog`
-- Sources Catalog UI with topic-tag filter + Add feed / Added
-- `isFeedAlreadyAdded` via `normalizeCanonicalUrl`
-- Unit tests in `feed-catalog.test.ts`
+- Migration `0003` + helpers in `packages/db/src/rank-dirty.ts`
+- Topic/source APIs mark dirty; topics invalidate new/seen scores
+- Feed GET: activity touch, catch-up enqueue, `needsRank` + muted “Feed updating…”
+- Worker: dirty∩active eligibility, ingest `affectedUserIds` fanout, `clearUserDirty`, `--all-dirty`
+- Tests: idle skip / allDirty / invalidatePreferenceScores; mock uses short id `r0`
 
 ### Verification
 
-- `pnpm --filter @newsroom/web exec node --import tsx --test src/lib/feed-catalog.test.ts`
+- `pnpm --filter @newsroom/db typecheck`
+- `pnpm --filter @newsroom/worker typecheck`
 - `pnpm --filter @newsroom/web typecheck`
+- `pnpm --filter @newsroom/worker test`
 
 ### Deviations
 
-- Lean v1 = catalog only; Advisor feed suggestions left as follow-up.
+- No separate web task slug; light feed hint shipped with API.
+- Global single-flight rank jobs unchanged (`rank-per-user-queue` follow-up).
 
 ### Follow-ups
 
-- Advisor suggesting catalog feeds; search/slug resolve; expand catalog entries.
+- `rank-per-user-queue`, `ai-token-metering`, `rank-ai-budgets`

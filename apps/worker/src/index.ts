@@ -32,6 +32,10 @@ async function runOnceIngest(): Promise<number> {
   if (!claimed) {
     const result = await runIngest(db);
     console.log("[newsroom-worker] one-shot ingest (inline):", result);
+    if (result.affectedUserIds.length > 0) {
+      const { markUsersDirty } = await import("@newsroom/db");
+      await markUsersDirty(db, result.affectedUserIds);
+    }
     const { ensureNextRankJob } = await import("./rank.js");
     await ensureNextRankJob(db, { delayMs: 0 });
     return result.subscriptions > 0 &&
@@ -51,19 +55,22 @@ async function runOnceIngest(): Promise<number> {
 
 async function runOnceRank(): Promise<number> {
   const db = loadDb();
-  console.log("[newsroom-worker] one-shot rank starting");
+  const allDirty = process.argv.includes("--all-dirty");
+  console.log(
+    `[newsroom-worker] one-shot rank starting${allDirty ? " (--all-dirty)" : ""}`,
+  );
   await enqueueRankNow(db);
   // Prefer rank-only claim so a due ingest job does not steal this one-shot.
   const claimed = await claimNextRankJob(db);
   if (!claimed) {
-    const result = await runRank(db);
+    const result = await runRank(db, { allDirty });
     console.log("[newsroom-worker] one-shot rank (inline):", result);
     const allAiFailed =
       result.aiBatches > 0 && result.aiBatchFailures === result.aiBatches;
     return allAiFailed ? 1 : 0;
   }
 
-  const result = await processRankJob(db, claimed.id);
+  const result = await processRankJob(db, claimed.id, { allDirty });
   console.log("[newsroom-worker] one-shot rank done:", result);
   const allAiFailed =
     result.aiBatches > 0 && result.aiBatchFailures === result.aiBatches;
