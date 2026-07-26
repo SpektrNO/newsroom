@@ -39,9 +39,9 @@ curl -sS http://localhost:3000/api/health | jq
 One-shot ingest then rank (requires migrate + seed or your own subscriptions/topics):
 
 ```bash
-pnpm worker:ingest            # upserts articles; marks affected users dirty; enqueues rank
-pnpm worker:rank              # ranks dirty ∩ active users (feed activity in last 30m)
-pnpm worker:rank -- --all-dirty  # rank all dirty users (ignore activity gate)
+pnpm worker:ingest            # upserts articles; marks affected users dirty; enqueues per-user rank jobs
+pnpm worker:rank              # drains rank jobs for dirty ∩ active users (feed activity in last 30m)
+pnpm worker:rank -- --all-dirty  # enqueue/drain all dirty users (ignore activity gate)
 # or: NEWSROOM_WORKER_ONCE=ingest|rank pnpm --filter @newsroom/worker start
 ```
 
