@@ -115,5 +115,11 @@ export const jobs = pgTable(
   },
   (table) => [
     index("jobs_status_scheduled_at_idx").on(table.status, table.scheduledAt),
+    // One open rank job per user (payload.userId).
+    uniqueIndex("jobs_rank_open_user_uidx")
+      .on(sql`(${table.payload} ->> 'userId')`)
+      .where(
+        sql`${table.type} = 'rank' AND ${table.status} IN ('pending', 'running') AND (${table.payload} ->> 'userId') IS NOT NULL`,
+      ),
   ],
 );

@@ -260,8 +260,8 @@ export async function processIngestJob(
     if (result.affectedUserIds.length > 0) {
       await markUsersDirty(db, result.affectedUserIds);
     }
-    const { ensureNextRankJob } = await import("./rank.js");
-    await ensureNextRankJob(db, { delayMs: 0 });
+    const { enqueueRankJobsForEligibleUsers } = await import("./rank.js");
+    await enqueueRankJobsForEligibleUsers(db, { delayMs: 0 });
   }
 
   return result;

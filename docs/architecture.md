@@ -89,7 +89,7 @@ Personal mode = one user row. Multi-user = same schema.
 
 Never call Ollama from UI code.
 
-**Scale path (backlog B2):** Keep shared articles + per-user scores. Evolve off “one rank pass walks every user” via `rank-dirty-incremental` (shipped: dirty ∩ active) → `rank-per-user-queue` → `rank-ai-budgets` → `rank-score-retention` (see `docs/feature-backlog.md`). Cadence: mark users dirty on ingest/preference change; run AI rank for **dirty ∩ active** (recent feed activity, not merely a session cookie); catch-up on feed load when dirty; coalesce per user around the ingest interval (~10–15 min). Hosted AI provider swap stays under `multiuser-harden`.
+**Scale path (backlog B2):** Keep shared articles + per-user scores. Evolve off “one rank pass walks every user” via `rank-dirty-incremental` (shipped: dirty ∩ active) → `rank-per-user-queue` (shipped: one `jobs` row per `userId`, fair `SKIP LOCKED` dequeue) → `rank-ai-budgets` → `rank-score-retention` (see `docs/feature-backlog.md`). Cadence: mark users dirty on ingest/preference change; enqueue AI rank for **dirty ∩ active** (recent feed activity, not merely a session cookie); catch-up on feed load when dirty; coalesce **per user** (unique open rank job on `payload.userId`). Hosted AI provider swap stays under `multiuser-harden`.
 
 **Token metering (backlog B3 `ai-token-metering`):** Count prompt/completion tokens on every `AiProvider.complete`, persist per-user usage, reveal in Settings (and optionally Advisor), and enforce daily caps shared by rank + chat.
 
