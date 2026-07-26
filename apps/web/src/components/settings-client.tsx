@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { HealthResponse } from "@newsroom/api-client";
+import type { AiUsageResponse, HealthResponse } from "@newsroom/api-client";
 import { authClient } from "@/lib/auth-client";
 import { getBrowserApiClient } from "@/lib/api";
 
@@ -14,11 +14,17 @@ function healthLabel(status: "ok" | "error"): string {
   return status === "ok" ? "Ok" : "Unavailable";
 }
 
+function formatTokens(n: number): string {
+  return new Intl.NumberFormat("en-US").format(n);
+}
+
 export function SettingsClient({ email }: SettingsClientProps): ReactNode {
   const router = useRouter();
   const api = getBrowserApiClient();
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState(false);
+  const [aiUsage, setAiUsage] = useState<AiUsageResponse | null>(null);
+  const [aiUsageError, setAiUsageError] = useState(false);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -31,6 +37,16 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
       .catch(() => {
         setHealth(null);
         setHealthError(true);
+      });
+    void api
+      .getAiUsage()
+      .then((res) => {
+        setAiUsage(res);
+        setAiUsageError(false);
+      })
+      .catch(() => {
+        setAiUsage(null);
+        setAiUsageError(true);
       });
   }, [api]);
 
@@ -54,6 +70,40 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
         <button type="button" onClick={() => void onSignOut()} disabled={pending}>
           {pending ? "Signing out…" : "Sign out"}
         </button>
+      </div>
+
+      <div className="settings-block">
+        <h2 className="form-heading">AI tokens today</h2>
+        {aiUsageError ? (
+          <p className="manage-meta">Couldn’t load token usage.</p>
+        ) : !aiUsage ? (
+          <p className="feed-placeholder">Checking…</p>
+        ) : (
+          <>
+            <p className="manage-meta">
+              {formatTokens(aiUsage.used)} / {formatTokens(aiUsage.limit)}
+              {aiUsage.limit <= 0 ? " (unlimited)" : ""} · UTC {aiUsage.day}
+            </p>
+            <ul className="health-list">
+              <li>Rank · {formatTokens(aiUsage.byPurpose.rank)}</li>
+              <li>Chat · {formatTokens(aiUsage.byPurpose.chat)}</li>
+              {aiUsage.byPurpose.other > 0 ? (
+                <li>Other · {formatTokens(aiUsage.byPurpose.other)}</li>
+              ) : null}
+            </ul>
+            {aiUsage.hardExceeded ? (
+              <p className="manage-meta" role="status">
+                Daily token limit reached. Chat is paused; ranking uses keywords
+                only until tomorrow (UTC).
+              </p>
+            ) : aiUsage.softExceeded ? (
+              <p className="manage-meta" role="status">
+                Approaching today’s token limit ({formatTokens(aiUsage.softLimit)}{" "}
+                soft threshold).
+              </p>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="settings-block">

@@ -10,9 +10,11 @@ import {
   type Database,
   articleSources,
   articles,
+  canSpendAiTokens,
   clearUserDirty,
   jobs,
   listDirtyRankUserIds,
+  recordAiTokenUsage,
   sourceSubscriptions,
   topics,
   userArticleScores,
@@ -493,6 +495,15 @@ export async function runRank(
       const needingAi = shortlist;
 
       for (let i = 0; i < needingAi.length; i += batchSize) {
+        const allowed = await canSpendAiTokens(db, userId);
+        if (!allowed) {
+          result.errors.push(`${userId}:token_budget_exceeded_skip_ai`);
+          console.warn(
+            `[newsroom-worker] token budget exceeded for ${userId}; keyword-only for remaining batches`,
+          );
+          break;
+        }
+
         const chunk = needingAi.slice(i, i + batchSize);
         result.aiBatches += 1;
         try {
@@ -508,7 +519,14 @@ export async function runRank(
               summary: c.summary,
             })),
           });
-          if (ranked.length === 0 && chunk.length > 0) {
+          if (ranked.usage) {
+            await recordAiTokenUsage(db, {
+              userId,
+              purpose: "rank",
+              usage: ranked.usage,
+            });
+          }
+          if (ranked.items.length === 0 && chunk.length > 0) {
             result.aiBatchFailures += 1;
             result.errors.push(`${userId}:empty_or_unparseable_ai_batch`);
           } else {
@@ -520,7 +538,7 @@ export async function runRank(
                 articleId: c.articleId,
                 keywordScore: c.keywordScore,
               })),
-              ranked,
+              ranked.items,
             );
           }
         } catch (err) {

@@ -1,4 +1,5 @@
-import type { AiProvider } from "./types.js";
+import type { AiProvider, AiTokenUsage } from "./types.js";
+import { mergeTokenUsage } from "./types.js";
 
 export type AdvisorChatMessage = {
   role: "user" | "assistant";
@@ -27,6 +28,7 @@ export type AdviseTopicsInput = {
 export type AdviseTopicsResult = {
   reply: string;
   suggestions: AdvisorSuggestion[];
+  usage?: AiTokenUsage;
 };
 
 const MAX_KEYWORDS = 50;
@@ -212,7 +214,8 @@ export async function adviseTopics(
   });
 
   try {
-    return parseAdvisorResponse(result.text);
+    const parsed = parseAdvisorResponse(result.text);
+    return { ...parsed, usage: result.usage };
   } catch (err) {
     console.warn(
       `[newsroom/ai] advisor: could not parse JSON (len=${result.text.length}): ${result.text.slice(0, 280)}`,
@@ -235,13 +238,21 @@ export async function adviseTopics(
         json: true,
         maxTokens: 2048,
       });
-      return parseAdvisorResponse(repair.text);
+      const parsed = parseAdvisorResponse(repair.text);
+      return {
+        ...parsed,
+        usage: mergeTokenUsage(result.usage, repair.usage),
+      };
     } catch {
       const fallback = result.text.trim().slice(0, 2000);
       if (fallback && !looksLikeRawJsonDump(fallback)) {
-        return { reply: fallback, suggestions: [] };
+        return { reply: fallback, suggestions: [], usage: result.usage };
       }
-      return { reply: FRIENDLY_PARSE_FAIL, suggestions: [] };
+      return {
+        reply: FRIENDLY_PARSE_FAIL,
+        suggestions: [],
+        usage: result.usage,
+      };
     }
   }
 }

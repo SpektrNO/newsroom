@@ -98,7 +98,7 @@ Shared foundation for Advisor and ranking cost control. **Prefer before or along
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | ⬜ | `docs/architecture.md` |
+| `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | ✅ | `docs/architecture.md` |
 
 Notes for `ai-token-metering`:
 

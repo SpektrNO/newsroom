@@ -8,9 +8,18 @@ export type AiCompleteRequest = {
   maxTokens?: number;
 };
 
+export type AiTokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** True when counts were estimated (e.g. chars/4) rather than reported by the model. */
+  estimated?: boolean;
+};
+
 export type AiCompleteResult = {
   text: string;
   model: string;
+  usage?: AiTokenUsage;
 };
 
 /**
@@ -21,4 +30,34 @@ export interface AiProvider {
   complete(request: AiCompleteRequest): Promise<AiCompleteResult>;
   /** Lightweight reachability probe (no generation required). */
   health(): Promise<boolean>;
+}
+
+/** Rough estimator when the backend omits token counts (~4 chars/token). */
+export function estimateTokenUsage(
+  prompt: string,
+  completion: string,
+): AiTokenUsage {
+  const promptTokens = Math.max(1, Math.ceil(prompt.length / 4));
+  const completionTokens = Math.max(0, Math.ceil(completion.length / 4));
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    estimated: true,
+  };
+}
+
+export function mergeTokenUsage(
+  a?: AiTokenUsage,
+  b?: AiTokenUsage,
+): AiTokenUsage | undefined {
+  if (!a && !b) return undefined;
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    promptTokens: a.promptTokens + b.promptTokens,
+    completionTokens: a.completionTokens + b.completionTokens,
+    totalTokens: a.totalTokens + b.totalTokens,
+    estimated: Boolean(a.estimated || b.estimated) || undefined,
+  };
 }

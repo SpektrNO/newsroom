@@ -17,7 +17,7 @@ async function main() {
     articles,
   });
   console.log(JSON.stringify(ranked, null, 2));
-  console.log("matched", ranked.length, "/", articles.length);
+  console.log("matched", ranked.items.length, "/", articles.length);
 }
 
 main().catch((err) => {

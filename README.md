@@ -91,7 +91,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000).
+Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard).
 
 ### Topics & feed API (session cookie)
 

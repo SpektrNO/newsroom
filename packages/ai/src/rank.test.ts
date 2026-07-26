@@ -40,11 +40,11 @@ describe("rankArticleBatch", () => {
     );
 
     const ranked = await rankArticleBatch(provider, { topics, articles });
-    assert.equal(ranked.length, 2);
-    assert.equal(ranked[0]?.articleId, "uuid-1111");
-    assert.equal(ranked[0]?.aiScore, 0.9);
-    assert.equal(ranked[1]?.articleId, "uuid-2222");
-    assert.equal(ranked[1]?.nearDuplicateOfArticleId, "uuid-1111");
+    assert.equal(ranked.items.length, 2);
+    assert.equal(ranked.items[0]?.articleId, "uuid-1111");
+    assert.equal(ranked.items[0]?.aiScore, 0.9);
+    assert.equal(ranked.items[1]?.articleId, "uuid-2222");
+    assert.equal(ranked.items[1]?.nearDuplicateOfArticleId, "uuid-1111");
   });
 
   it("strips markdown fences and ignores unknown article ids", async () => {
@@ -53,14 +53,14 @@ describe("rankArticleBatch", () => {
 \`\`\``);
 
     const ranked = await rankArticleBatch(provider, { topics, articles });
-    assert.equal(ranked.length, 1);
-    assert.equal(ranked[0]?.articleId, "uuid-1111");
+    assert.equal(ranked.items.length, 1);
+    assert.equal(ranked.items[0]?.articleId, "uuid-1111");
   });
 
   it("returns empty on unparseable output without throwing", async () => {
     const provider = fakeProvider("sorry, I cannot help");
     const ranked = await rankArticleBatch(provider, { topics, articles });
-    assert.deepEqual(ranked, []);
+    assert.deepEqual(ranked.items, []);
   });
 
   it("skips malformed items and keeps valid ones", async () => {
@@ -73,9 +73,9 @@ describe("rankArticleBatch", () => {
       ]),
     );
     const ranked = await rankArticleBatch(provider, { topics, articles });
-    assert.equal(ranked.length, 1);
-    assert.equal(ranked[0]?.articleId, "uuid-2222");
-    assert.equal(ranked[0]?.aiScore, 0.7);
+    assert.equal(ranked.items.length, 1);
+    assert.equal(ranked.items[0]?.articleId, "uuid-2222");
+    assert.equal(ranked.items[0]?.aiScore, 0.7);
   });
 
   it("ignores invalid near-duplicate ids", async () => {
@@ -90,7 +90,7 @@ describe("rankArticleBatch", () => {
       ]),
     );
     const ranked = await rankArticleBatch(provider, { topics, articles });
-    assert.equal(ranked[0]?.nearDuplicateOfArticleId, null);
+    assert.equal(ranked.items[0]?.nearDuplicateOfArticleId, null);
   });
 
   it("extractJsonArray unwraps { results: [...] } objects", () => {
@@ -115,8 +115,8 @@ describe("rankArticleBatch", () => {
       '{"articleId":"r0","aiScore":0.8,"reason":"LLM mentioned","nearDuplicateOfArticleId":null}',
     );
     const ranked = await rankArticleBatch(provider, { topics, articles });
-    assert.equal(ranked.length, 1);
-    assert.equal(ranked[0]?.articleId, "uuid-1111");
-    assert.equal(ranked[0]?.aiScore, 0.8);
+    assert.equal(ranked.items.length, 1);
+    assert.equal(ranked.items[0]?.articleId, "uuid-1111");
+    assert.equal(ranked.items[0]?.aiScore, 0.8);
   });
 });

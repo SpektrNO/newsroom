@@ -1,4 +1,4 @@
-import type { AiProvider } from "./types.js";
+import type { AiProvider, AiTokenUsage } from "./types.js";
 
 export type RankTopicInput = {
   name: string;
@@ -24,6 +24,11 @@ export type RankArticleBatchInput = {
   articles: RankArticleInput[];
   /** Max summary chars sent to the model (default 280). */
   summaryMaxChars?: number;
+};
+
+export type RankArticleBatchResult = {
+  items: RankedItem[];
+  usage?: AiTokenUsage;
 };
 
 const DEFAULT_SUMMARY_MAX = 280;
@@ -168,8 +173,8 @@ function parseRankedItem(
 export async function rankArticleBatch(
   provider: AiProvider,
   input: RankArticleBatchInput,
-): Promise<RankedItem[]> {
-  if (input.articles.length === 0) return [];
+): Promise<RankArticleBatchResult> {
+  if (input.articles.length === 0) return { items: [] };
 
   const summaryMax = input.summaryMaxChars ?? DEFAULT_SUMMARY_MAX;
   const shortToReal = new Map<string, string>();
@@ -213,10 +218,10 @@ export async function rankArticleBatch(
     console.warn(
       `[newsroom/ai] rank batch: could not parse JSON (len=${result.text.length}): ${result.text.slice(0, 280)}`,
     );
-    return [];
+    return { items: [], usage: result.usage };
   }
 
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(parsed)) return { items: [], usage: result.usage };
 
   const out: RankedItem[] = [];
   const seen = new Set<string>();
@@ -251,5 +256,5 @@ export async function rankArticleBatch(
     );
   }
 
-  return out;
+  return { items: out, usage: result.usage };
 }

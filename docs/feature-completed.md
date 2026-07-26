@@ -22,6 +22,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-26 | `web-source-discovery` | Discover/add feeds without knowing URLs | #85 | Completed via spec→implement pipeline |
 | 2026-07-26 | `rank-dirty-incremental` | Dirty users + preference invalidation + ingest fanout | #92 | Dirty∩active ranking; preference invalidation; ingest fanout |
 | 2026-07-26 | `rank-per-user-queue` | Per-user (or sharded) rank jobs; fair dequeue | #109 | Per-user rank jobs; unique open job on payload.userId; ingest/CLI fanout |
+| 2026-07-26 | `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | #117 | Daily token rollups; Settings reveal; chat 429 / rank keyword-only on hard cap |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -53,3 +54,4 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 |----|---------|-----------|------|-------|
 | `rank-dirty-incremental` | Dirty users + preference invalidation + ingest fanout | 2026-07-26 | `docs/architecture.md` | Dirty∩active ranking; preference invalidation; ingest fanout |
 | `rank-per-user-queue` | Per-user (or sharded) rank jobs; fair dequeue | 2026-07-26 | `docs/architecture.md` | Per-user rank jobs; unique open job on payload.userId; ingest/CLI fanout |
+| `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | 2026-07-26 | `docs/architecture.md` | Daily token rollups; Settings reveal; chat 429 / rank keyword-only on hard cap |
