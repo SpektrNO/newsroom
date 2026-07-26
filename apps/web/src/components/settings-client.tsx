@@ -102,6 +102,20 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
                 soft threshold).
               </p>
             ) : null}
+            {aiUsage.rankAi ? (
+              <p className="manage-meta">
+                Rank AI articles today · {formatTokens(aiUsage.rankAi.used)}
+                {aiUsage.rankAi.dayLimit > 0
+                  ? ` / ${formatTokens(aiUsage.rankAi.dayLimit)}`
+                  : ""}
+                {aiUsage.rankAi.runLimit > 0
+                  ? ` · up to ${formatTokens(aiUsage.rankAi.runLimit)} per run`
+                  : ""}
+                {aiUsage.rankAi.remaining === 0 && aiUsage.rankAi.dayLimit > 0
+                  ? " · remaining shortlist stays keyword-only"
+                  : ""}
+              </p>
+            ) : null}
           </>
         )}
       </div>
