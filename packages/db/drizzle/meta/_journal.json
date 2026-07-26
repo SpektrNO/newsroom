@@ -36,6 +36,13 @@
       "when": 1785088362718,
       "tag": "0004_rank_per_user_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785088839093,
+      "tag": "0005_ai_token_daily",
+      "breakpoints": true
     }
   ]
 }

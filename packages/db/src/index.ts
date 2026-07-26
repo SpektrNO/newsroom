@@ -35,3 +35,13 @@ export {
   isUserDirty,
   listDirtyRankUserIds,
 } from "./rank-dirty.js";
+export {
+  recordAiTokenUsage,
+  getAiTokenUsageForDay,
+  canSpendAiTokens,
+  resolveAiTokenDailyLimit,
+  resolveAiTokenDailySoftLimit,
+  utcDayString,
+  type AiTokenUsageInput,
+  type AiTokenBudgetStatus,
+} from "./ai-usage.js";
