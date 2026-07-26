@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { getDb, sourceSubscriptions } from "@newsroom/db";
+import { getDb, markUserDirty, sourceSubscriptions } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
 import {
   isUniqueViolation,
@@ -68,6 +68,8 @@ export async function POST(request: Request) {
     if (!row) {
       return Response.json({ error: "invalid_config" }, { status: 400 });
     }
+
+    await markUserDirty(getDb(), authResult.userId);
 
     return Response.json(
       {

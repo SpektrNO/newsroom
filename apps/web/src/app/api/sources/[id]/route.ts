@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { getDb, sourceSubscriptions } from "@newsroom/db";
+import { getDb, markUserDirty, sourceSubscriptions } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
 import {
   isUniqueViolation,
@@ -73,6 +73,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       return Response.json({ error: "not_found" }, { status: 404 });
     }
 
+    await markUserDirty(getDb(), authResult.userId);
+
     return Response.json({
       source: toSourceJson({
         id: row.id,
@@ -110,6 +112,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
   if (deleted.length === 0) {
     return Response.json({ error: "not_found" }, { status: 404 });
   }
+
+  await markUserDirty(getDb(), authResult.userId);
 
   return new Response(null, { status: 204 });
 }

@@ -3,12 +3,15 @@ import {
   articleSources,
   articles,
   getDb,
+  isUserDirty,
   jobs,
   sourceSubscriptions,
   topics,
+  touchFeedActivity,
   userArticleScores,
   type UserArticleScoreStatus,
 } from "@newsroom/db";
+import { ensureNextRankJob } from "@newsroom/worker/rank";
 import { requireSessionUserId } from "@/lib/session";
 import {
   countMatchingFeedRows,
@@ -160,6 +163,15 @@ export async function GET(request: Request) {
   const authResult = await requireSessionUserId();
   if ("error" in authResult) return authResult.error;
 
+  await touchFeedActivity(getDb(), authResult.userId);
+  const needsRank = await isUserDirty(getDb(), authResult.userId);
+  if (needsRank) {
+    await ensureNextRankJob(getDb(), {
+      userId: authResult.userId,
+      delayMs: 0,
+    });
+  }
+
   const url = new URL(request.url);
   const limit = parseFeedLimit(url.searchParams.get("limit"));
   const cursorRaw = url.searchParams.get("cursor");
@@ -276,6 +288,7 @@ export async function GET(request: Request) {
       lastRankedAt: pipeline.lastRankedAt,
       matchedCount: counts.matchedCount,
       totalCount: counts.totalCount,
+      needsRank,
     });
   }
 
@@ -375,5 +388,6 @@ export async function GET(request: Request) {
     lastRankedAt: pipeline.lastRankedAt,
     matchedCount: counts.matchedCount,
     totalCount: counts.totalCount,
+    needsRank,
   });
 }

@@ -141,6 +141,7 @@ export function FeedClient(): ReactNode {
   const [lastRankedAt, setLastRankedAt] = useState<string | null>(null);
   const [matchedCount, setMatchedCount] = useState<number | null>(null);
   const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [needsRank, setNeedsRank] = useState(false);
   const [ranking, setRanking] = useState(false);
   const [rankNote, setRankNote] = useState<string | null>(null);
 
@@ -188,6 +189,7 @@ export function FeedClient(): ReactNode {
           setTotalCount(
             typeof page.totalCount === "number" ? page.totalCount : null,
           );
+          setNeedsRank(Boolean(page.needsRank));
         }
       } catch (err) {
         const status =
@@ -324,6 +326,7 @@ export function FeedClient(): ReactNode {
           : "No new articles to rank.",
       );
       await loadPage();
+      setNeedsRank(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push("/sign-in?callbackUrl=%2F");
@@ -385,6 +388,11 @@ export function FeedClient(): ReactNode {
       {rankNote ? (
         <p className="feed-rank-note" aria-live="polite">
           {rankNote}
+        </p>
+      ) : null}
+      {needsRank && !ranking ? (
+        <p className="feed-rank-note" aria-live="polite">
+          Feed updating…
         </p>
       ) : null}
       <div className="feed-filters" role="group" aria-label="Feed filters">
