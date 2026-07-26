@@ -54,3 +54,9 @@ export {
   type RankAiLimits,
   type RankAiBudgetStatus,
 } from "./rank-ai.js";
+export {
+  resolveRankScoreRetention,
+  pruneUserArticleScores,
+  type RankScoreRetentionConfig,
+  type PruneScoresResult,
+} from "./score-retention.js";
