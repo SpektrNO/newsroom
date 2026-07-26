@@ -25,6 +25,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-26 | `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | #117 | Daily token rollups; Settings reveal; chat 429 / rank keyword-only on hard cap |
 | 2026-07-26 | `rank-ai-budgets` | AI caps, active-user priority, keyword-only fallback | #125 | Per-run/day AI article caps; keyword-only beyond budget; Settings reveal |
 | 2026-07-26 | `rank-score-retention` | TTL / prune `user_article_scores`; keep saved | #133 | Prune new/seen/dismissed by TTL+top-N; keep saved; post-rank + CLI |
+| 2026-07-27 | `source-podcast` | Podcast RSS adapter + episode cards in feed | #100 | Podcast RSS adapter + episode cards; mobile deferred to mobile-feed-topics |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -59,3 +60,9 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | 2026-07-26 | `docs/architecture.md` | Daily token rollups; Settings reveal; chat 429 / rank keyword-only on hard cap |
 | `rank-ai-budgets` | AI caps, active-user priority, keyword-only fallback | 2026-07-26 | `docs/architecture.md` | Per-run/day AI article caps; keyword-only beyond budget; Settings reveal |
 | `rank-score-retention` | TTL / prune `user_article_scores`; keep saved | 2026-07-26 | `docs/architecture.md` | Prune new/seen/dismissed by TTL+top-N; keep saved; post-rank + CLI |
+
+## E. Multi-user and channels
+
+| ID | Feature | Completed | Spec | Notes |
+|----|---------|-----------|------|-------|
+| `source-podcast` | Podcast RSS adapter + episode cards in feed | 2026-07-27 | `docs/architecture.md` | Podcast RSS adapter + episode cards; mobile deferred to mobile-feed-topics |

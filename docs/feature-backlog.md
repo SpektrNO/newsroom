@@ -171,7 +171,7 @@ Notes for `web-source-discovery` (shipped — catalog v1):
 |----|---------|--------|------|
 | `multiuser-harden` | Registration, isolation, rate limits, host AI swap | ⬜ | `docs/architecture.md` |
 | `source-bluesky` | Bluesky adapter | ⬜ | `docs/architecture.md` |
-| `source-podcast` | Podcast RSS adapter + episode cards in feed | ⬜ | `docs/architecture.md` |
+| `source-podcast` | Podcast RSS adapter + episode cards in feed | ✅ | `docs/architecture.md` |
 
 Notes for `source-podcast`:
 

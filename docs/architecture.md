@@ -1,6 +1,6 @@
 # Newsroom architecture
 
-Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News and Substack; podcasts and Bluesky later; X deferred.
+Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, and podcasts; Bluesky later; X deferred.
 
 ## Goals
 
@@ -59,7 +59,7 @@ flowchart LR
 | `packages/db` | Drizzle schema + migrations |
 | `packages/api-client` | Shared typed fetch client for web + mobile |
 | `packages/ai` | `AiProvider` interface; `OllamaProvider` default |
-| `packages/sources` | Source adapters (HN, Substack, later podcasts/Bluesky/X) |
+| `packages/sources` | Source adapters (HN, Substack, podcasts; later Bluesky/X) |
 
 ## Defaults
 
@@ -71,9 +71,8 @@ flowchart LR
 ## Data model
 
 - `users`, `sessions` — Better Auth
-- `topics` — `user_id`, name, keywords[], weight, enabled
-- `source_subscriptions` — `user_id`, `source_type` (`hackernews` \| `substack` \| `bluesky` \| …), config JSON, enabled
-- `articles` — canonical URL, title, summary, author, published_at, raw payload, content hash
+- `articles` — canonical URL, title, summary, author, published_at, optional podcast show_title / duration_seconds / enclosure_url, raw payload, content hash
+- `source_subscriptions` — `user_id`, `source_type` (`hackernews` \| `substack` \| `podcast` \| `bluesky` \| …), config JSON, enabled
 - `article_sources` — which adapter produced an article
 - `user_article_scores` — per-user keyword_score, ai_score, final_rank, reason, status (`new` \| `seen` \| `saved` \| `dismissed`)
 - `jobs` — ingest/rank work items
@@ -99,7 +98,7 @@ Never call Ollama from UI code.
 |--------|----------|--------|
 | Hacker News | Firebase API + Algolia HN Search | v1 |
 | Substack | User-added RSS URLs + curated catalog (`web-source-discovery`) | v1 |
-| Podcasts | Podcast RSS/Atom (episodes as feed items) | later (`source-podcast`) |
+| Podcasts | Podcast RSS/Atom (`source_type: podcast`, `{ rssUrl }`); episodes as feed items with show/duration/enclosure | v1 (`source-podcast`) |
 | Bluesky | AT Proto public endpoints | later (`source-bluesky`) |
 | X | Paid API | deferred |
 
@@ -121,7 +120,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Clients
 
-**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Sources** (`web-source-discovery`): curated feed catalog (`GET /api/feed-catalog`) with one-click Add feed alongside manual RSS URL entry — HN remains the shared firehose; newsletters are discoverable without prior URL knowledge. Planned: podcast shows via RSS (`source-podcast`) in the same ranked feed (episode cards; link-out player in v1). **Settings** shows today’s AI token usage vs daily limit (`ai-token-metering`).
+**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Sources** (`web-source-discovery` + `source-podcast`): curated newsletter catalog (`GET /api/feed-catalog`) with one-click Add feed alongside manual RSS URL entry; distinct **Add podcast** for `source_type: podcast` RSS/Atom (catalog podcast entries are a follow-up). HN remains the shared firehose. Podcast episodes appear in the ranked feed with show/duration meta and external Play audio (no in-app player). **Settings** shows today’s AI token usage vs daily limit (`ai-token-metering`).
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 
