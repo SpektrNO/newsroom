@@ -251,10 +251,12 @@ button.danger-text {
 
 .masthead-nav {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.9rem;
-  flex: 1;
-  min-width: 12rem;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .nav-link {
@@ -264,6 +266,8 @@ button.danger-text {
   text-decoration: none;
   padding: 0.15rem 0;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .nav-link:hover {
