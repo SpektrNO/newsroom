@@ -52,6 +52,7 @@ export async function POST() {
       userId: authResult.userId,
       provider,
     });
+    // runRank prunes this user's score rows after a successful pass.
 
     const allAiFailed =
       result.aiBatches > 0 &&

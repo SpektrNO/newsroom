@@ -14,6 +14,7 @@ import {
   clearUserDirty,
   jobs,
   listDirtyRankUserIds,
+  pruneUserArticleScores,
   recordAiTokenUsage,
   recordRankAiArticles,
   remainingRankAiBudget,
@@ -574,6 +575,22 @@ export async function runRank(
       }
 
       await clearUserDirty(db, userId);
+      try {
+        const pruned = await pruneUserArticleScores(db, { userId });
+        if (pruned.deleted > 0) {
+          console.log(
+            `[newsroom-worker] pruned ${pruned.deleted} score row(s) for ${userId}`,
+          );
+        }
+      } catch (pruneErr) {
+        const message =
+          pruneErr instanceof Error ? pruneErr.message : String(pruneErr);
+        result.errors.push(`${userId}:prune:${message}`);
+        console.error(
+          `[newsroom-worker] score prune failed for ${userId}:`,
+          message,
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       result.errors.push(`${userId}:${message}`);

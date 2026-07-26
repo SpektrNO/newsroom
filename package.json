@@ -13,6 +13,7 @@
     "db:studio": "pnpm --filter @newsroom/db studio",
     "worker:ingest": "pnpm --filter @newsroom/worker ingest",
     "worker:rank": "pnpm --filter @newsroom/worker rank",
+    "worker:prune-scores": "pnpm --filter @newsroom/worker prune-scores",
     "sources:test": "pnpm --filter @newsroom/sources test",
     "worker:test": "pnpm --filter @newsroom/worker test",
     "web:test": "pnpm --filter @newsroom/web test",

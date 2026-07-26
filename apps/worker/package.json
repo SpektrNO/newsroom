@@ -22,6 +22,7 @@
     "start": "pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts",
     "ingest": "pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts ingest",
     "rank": "pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts rank",
+    "prune-scores": "tsx --env-file=../../.env src/index.ts prune-scores",
     "test": "tsx --test --test-force-exit src/**/*.test.ts"
   },
   "devDependencies": {
