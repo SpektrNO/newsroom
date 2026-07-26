@@ -207,7 +207,7 @@ export async function rankArticleBatch(
     system:
       "You are a news ranking assistant. Reply with a JSON array only. No markdown. Never return a bare object.",
     prompt: buildPrompt(topicsJson, articlesJson, input.articles.length),
-    json: true,
+    json: "rank-array",
     maxTokens,
   });
 

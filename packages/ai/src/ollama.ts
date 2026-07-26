@@ -13,6 +13,31 @@ export type OllamaProviderOptions = {
   completeTimeoutMs?: number;
 };
 
+/** Ollama `format` payload for `AiCompleteRequest.json`. */
+export function ollamaJsonFormat(
+  json: AiCompleteRequest["json"],
+): "json" | Record<string, unknown> | undefined {
+  if (json === "rank-array") {
+    return {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          articleId: { type: "string" },
+          aiScore: { type: "number" },
+          reason: { type: "string" },
+          nearDuplicateOfArticleId: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+          },
+        },
+        required: ["articleId", "aiScore", "reason"],
+      },
+    };
+  }
+  if (json) return "json";
+  return undefined;
+}
+
 function resolveCompleteTimeoutMs(options: OllamaProviderOptions): number {
   if (options.completeTimeoutMs !== undefined) {
     return Math.max(1_000, options.completeTimeoutMs);
@@ -66,22 +91,7 @@ export class OllamaProvider implements AiProvider {
       stream: false,
     };
     if (request.json) {
-      // Schema forces a top-level array; plain `format: "json"` often yields one object.
-      body.format = {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            articleId: { type: "string" },
-            aiScore: { type: "number" },
-            reason: { type: "string" },
-            nearDuplicateOfArticleId: {
-              anyOf: [{ type: "string" }, { type: "null" }],
-            },
-          },
-          required: ["articleId", "aiScore", "reason"],
-        },
-      };
+      body.format = ollamaJsonFormat(request.json);
     }
     if (request.maxTokens !== undefined && request.maxTokens > 0) {
       body.options = { num_predict: Math.floor(request.maxTokens) };

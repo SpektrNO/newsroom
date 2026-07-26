@@ -178,6 +178,14 @@ export type AiUsageResponse = {
   };
   softExceeded: boolean;
   hardExceeded: boolean;
+  rankAi?: {
+    used: number;
+    dayLimit: number;
+    runLimit: number;
+    remaining: number;
+    globalUsed: number;
+    globalLimit: number;
+  };
 };
 
 export type RankFeedLatestResponse = {

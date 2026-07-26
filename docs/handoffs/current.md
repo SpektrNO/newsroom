@@ -1,4 +1,4 @@
-# Handoff: Count, reveal, and cap AI tokens (rank + chat)
+# Handoff: AI caps, active-user priority, keyword-only fallback
 
 **Status:** done  
 **Created:** 2026-07-26  
@@ -9,41 +9,36 @@
 
 | Field | Value |
 |-------|-------|
-| Feature id | `ai-token-metering` |
-| Parent issue | #117 — https://github.com/SpektrNO/newsroom/issues/117 |
+| Feature id | `rank-ai-budgets` |
+| Parent issue | #125 — https://github.com/SpektrNO/newsroom/issues/125 |
 | Open tasks | *(none)* |
-| Closed tasks | `spec` (#118), `db` (#119), `api` (#120), `worker` (#121), `verify` (#122), `docs` (#123) |
-| Backlog | `docs/feature-backlog.md` § B3 — Notes for `ai-token-metering` |
-
-Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`
+| Closed tasks | `spec` (#126), `db` (#127), `api` (#128), `worker` (#129), `verify` (#130), `docs` (#131) |
+| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-ai-budgets` |
 
 ## Intent
 
-Meter AI tokens for rank + chat, show today’s usage in Settings, and enforce a shared daily hard cap (chat 429; rank degrades to keyword-only).
+Cap how many articles get AI-scored per user (per run and per day), so ranking stays keyword-only beyond the budget instead of burning Ollama on huge shortlists.
 
 ## Implementation result
 
 ### Delivered
 
-- `AiCompleteResult.usage` + Ollama counts / chars/4 estimate; rank/advisor preserve usage
-- `ai_token_daily` migration + record/get/budget helpers
-- `GET /api/ai-usage`; chat budget + record; Settings “AI tokens today”
-- Worker records rank usage; skips AI batches when hard exceeded
+- `rank_ai_daily` + `remainingRankAiBudget` / `recordRankAiArticles`
+- Env: `RANK_AI_MAX_PER_RUN` (60), `RANK_AI_MAX_PER_DAY` (200), `RANK_AI_MAX_GLOBAL_PER_DAY` (0=unlimited)
+- Worker slices shortlist before AI; records scored count; token hard cap still applies
+- `GET /api/ai-usage.rankAi` + Settings line
 
 ### Verification
 
-- `pnpm --filter @newsroom/db typecheck` + `ai-usage.test.ts`
-- `pnpm --filter @newsroom/ai typecheck` + test
-- `pnpm --filter @newsroom/db build` && `pnpm --filter @newsroom/ai build`
-- `pnpm --filter @newsroom/worker typecheck` + test
-- `pnpm --filter @newsroom/web typecheck`
+- `pnpm --filter @newsroom/db` typecheck/build + `rank-ai.test.ts`
+- `pnpm --filter @newsroom/worker` typecheck + test
+- `pnpm --filter @newsroom/web` typecheck
+- `pnpm --filter @newsroom/api-client` typecheck
 
 ### Deviations
 
-- No separate web task slug; Settings reveal shipped under `api`.
-- Chat response includes optional `tokens` + `aiUsage` summary (not only Settings).
+- Active-user priority already enforced by dirty∩active enqueue from prior features.
 
 ### Follow-ups
 
-- `rank-ai-budgets` (article/batch caps on top of token meter)
-- Advisor composer footer for soft-warn (optional)
+- `rank-score-retention`

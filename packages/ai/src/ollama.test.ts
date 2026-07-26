@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { OllamaProvider } from "./ollama.js";
+import { OllamaProvider, ollamaJsonFormat } from "./ollama.js";
+
+describe("ollamaJsonFormat", () => {
+  it("uses rank-array schema only for ranking", () => {
+    const rank = ollamaJsonFormat("rank-array");
+    assert.ok(rank && typeof rank === "object");
+    assert.equal((rank as { type: string }).type, "array");
+  });
+
+  it("uses plain json for advisor-style requests", () => {
+    assert.equal(ollamaJsonFormat(true), "json");
+    assert.equal(ollamaJsonFormat("object"), "json");
+    assert.equal(ollamaJsonFormat(undefined), undefined);
+  });
+});
 
 describe("OllamaProvider", () => {
   it("constructs with defaults from env", () => {

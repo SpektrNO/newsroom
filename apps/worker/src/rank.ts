@@ -15,6 +15,8 @@ import {
   jobs,
   listDirtyRankUserIds,
   recordAiTokenUsage,
+  recordRankAiArticles,
+  remainingRankAiBudget,
   sourceSubscriptions,
   topics,
   userArticleScores,
@@ -491,8 +493,19 @@ export async function runRank(
         });
       }
 
-      // AI pass: items needing ai_score (just shortlisted or previously keyword-only).
-      const needingAi = shortlist;
+      // AI pass: cap by run/day/global article budget, then token hard cap.
+      const budget = await remainingRankAiBudget(db, userId);
+      const needingAi = shortlist.slice(0, Math.max(0, budget.remaining));
+      if (shortlist.length > needingAi.length) {
+        result.errors.push(
+          `${userId}:rank_ai_budget_keyword_only:${shortlist.length - needingAi.length}`,
+        );
+        console.warn(
+          `[newsroom-worker] rank AI article budget for ${userId}: scoring ${needingAi.length}/${shortlist.length} (remaining=${budget.remaining})`,
+        );
+      }
+
+      let aiArticlesThisUser = 0;
 
       for (let i = 0; i < needingAi.length; i += batchSize) {
         const allowed = await canSpendAiTokens(db, userId);
@@ -540,6 +553,7 @@ export async function runRank(
               })),
               ranked.items,
             );
+            aiArticlesThisUser += ranked.items.length;
           }
         } catch (err) {
           result.aiBatchFailures += 1;
@@ -550,6 +564,13 @@ export async function runRank(
             message,
           );
         }
+      }
+
+      if (aiArticlesThisUser > 0) {
+        await recordRankAiArticles(db, {
+          userId,
+          count: aiArticlesThisUser,
+        });
       }
 
       await clearUserDirty(db, userId);

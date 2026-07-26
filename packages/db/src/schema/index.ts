@@ -18,3 +18,4 @@ export {
   aiTokenPurposes,
   type AiTokenPurpose,
 } from "./ai-usage.js";
+export { rankAiDaily } from "./rank-ai.js";
