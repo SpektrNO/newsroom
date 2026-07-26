@@ -1,9 +1,9 @@
 # Handoff: Dirty users + preference invalidation + ingest fanout
 
-**Status:** spec  
+**Status:** done  
 **Created:** 2026-07-26  
 **Specifier agent:** lean (supervisor)  
-**Developer agent:** pending
+**Developer agent:** complete (lean)
 
 ## GitHub tracking
 
@@ -11,7 +11,8 @@
 |-------|-------|
 | Feature id | `rank-dirty-incremental` |
 | Parent issue | #92 — https://github.com/SpektrNO/newsroom/issues/92 |
-| Open tasks | `spec` (#93), `db` (#94), `api` (#95), `worker` (#96), `verify` (#97), `docs` (#98) |
+| Open tasks | *(none)* |
+| Closed tasks | `spec` (#93), `db` (#94), `api` (#95), `worker` (#96), `verify` (#97), `docs` (#98) |
 | Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-dirty-incremental` |
 
 Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`
@@ -22,12 +23,7 @@ Rank only users who need it (preference/ingest dirty) and are active on the feed
 
 ## User-facing spec
 
-| Field | Value |
-|-------|-------|
-| Trigger | Topic/source preference change; ingest upserts for a user’s subscriptions; feed read while dirty |
-| Surfaces | worker rank/ingest, topic/source APIs, GET `/api/feed`, POST `/api/feed/rank` |
-| Copy | Optional muted feed note when `needsRank` (e.g. “Feed updating…”) — keep calm |
-| Acceptance | See criteria below |
+Curated dirty ∩ active ranking with preference invalidation and feed catch-up.
 
 ### Acceptance criteria
 
@@ -39,35 +35,28 @@ Rank only users who need it (preference/ingest dirty) and are active on the feed
 6. `GET /api/feed` touches `last_feed_at`; if dirty, enqueue rank (single-flight) and return `needsRank: true`.
 7. Tests cover dirty eligibility and preference invalidation; docs/backlog updated.
 
-## API / DB contract
-
-| Field / Endpoint | Type | Notes |
-|------------------|------|-------|
-| `user.dirty_at` | timestamptz null | Set when dirty; null when clean |
-| `user.last_feed_at` | timestamptz null | Updated on authenticated feed GET |
-| Helpers | `markUserDirty`, `markUsersDirty`, `clearUserDirty`, `touchFeedActivity`, `invalidatePreferenceScores` | `@newsroom/db` |
-| `GET /api/feed` | + `needsRank?: boolean` | Dirty after touch |
-| `POST /api/feed/rank` | unchanged sync | Clears dirty for that user on success |
-| `pnpm worker:rank` | optional `--all-dirty` | Debug/ops |
-
-## Touchpoints
-
-- `packages/db` schema auth + migration + dirty helpers
-- Topic/source API routes
-- `apps/worker` ingest fanout + `rank.ts` eligibility
-- Feed GET + api-client `FeedPage.needsRank`
-- Light feed UI hint (optional)
-- Tests + backlog/architecture/README as needed
-
-## Out of scope
-
-- Per-user job queue (`rank-per-user-queue`)
-- AI article/token budgets
-- Score TTL GC
-- Hosted AI provider swap
-
----
-
 ## Implementation result
 
-*(Developer agent fills this section.)*
+### Delivered
+
+- Migration `0003` + helpers in `packages/db/src/rank-dirty.ts`
+- Topic/source APIs mark dirty; topics invalidate new/seen scores
+- Feed GET: activity touch, catch-up enqueue, `needsRank` + muted “Feed updating…”
+- Worker: dirty∩active eligibility, ingest `affectedUserIds` fanout, `clearUserDirty`, `--all-dirty`
+- Tests: idle skip / allDirty / invalidatePreferenceScores; mock uses short id `r0`
+
+### Verification
+
+- `pnpm --filter @newsroom/db typecheck`
+- `pnpm --filter @newsroom/worker typecheck`
+- `pnpm --filter @newsroom/web typecheck`
+- `pnpm --filter @newsroom/worker test`
+
+### Deviations
+
+- No separate web task slug; light feed hint shipped with API.
+- Global single-flight rank jobs unchanged (`rank-per-user-queue` follow-up).
+
+### Follow-ups
+
+- `rank-per-user-queue`, `ai-token-metering`, `rank-ai-budgets`

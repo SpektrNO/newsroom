@@ -20,6 +20,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-25 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | #67 | Catalog browse + one-click Follow on /topics (client merge) |
 | 2026-07-26 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | #74 | Completed via spec→implement pipeline |
 | 2026-07-26 | `web-source-discovery` | Discover/add feeds without knowing URLs | #85 | Completed via spec→implement pipeline |
+| 2026-07-26 | `rank-dirty-incremental` | Dirty users + preference invalidation + ingest fanout | #92 | Dirty∩active ranking; preference invalidation; ingest fanout |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -44,3 +45,9 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | 2026-07-25 | `docs/architecture.md` | Catalog browse + one-click Follow on /topics (client merge) |
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | 2026-07-26 | `docs/architecture.md` | Completed via spec→implement pipeline |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | 2026-07-26 | `docs/architecture.md` | Completed via spec→implement pipeline |
+
+## Other
+
+| ID | Feature | Completed | Spec | Notes |
+|----|---------|-----------|------|-------|
+| `rank-dirty-incremental` | Dirty users + preference invalidation + ingest fanout | 2026-07-26 | `docs/architecture.md` | Dirty∩active ranking; preference invalidation; ingest fanout |

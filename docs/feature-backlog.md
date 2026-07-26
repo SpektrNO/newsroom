@@ -39,7 +39,7 @@ Personal scores and shared articles stay. Replace “one rank pass walks every u
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `rank-dirty-incremental` | Dirty users + preference invalidation + ingest fanout | ⬜ | `docs/architecture.md` |
+| `rank-dirty-incremental` | Dirty users + preference invalidation + ingest fanout | ✅ | `docs/architecture.md` |
 | `rank-per-user-queue` | Per-user (or sharded) rank jobs; fair dequeue | ⬜ | `docs/architecture.md` |
 | `rank-ai-budgets` | AI caps, active-user priority, keyword-only fallback | ⬜ | `docs/architecture.md` |
 | `rank-score-retention` | TTL / prune `user_article_scores`; keep saved | ⬜ | `docs/architecture.md` |
