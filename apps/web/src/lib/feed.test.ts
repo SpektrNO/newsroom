@@ -12,6 +12,7 @@ import {
   parseFeedTopicIds,
   passesSearchFilter,
   tokenizeFeedSearch,
+  formatEpisodeDuration,
 } from "./feed.js";
 
 describe("feed cursor", () => {
@@ -40,6 +41,14 @@ describe("feed query parsers", () => {
     assert.equal(parseFeedSourceFilter("podcast"), "podcast");
     assert.equal(parseFeedSourceFilter("nope"), "invalid");
     assert.equal(parseFeedSourceFilter(null), null);
+  });
+
+  it("formats episode duration", () => {
+    assert.equal(formatEpisodeDuration(45), "45s");
+    assert.equal(formatEpisodeDuration(90), "1 min");
+    assert.equal(formatEpisodeDuration(3723), "1h 2m");
+    assert.equal(formatEpisodeDuration(3600), "1h");
+    assert.equal(formatEpisodeDuration(null), null);
   });
 
   it("validates status filter", () => {

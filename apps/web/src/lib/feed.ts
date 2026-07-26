@@ -128,6 +128,26 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
   };
 }
 
+/** Human-readable episode duration for feed cards. */
+export function formatEpisodeDuration(
+  durationSeconds: number | null | undefined,
+): string | null {
+  if (
+    durationSeconds === null ||
+    durationSeconds === undefined ||
+    !Number.isFinite(durationSeconds) ||
+    durationSeconds < 0
+  ) {
+    return null;
+  }
+  const total = Math.floor(durationSeconds);
+  if (total < 60) return `${total}s`;
+  const hours = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  if (hours === 0) return `${mins} min`;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
 /** Collect topic ids from `topic` (repeatable) and/or `topics` (comma-separated). */
 export function parseFeedTopicIds(url: URL): string[] | "invalid" {
   const fromRepeat = url.searchParams.getAll("topic").flatMap((raw) =>
