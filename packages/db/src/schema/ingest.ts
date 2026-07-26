@@ -50,6 +50,10 @@ export const sourceSubscriptions = pgTable(
     uniqueIndex("source_subscriptions_user_rss_uidx")
       .on(table.userId, sql`(${table.config}->>'rssUrl')`)
       .where(sql`${table.sourceType} = 'substack'`),
+    /** One podcast feed URL per user (rssUrl normalized in app before insert). */
+    uniqueIndex("source_subscriptions_user_podcast_rss_uidx")
+      .on(table.userId, sql`(${table.config}->>'rssUrl')`)
+      .where(sql`${table.sourceType} = 'podcast'`),
   ],
 );
 
@@ -60,6 +64,12 @@ export const articles = pgTable("articles", {
   summary: text("summary"),
   author: text("author"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  /** Podcast show / channel title when known. */
+  showTitle: text("show_title"),
+  /** Episode duration in seconds when known. */
+  durationSeconds: integer("duration_seconds"),
+  /** Audio (or media) enclosure URL when distinct from canonical. */
+  enclosureUrl: text("enclosure_url"),
   raw: jsonb("raw"),
   contentHash: text("content_hash"),
   createdAt: timestamp("created_at", { withTimezone: true })
