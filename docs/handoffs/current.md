@@ -1,49 +1,68 @@
-# Handoff: Count, reveal, and cap AI tokens (rank + chat)
+# Handoff: AI caps, active-user priority, keyword-only fallback
 
-**Status:** done  
+**Status:** spec  
 **Created:** 2026-07-26  
 **Specifier agent:** lean (supervisor)  
-**Developer agent:** complete (lean)
+**Developer agent:** pending
 
 ## GitHub tracking
 
 | Field | Value |
 |-------|-------|
-| Feature id | `ai-token-metering` |
-| Parent issue | #117 — https://github.com/SpektrNO/newsroom/issues/117 |
-| Open tasks | *(none)* |
-| Closed tasks | `spec` (#118), `db` (#119), `api` (#120), `worker` (#121), `verify` (#122), `docs` (#123) |
-| Backlog | `docs/feature-backlog.md` § B3 — Notes for `ai-token-metering` |
+| Feature id | `rank-ai-budgets` |
+| Parent issue | #125 — https://github.com/SpektrNO/newsroom/issues/125 |
+| Open tasks | `spec` (#126), `db` (#127), `api` (#128), `worker` (#129), `verify` (#130), `docs` (#131) |
+| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-ai-budgets` |
 
 Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`
 
 ## Intent
 
-Meter AI tokens for rank + chat, show today’s usage in Settings, and enforce a shared daily hard cap (chat 429; rank degrades to keyword-only).
+Cap how many articles get AI-scored per user (per run and per day), so ranking stays keyword-only beyond the budget instead of burning Ollama on huge shortlists.
+
+## User-facing spec
+
+| Field | Value |
+|-------|-------|
+| Trigger | Worker `runRank` AI pass; optional Settings/ai-usage reveal |
+| Surfaces | worker; Settings (article budget line); Rank latest uses same path |
+| Copy | Settings: optional “Rank AI articles today” |
+| Acceptance | See criteria |
+
+### Acceptance criteria
+
+1. Env caps: `RANK_AI_MAX_PER_RUN`, `RANK_AI_MAX_PER_DAY`, optional `RANK_AI_MAX_GLOBAL_PER_DAY` (`0` = unlimited).
+2. Persist per-user daily AI article count (`rank_ai_daily`).
+3. AI pass only scores `min(remainingDay, perRun, shortlist)` articles; remainder stay keyword-only (`combineFinalRank` null AI).
+4. Respect existing dirty∩active enqueue + token hard cap (token check still wins).
+5. Over article budget → skip further AI batches for that user (log); still clear dirty after keyword pass.
+6. Reveal remaining/used on `GET /api/ai-usage` + Settings.
+7. Out of scope: dollar pricing, changing activity window, `rank-score-retention`.
+
+## API / DB contract
+
+| Field / Endpoint | Notes |
+|------------------|-------|
+| `rank_ai_daily` | PK `(user_id, day)`; `articles_scored` int |
+| Helpers | `resolveRankAiLimits`, `getRankAiArticlesForDay`, `recordRankAiArticles`, `remainingRankAiBudget` |
+| `GET /api/ai-usage` | Add `rankAi: { used, dayLimit, runLimit, remaining, globalUsed?, globalLimit? }` |
+| Worker | Slice shortlist before AI loop; record after successful AI apply |
+
+## Touchpoints
+
+- `packages/db` — schema + helpers
+- `apps/worker/src/rank.ts` — budget gate
+- `apps/web` — ai-usage + Settings
+- `packages/api-client` — types
+- `.env.example`, docs
+
+## Out of scope
+
+- Closing parent #125 (PR `Closes #125`)
+- Token meter redesign (already shipped)
+
+---
 
 ## Implementation result
 
-### Delivered
-
-- `AiCompleteResult.usage` + Ollama counts / chars/4 estimate; rank/advisor preserve usage
-- `ai_token_daily` migration + record/get/budget helpers
-- `GET /api/ai-usage`; chat budget + record; Settings “AI tokens today”
-- Worker records rank usage; skips AI batches when hard exceeded
-
-### Verification
-
-- `pnpm --filter @newsroom/db typecheck` + `ai-usage.test.ts`
-- `pnpm --filter @newsroom/ai typecheck` + test
-- `pnpm --filter @newsroom/db build` && `pnpm --filter @newsroom/ai build`
-- `pnpm --filter @newsroom/worker typecheck` + test
-- `pnpm --filter @newsroom/web typecheck`
-
-### Deviations
-
-- No separate web task slug; Settings reveal shipped under `api`.
-- Chat response includes optional `tokens` + `aiUsage` summary (not only Settings).
-
-### Follow-ups
-
-- `rank-ai-budgets` (article/batch caps on top of token meter)
-- Advisor composer footer for soft-warn (optional)
+*(Developer agent fills this section.)*
