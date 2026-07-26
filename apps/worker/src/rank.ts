@@ -4,6 +4,7 @@ import {
   OllamaProvider,
   rankArticleBatch,
   scoreKeywordMatch,
+  withInheritedCatalogKeywords,
   type AiProvider,
 } from "@newsroom/ai";
 import {
@@ -454,12 +455,14 @@ export async function runRank(
       const userTopics = await loadUserTopics(db, userId);
       if (userTopics.length === 0) continue;
 
-      const keywordTopics = userTopics.map((t) => ({
-        id: t.id,
-        name: t.name,
-        keywords: t.keywords ?? [],
-        weight: t.weight,
-      }));
+      const keywordTopics = userTopics.map((t) =>
+        withInheritedCatalogKeywords({
+          id: t.id,
+          name: t.name,
+          keywords: t.keywords ?? [],
+          weight: t.weight,
+        }),
+      );
 
       const candidates = await loadCandidateArticles(db, userId);
       const shortlist: Array<{

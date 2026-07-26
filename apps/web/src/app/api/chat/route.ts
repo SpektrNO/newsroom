@@ -1,4 +1,8 @@
-import { adviseTopics, OllamaProvider } from "@newsroom/ai";
+import {
+  adviseTopics,
+  OllamaProvider,
+  topicPathLabels,
+} from "@newsroom/ai";
 import {
   canSpendAiTokens,
   getDb,
@@ -50,9 +54,12 @@ export async function POST(request: Request) {
   }
 
   const tree = getTopicTree();
-  const selectableLabels = tree.nodes
-    .filter((n) => n.selectable)
-    .map((n) => n.label);
+  const selectable = tree.nodes.filter((n) => n.selectable);
+  const selectableLabels = selectable.map((n) => n.label);
+  const catalogCrumbs = selectable.map((n) => {
+    const path = topicPathLabels(n.label);
+    return path ? path.join(" · ") : n.label;
+  });
 
   const topics = await listTopicsForUser(db, authResult.userId);
   const following = topics.map((t) => ({
@@ -69,6 +76,7 @@ export async function POST(request: Request) {
 
     const advised = await adviseTopics(provider, {
       catalogLabels: selectableLabels,
+      catalogCrumbs,
       following,
       messages: parsed.messages,
     });

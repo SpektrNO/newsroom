@@ -2,10 +2,34 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   adviseTopics,
+  buildAdvisorPrompt,
   looksLikeRankPayload,
   parseAdvisorResponse,
 } from "./advisor.js";
 import type { AiProvider } from "./types.js";
+
+describe("buildAdvisorPrompt", () => {
+  it("includes hierarchical paths and branch-matching rules", () => {
+    const prompt = buildAdvisorPrompt({
+      catalogLabels: ["Evals & safety", "Policy & society"],
+      catalogCrumbs: [
+        "Technology · AI & Machine Learning · Evals & safety",
+        "Culture & Society · Policy & society",
+      ],
+      following: [],
+      messages: [{ role: "user", content: "I care about world affairs" }],
+    });
+    assert.match(prompt, /hierarchical/i);
+    assert.match(prompt, /branch first/i);
+    assert.match(prompt, /never Technology leaves/i);
+    assert.match(
+      prompt,
+      /Technology · AI & Machine Learning · Evals & safety/,
+    );
+    assert.match(prompt, /Culture & Society · Policy & society/);
+    assert.match(prompt, /weakly matches ancestor path tokens/);
+  });
+});
 
 describe("parseAdvisorResponse", () => {
   it("parses reply and suggestions", () => {

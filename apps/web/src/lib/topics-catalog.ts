@@ -1,5 +1,10 @@
 /** Browser-safe catalog/follow helpers (no Node / DB / sources imports). */
 
+import {
+  pathKeywordsForTopicName,
+  tokenizeTopicLabel,
+} from "@newsroom/ai/topic-keywords";
+
 /** Body for one-click Follow from a catalog leaf (POST /api/topics). */
 export type FollowTopicDefaults = {
   name: string;
@@ -9,31 +14,20 @@ export type FollowTopicDefaults = {
 };
 
 /**
- * Split a catalog leaf label into starter keywords that can substring-match
- * article titles (e.g. "LLMs & agents" → ["LLMs", "agents"]).
- * Using the full label alone almost never hits real headlines.
+ * Locked chips in the Manage UI: leaf tokens plus ancestor path tokens
+ * (Technology → AI & Machine Learning → …). Ancestors are scored weakly at
+ * rank time even if not stored on the topic row.
  */
 export function starterKeywordsFromLabel(label: string): string[] {
-  const raw = label.trim();
-  if (!raw) return [];
-
-  const parts = raw
-    .split(/[&/,|+]+|\s+/)
-    .map((p) => p.trim())
-    .filter((p) => p.length >= 2);
-
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const part of parts.length > 0 ? parts : [raw]) {
-    const key = part.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(part);
-  }
-  return out;
+  return pathKeywordsForTopicName(label);
 }
 
-/** Keywords not already covered by label-derived starters (case-insensitive). */
+/** Leaf-only tokens stored as primary keywords on create. */
+export function leafKeywordsFromLabel(label: string): string[] {
+  return tokenizeTopicLabel(label);
+}
+
+/** Keywords not already covered by path-derived starters (case-insensitive). */
 export function extraKeywordsBeyondStarters(
   keywords: readonly string[],
   label: string,
@@ -54,12 +48,15 @@ export function extraKeywordsBeyondStarters(
   return out;
 }
 
-/** Label starters first, then user extras (deduped). */
+/**
+ * Persist leaf starters + user extras. Ancestor path tokens are applied as
+ * weak inherited keywords at rank/feed time via the catalog tree.
+ */
 export function mergeTopicKeywords(
   label: string,
   extras: readonly string[],
 ): string[] {
-  const locked = starterKeywordsFromLabel(label);
+  const locked = leafKeywordsFromLabel(label);
   const seen = new Set(locked.map((k) => k.toLowerCase()));
   const out = [...locked];
   for (const raw of extras) {
@@ -75,13 +72,14 @@ export function mergeTopicKeywords(
 
 /**
  * Normative create payload when following a curated catalog leaf:
- * name = label, keywords = tokenized label parts, weight = 1, enabled = true.
+ * name = label, keywords = leaf tokens, weight = 1, enabled = true.
+ * Ancestor keywords are inherited weakly at rank/feed time.
  */
 export function followDefaultsForLabel(label: string): FollowTopicDefaults {
   const name = label.trim();
   return {
     name,
-    keywords: starterKeywordsFromLabel(name),
+    keywords: leafKeywordsFromLabel(name),
     weight: 1,
     enabled: true,
   };

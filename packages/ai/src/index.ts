@@ -7,10 +7,27 @@ export { OllamaProvider, ollamaJsonFormat, type OllamaProviderOptions } from "./
 export {
   scoreKeywordMatch,
   articleMatchesTopicKeywords,
+  withInheritedCatalogKeywords,
   combineFinalRank,
+  INHERITED_KEYWORD_WEIGHT_FACTOR,
   type KeywordTopic,
   type KeywordMatchResult,
 } from "./keyword.js";
+export {
+  tokenizeTopicLabel,
+  pathKeywordsForTopicName,
+  inheritedKeywordsForTopicName,
+} from "./topic-keywords.js";
+export {
+  getTopicTree,
+  resolveSelectableTopicLabel,
+  findNodeByLabel,
+  topicPathLabels,
+  TOPIC_TREE_NODES,
+  TOPIC_TREE_VERSION,
+  type TopicTreeNode,
+  type TopicTreeResponse,
+} from "./topic-tree.js";
 export {
   rankArticleBatch,
   type RankTopicInput,
@@ -23,6 +40,7 @@ export {
   adviseTopics,
   parseAdvisorResponse,
   looksLikeRankPayload,
+  buildAdvisorPrompt,
   type AdvisorChatMessage,
   type AdvisorFollowingTopic,
   type AdvisorSuggestion,

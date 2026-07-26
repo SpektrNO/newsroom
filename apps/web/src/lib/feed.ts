@@ -1,4 +1,4 @@
-import { articleMatchesTopicKeywords } from "@newsroom/ai";
+import { articleMatchesTopicKeywords, inheritedKeywordsForTopicName } from "@newsroom/ai";
 import type { UserArticleScoreStatus } from "@newsroom/db";
 
 export type FeedSourceJson = {
@@ -146,8 +146,14 @@ export function passesTopicFilter(
   title: string,
   summary: string | null,
   topicKeywords: string[],
+  inheritedKeywords?: string[],
 ): boolean {
-  return articleMatchesTopicKeywords(title, summary, topicKeywords);
+  return articleMatchesTopicKeywords(
+    title,
+    summary,
+    topicKeywords,
+    inheritedKeywords,
+  );
 }
 
 const MAX_FEED_SEARCH_LEN = 200;

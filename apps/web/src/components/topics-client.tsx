@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -105,106 +106,15 @@ function formatPath(path: string[] | null): string | null {
   return path.join(" · ");
 }
 
-type TreeItemProps = {
-  node: TopicTreeNode;
-  childrenByParent: Map<string, TopicTreeNode[]>;
-  expanded: Set<string>;
-  selectedId: string | null;
-  search: string;
-  onToggle: (id: string) => void;
-  onSelect: (node: TopicTreeNode) => void;
-};
-
-function TreeItem({
-  node,
-  childrenByParent,
-  expanded,
-  selectedId,
-  search,
-  onToggle,
-  onSelect,
-}: TreeItemProps): ReactNode {
-  const kids = childrenByParent.get(parentKey(node.id)) ?? [];
-  const hasKids = kids.length > 0;
-  const isOpen = expanded.has(node.id);
-  const q = search.trim().toLowerCase();
-
-  function matchesSelf(n: TopicTreeNode): boolean {
-    if (!q) return true;
-    return n.label.toLowerCase().includes(q);
-  }
-
-  function matchesBranch(n: TopicTreeNode): boolean {
-    if (matchesSelf(n)) return true;
-    return (childrenByParent.get(parentKey(n.id)) ?? []).some(matchesBranch);
-  }
-
-  if (q && !matchesBranch(node)) return null;
-
-  return (
-    <li className="topic-tree-item">
-      <div className="topic-tree-row">
-        {hasKids ? (
-          <button
-            type="button"
-            className="topic-tree-toggle"
-            aria-expanded={isOpen}
-            onClick={() => onToggle(node.id)}
-          >
-            {isOpen ? "▾" : "▸"}
-          </button>
-        ) : (
-          <span className="topic-tree-toggle spacer" aria-hidden />
-        )}
-        {node.selectable ? (
-          <button
-            type="button"
-            className={
-              selectedId === node.id
-                ? "topic-tree-leaf selected"
-                : "topic-tree-leaf"
-            }
-            onClick={() => onSelect(node)}
-          >
-            {node.label}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="topic-tree-branch"
-            onClick={() => hasKids && onToggle(node.id)}
-          >
-            {node.label}
-          </button>
-        )}
-      </div>
-      {hasKids && isOpen ? (
-        <ul className="topic-tree-children">
-          {kids.map((child) => (
-            <TreeItem
-              key={child.id}
-              node={child}
-              childrenByParent={childrenByParent}
-              expanded={expanded}
-              selectedId={selectedId}
-              search={search}
-              onToggle={onToggle}
-              onSelect={onSelect}
-            />
-          ))}
-        </ul>
-      ) : null}
-    </li>
-  );
-}
-
 type CatalogItemProps = {
   node: TopicTreeNode;
   childrenByParent: Map<string, TopicTreeNode[]>;
   expanded: Set<string>;
   search: string;
   topics: Topic[];
+  followingOnly: boolean;
   followingLabel: string | null;
+  managingId: string | null;
   onToggle: (id: string) => void;
   onFollow: (label: string) => void;
   onManage: (topic: Topic) => void;
@@ -216,7 +126,9 @@ function CatalogItem({
   expanded,
   search,
   topics,
+  followingOnly,
   followingLabel,
+  managingId,
   onToggle,
   onFollow,
   onManage,
@@ -226,27 +138,37 @@ function CatalogItem({
   const isOpen = expanded.has(node.id);
   const q = search.trim().toLowerCase();
 
-  function matchesSelf(n: TopicTreeNode): boolean {
-    if (!q) return true;
-    return n.label.toLowerCase().includes(q);
+  function leafVisible(n: TopicTreeNode): boolean {
+    if (!n.selectable) return false;
+    if (q && !n.label.toLowerCase().includes(q)) return false;
+    if (followingOnly && !isFollowingLabel(topics, n.label)) return false;
+    return true;
   }
 
-  function matchesBranch(n: TopicTreeNode): boolean {
-    if (matchesSelf(n)) return true;
-    return (childrenByParent.get(parentKey(n.id)) ?? []).some(matchesBranch);
+  function branchVisible(n: TopicTreeNode): boolean {
+    if (n.selectable) return leafVisible(n);
+    return (childrenByParent.get(parentKey(n.id)) ?? []).some(branchVisible);
   }
 
-  if (q && !matchesBranch(node)) return null;
+  if (!branchVisible(node)) return null;
 
   const followed = node.selectable && isFollowingLabel(topics, node.label);
   const matchedTopic = followed
     ? findTopicByLabel(topics, node.label)
     : undefined;
   const pending = followingLabel?.toLowerCase() === node.label.toLowerCase();
+  const managing =
+    matchedTopic != null && managingId === matchedTopic.id;
 
   return (
     <li className="topic-tree-item">
-      <div className="topic-tree-row catalog-row">
+      <div
+        className={
+          managing
+            ? "topic-tree-row catalog-row catalog-row-managing"
+            : "topic-tree-row catalog-row"
+        }
+      >
         {hasKids ? (
           <button
             type="button"
@@ -306,7 +228,9 @@ function CatalogItem({
               expanded={expanded}
               search={search}
               topics={topics}
+              followingOnly={followingOnly}
               followingLabel={followingLabel}
+              managingId={managingId}
               onToggle={onToggle}
               onFollow={onFollow}
               onManage={onManage}
@@ -321,19 +245,29 @@ function CatalogItem({
 type TopicCatalogTreeProps = {
   nodes: TopicTreeNode[];
   topics: Topic[];
+  followingOnly: boolean;
   followingLabel: string | null;
+  managingId: string | null;
+  search: string;
+  onSearchChange: (value: string) => void;
   onFollow: (label: string) => void;
   onManage: (topic: Topic) => void;
   catalogEmptyMessage?: string;
+  managePanel?: ReactNode;
 };
 
 function TopicCatalogTree({
   nodes,
   topics,
+  followingOnly,
   followingLabel,
+  managingId,
+  search,
+  onSearchChange,
   onFollow,
   onManage,
   catalogEmptyMessage,
+  managePanel,
 }: TopicCatalogTreeProps): ReactNode {
   const childrenByParent = useMemo(() => {
     const map = new Map<string, TopicTreeNode[]>();
@@ -349,23 +283,28 @@ function TopicCatalogTree({
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const next = new Set<string>();
     for (const n of nodes) {
-      if (!n.selectable && (childrenByParent.get(parentKey(n.id))?.length ?? 0) > 0) {
+      if (
+        !n.selectable &&
+        (childrenByParent.get(parentKey(n.id))?.length ?? 0) > 0
+      ) {
         next.add(n.id);
       }
     }
     return next;
   });
-  const [search, setSearch] = useState("");
 
   const roots = childrenByParent.get("") ?? [];
 
   useEffect(() => {
-    if (!search.trim()) return;
+    if (!search.trim() && !followingOnly) return;
     const q = search.trim().toLowerCase();
     const next = new Set<string>();
     const byId = new Map(nodes.map((x) => [x.id, x]));
+
     for (const n of nodes) {
-      if (!n.label.toLowerCase().includes(q)) continue;
+      if (!n.selectable) continue;
+      if (q && !n.label.toLowerCase().includes(q)) continue;
+      if (followingOnly && !isFollowingLabel(topics, n.label)) continue;
       let current: TopicTreeNode | undefined = n;
       while (current?.parentId) {
         next.add(current.parentId);
@@ -377,7 +316,7 @@ function TopicCatalogTree({
       for (const id of next) merged.add(id);
       return merged;
     });
-  }, [search, nodes]);
+  }, [search, nodes, followingOnly, topics]);
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -397,193 +336,36 @@ function TopicCatalogTree({
   }
 
   return (
-    <div className="topic-catalog">
+    <div className="topic-browse">
       <input
         type="search"
         className="topic-tree-search"
         placeholder="Search topics…"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        aria-label="Search catalog"
+        onChange={(e) => onSearchChange(e.target.value)}
+        aria-label="Search topics"
       />
-      <ul className="topic-tree-root">
-        {roots.map((node) => (
-          <CatalogItem
-            key={node.id}
-            node={node}
-            childrenByParent={childrenByParent}
-            expanded={expanded}
-            search={search}
-            topics={topics}
-            followingLabel={followingLabel}
-            onToggle={toggle}
-            onFollow={onFollow}
-            onManage={onManage}
-          />
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-type TopicTreePickerProps = {
-  nodes: TopicTreeNode[];
-  selectedLabel: string;
-  onSelectLabel: (label: string) => void;
-  legacyName: string | null;
-};
-
-function TopicTreePicker({
-  nodes,
-  selectedLabel,
-  onSelectLabel,
-  legacyName,
-}: TopicTreePickerProps): ReactNode {
-  const childrenByParent = useMemo(() => {
-    const map = new Map<string, TopicTreeNode[]>();
-    for (const n of nodes) {
-      const key = parentKey(n.parentId);
-      const list = map.get(key) ?? [];
-      list.push(n);
-      map.set(key, list);
-    }
-    return map;
-  }, [nodes]);
-
-  const selectedNode = useMemo(() => {
-    if (!selectedLabel) return null;
-    const needle = selectedLabel.toLowerCase();
-    return (
-      nodes.find((n) => n.selectable && n.label.toLowerCase() === needle) ??
-      null
-    );
-  }, [nodes, selectedLabel]);
-
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
-
-  const roots = childrenByParent.get("") ?? [];
-
-  /** Expand every non-leaf so categories are browsable without hunting. */
-  function expandBranches(base?: Set<string>) {
-    const next = new Set(base ?? []);
-    for (const n of nodes) {
-      if (!n.selectable && (childrenByParent.get(parentKey(n.id))?.length ?? 0) > 0) {
-        next.add(n.id);
-      }
-    }
-    return next;
-  }
-
-  useEffect(() => {
-    if (!selectedNode) return;
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const next = new Set<string>();
-    let current: TopicTreeNode | undefined = selectedNode;
-    while (current?.parentId) {
-      next.add(current.parentId);
-      current = byId.get(current.parentId);
-    }
-    setExpanded((prev) => {
-      const merged = new Set(prev);
-      for (const id of next) merged.add(id);
-      return merged;
-    });
-  }, [selectedNode, nodes]);
-
-  useEffect(() => {
-    if (!search.trim()) return;
-    const q = search.trim().toLowerCase();
-    const next = new Set<string>();
-    for (const n of nodes) {
-      if (!n.label.toLowerCase().includes(q)) continue;
-      let current: TopicTreeNode | undefined = n;
-      const byId = new Map(nodes.map((x) => [x.id, x]));
-      while (current?.parentId) {
-        next.add(current.parentId);
-        current = byId.get(current.parentId);
-      }
-    }
-    setExpanded((prev) => {
-      const merged = new Set(prev);
-      for (const id of next) merged.add(id);
-      return merged;
-    });
-  }, [search, nodes]);
-
-  const pathCrumb = formatPath(
-    selectedLabel ? pathFromNodes(nodes, selectedLabel) : null,
-  );
-
-  function toggle(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function openPanel() {
-    setOpen(true);
-    setExpanded((prev) => expandBranches(prev));
-  }
-
-  return (
-    <div className="topic-picker">
-      <span className="field-label">Topic</span>
-      {legacyName ? (
-        <p className="legacy-note">
-          Current name isn’t in the catalog: “{legacyName}”. Pick a topic from
-          the tree.
-        </p>
-      ) : null}
-      <button
-        type="button"
-        className="topic-picker-trigger"
-        aria-expanded={open}
-        onClick={() => (open ? setOpen(false) : openPanel())}
-      >
-        {selectedNode ? selectedNode.label : "Choose a topic…"}
-      </button>
-      {pathCrumb && selectedNode ? (
-        <p className="topic-path">{pathCrumb}</p>
-      ) : null}
-      {open ? (
-        <div className="topic-tree-panel">
-          <input
-            type="search"
-            className="topic-tree-search"
-            placeholder="Search topics…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search topics"
-          />
-          {roots.length === 0 ? (
-            <p className="legacy-note">No topics in the catalog.</p>
-          ) : (
-            <ul className="topic-tree-root">
-              {roots.map((node) => (
-                <TreeItem
-                  key={node.id}
-                  node={node}
-                  childrenByParent={childrenByParent}
-                  expanded={expanded}
-                  selectedId={selectedNode?.id ?? null}
-                  search={search}
-                  onToggle={toggle}
-                  onSelect={(n) => {
-                    onSelectLabel(n.label);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
+      {managePanel}
+      <div className="topic-catalog">
+        <ul className="topic-tree-root">
+          {roots.map((node) => (
+            <CatalogItem
+              key={node.id}
+              node={node}
+              childrenByParent={childrenByParent}
+              expanded={expanded}
+              search={search}
+              topics={topics}
+              followingOnly={followingOnly}
+              followingLabel={followingLabel}
+              managingId={managingId}
+              onToggle={toggle}
+              onFollow={onFollow}
+              onManage={onManage}
+            />
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -677,7 +459,7 @@ function KeywordChips({
           disabled={disabled || !lockedKeywords.length}
           placeholder={
             !lockedKeywords.length
-              ? "Pick a topic first"
+              ? "Topic name required"
               : hasAny
                 ? "Add more…"
                 : "Add keywords…"
@@ -692,7 +474,8 @@ function KeywordChips({
       </div>
       {lockedKeywords.length > 0 ? (
         <p className="keyword-chips-hint">
-          Words from the topic name stay fixed. Add more if you want.
+          Words from the topic path stay fixed (parents match more weakly when
+          ranking). Add more if you want.
         </p>
       ) : null}
     </div>
@@ -702,6 +485,7 @@ function KeywordChips({
 export function TopicsClient(): ReactNode {
   const router = useRouter();
   const api = getBrowserApiClient();
+  const managePanelRef = useRef<HTMLFormElement | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [treeNodes, setTreeNodes] = useState<TopicTreeNode[]>(
     () => getTopicTree().nodes,
@@ -715,6 +499,8 @@ export function TopicsClient(): ReactNode {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [followingLabel, setFollowingLabel] = useState<string | null>(null);
+  const [followingOnly, setFollowingOnly] = useState(false);
+  const [search, setSearch] = useState("");
 
   const [selectedLabel, setSelectedLabel] = useState("");
   const [legacyName, setLegacyName] = useState<string | null>(null);
@@ -729,40 +515,50 @@ export function TopicsClient(): ReactNode {
     [topicLabelForKeywords],
   );
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [topicsRes, treeResult] = await Promise.all([
-        api.listTopics(),
-        api.listTopicTree().then(
-          (res) => ({ ok: true as const, res }),
-          () => ({ ok: false as const }),
-        ),
-      ]);
-      setTopics(topicsRes.topics);
-      if (treeResult.ok && treeResult.res.nodes?.length > 0) {
-        setTreeNodes(treeResult.res.nodes);
-        setCatalogFailed(false);
-      } else {
+  const pathCrumb = formatPath(
+    topicLabelForKeywords
+      ? pathFromNodes(treeNodes, topicLabelForKeywords)
+      : null,
+  );
+
+  const refresh = useCallback(
+    async (opts?: { quiet?: boolean }): Promise<Topic[] | null> => {
+      if (!opts?.quiet) setLoading(true);
+      setError(null);
+      try {
+        const [topicsRes, treeResult] = await Promise.all([
+          api.listTopics(),
+          api.listTopicTree().then(
+            (res) => ({ ok: true as const, res }),
+            () => ({ ok: false as const }),
+          ),
+        ]);
+        setTopics(topicsRes.topics);
+        if (treeResult.ok && treeResult.res.nodes?.length > 0) {
+          setTreeNodes(treeResult.res.nodes);
+          setCatalogFailed(false);
+        } else {
+          const fallback = getTopicTree();
+          setTreeNodes(fallback.nodes);
+          setCatalogFailed(!fallback.nodes.length);
+        }
+        return topicsRes.topics;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          router.push("/sign-in?callbackUrl=%2Ftopics");
+          return null;
+        }
         const fallback = getTopicTree();
         setTreeNodes(fallback.nodes);
         setCatalogFailed(!fallback.nodes.length);
+        setError("Couldn't load topics.");
+        return null;
+      } finally {
+        if (!opts?.quiet) setLoading(false);
       }
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        router.push("/sign-in?callbackUrl=%2Ftopics");
-        return;
-      }
-      // Still offer the static catalog so Catalog / picker are never blank.
-      const fallback = getTopicTree();
-      setTreeNodes(fallback.nodes);
-      setCatalogFailed(!fallback.nodes.length);
-      setError("Couldn't load topics.");
-    } finally {
-      setLoading(false);
-    }
-  }, [api, router]);
+    },
+    [api, router],
+  );
 
   useEffect(() => {
     void refresh();
@@ -802,9 +598,13 @@ export function TopicsClient(): ReactNode {
   function manageTopic(topic: Topic) {
     startEdit(topic);
     requestAnimationFrame(() => {
-      document
-        .getElementById(`following-topic-${topic.id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      managePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+      managePanelRef.current
+        ?.querySelector<HTMLInputElement>("input:not([type=checkbox])")
+        ?.focus();
     });
   }
 
@@ -813,8 +613,9 @@ export function TopicsClient(): ReactNode {
     setFollowNote(null);
     setFollowingLabel(label);
     try {
-      await api.createTopic(followDefaultsForLabel(label));
-      await refresh();
+      const created = await api.createTopic(followDefaultsForLabel(label));
+      await refresh({ quiet: true });
+      manageTopic(created.topic);
     } catch (err) {
       const apiErr = readApiError(err);
       if (apiErr?.status === 401) {
@@ -823,7 +624,11 @@ export function TopicsClient(): ReactNode {
       }
       if (apiErr?.code === "duplicate" || apiErr?.status === 409) {
         setFollowNote("You’re already following that topic.");
-        await refresh();
+        const list = await refresh({ quiet: true });
+        const existing = list
+          ? findTopicByLabel(list, label)
+          : findTopicByLabel(topics, label);
+        if (existing) manageTopic(existing);
       } else {
         console.error("[newsroom] catalog follow failed", err);
         setFollowError("Couldn't follow topic — try again.");
@@ -837,35 +642,26 @@ export function TopicsClient(): ReactNode {
     event.preventDefault();
     setFormError(null);
 
-    if (!selectedLabel.trim()) {
+    if (!editingId) return;
+
+    const name = selectedLabel.trim() || legacyName?.trim() || "";
+    if (!name) {
       setFormError("Check the topic and keywords.");
       return;
     }
 
     setPending(true);
     const w = Number(weight);
-    const resolvedKeywords = mergeTopicKeywords(
-      selectedLabel.trim(),
-      extraKeywords,
-    );
+    const resolvedKeywords = mergeTopicKeywords(name, extraKeywords);
     try {
-      if (editingId) {
-        await api.patchTopic(editingId, {
-          name: selectedLabel.trim(),
-          keywords: resolvedKeywords,
-          weight: Number.isFinite(w) ? w : 1,
-          enabled,
-        });
-      } else {
-        await api.createTopic({
-          name: selectedLabel.trim(),
-          keywords: resolvedKeywords,
-          weight: Number.isFinite(w) ? w : 1,
-          enabled,
-        });
-      }
+      await api.patchTopic(editingId, {
+        name: selectedLabel.trim() || name,
+        keywords: resolvedKeywords,
+        weight: Number.isFinite(w) ? w : 1,
+        enabled,
+      });
       resetForm();
-      await refresh();
+      await refresh({ quiet: true });
     } catch (err) {
       const apiErr = readApiError(err);
       if (apiErr?.status === 401) {
@@ -885,189 +681,169 @@ export function TopicsClient(): ReactNode {
     }
   }
 
-  async function toggleEnabled(topic: Topic) {
+  async function onDeleteEditing() {
+    if (!editingId) return;
+    const topic = topics.find((t) => t.id === editingId);
+    const name =
+      topic?.name ?? (selectedLabel || legacyName || "this topic");
+    if (!window.confirm(`Delete topic "${name}"?`)) return;
     try {
-      await api.patchTopic(topic.id, { enabled: !topic.enabled });
-      await refresh();
+      await api.deleteTopic(editingId);
+      resetForm();
+      await refresh({ quiet: true });
     } catch {
-      setError("Couldn't update topic — try again.");
+      setFormError("Couldn't delete topic — try again.");
     }
   }
 
-  async function onDelete(topic: Topic) {
-    if (!window.confirm(`Delete topic "${topic.name}"?`)) return;
-    try {
-      await api.deleteTopic(topic.id);
-      if (editingId === topic.id) resetForm();
-      await refresh();
-    } catch {
-      setError("Couldn't delete topic — try again.");
-    }
-  }
+  const managePanel =
+    editingId && !loading ? (
+      <form
+        ref={managePanelRef}
+        id="topic-manage-panel"
+        className="manage-form panel-soft topic-manage-panel"
+        onSubmit={onSubmit}
+      >
+        <h2 className="form-heading">Manage topic</h2>
+        <div className="topic-manage-identity">
+          <p className="manage-title">
+            {selectedLabel || legacyName || "Topic"}
+          </p>
+          {pathCrumb ? <p className="topic-path">{pathCrumb}</p> : null}
+          {legacyName ? (
+            <p className="legacy-note">
+              This name isn’t in the catalog: “{legacyName}”. Keywords and
+              weight still apply; delete and follow a catalog topic to replace
+              it.
+            </p>
+          ) : null}
+        </div>
+
+        <KeywordChips
+          lockedKeywords={lockedKeywords}
+          extraKeywords={extraKeywords}
+          onChangeExtras={setExtraKeywords}
+        />
+
+        <div className="weight-field">
+          <label className="weight-label" htmlFor="topic-weight">
+            Weight
+          </label>
+          <input
+            id="topic-weight"
+            type="number"
+            min={0.1}
+            max={10}
+            step={0.1}
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+          />
+          <div className="weight-help">{WEIGHT_HELP}</div>
+        </div>
+
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+          />
+          Enabled
+        </label>
+        {formError ? <p className="error">{formError}</p> : null}
+        <div className="form-actions">
+          <button type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Save changes"}
+          </button>
+          <button type="button" className="ghost" onClick={resetForm}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="ghost danger-text"
+            onClick={() => void onDeleteEditing()}
+          >
+            Delete
+          </button>
+        </div>
+      </form>
+    ) : null;
 
   return (
     <section className="manage-page">
       <header className="page-header">
         <h1 className="page-title">Topics</h1>
         <p className="page-lede">
-          Follow topics from the catalog, then tune keywords and weight so
-          ranking knows what you care about.
+          Browse topics. Follow what you care about, then manage keywords and
+          weight so ranking knows what matters.
         </p>
       </header>
 
       {loading ? (
         <p className="feed-placeholder">Loading topics…</p>
       ) : (
-        <form className="manage-form panel-soft" onSubmit={onSubmit}>
-          <h2 className="form-heading">
-            {editingId ? "Edit topic" : "Add topic"}
-          </h2>
-
-          <TopicTreePicker
-            nodes={treeNodes}
-            selectedLabel={selectedLabel}
-            onSelectLabel={(label) => {
-              setSelectedLabel(label);
-              setLegacyName(null);
-              // Keep only extras that aren't already covered by the new label.
-              setExtraKeywords((prev) =>
-                extraKeywordsBeyondStarters(prev, label),
-              );
-            }}
-            legacyName={legacyName}
-          />
-
-          <KeywordChips
-            lockedKeywords={lockedKeywords}
-            extraKeywords={extraKeywords}
-            onChangeExtras={setExtraKeywords}
-          />
-
-          <div className="weight-field">
-            <label className="weight-label" htmlFor="topic-weight">
-              Weight
-            </label>
-            <input
-              id="topic-weight"
-              type="number"
-              min={0.1}
-              max={10}
-              step={0.1}
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-            />
-            <div className="weight-help">{WEIGHT_HELP}</div>
-          </div>
-
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            Enabled
-          </label>
-          {formError ? <p className="error">{formError}</p> : null}
-          <div className="form-actions">
-            <button type="submit" disabled={pending}>
-              {pending ? "Saving…" : editingId ? "Save changes" : "Add topic"}
-            </button>
-            {editingId ? (
-              <button type="button" className="ghost" onClick={resetForm}>
-                Cancel
-              </button>
-            ) : null}
-          </div>
-        </form>
-      )}
-
-      {loading ? null : (
         <>
-          <div className="topics-section">
-            <h2 className="section-heading">Following</h2>
-            {error ? <p className="error">{error}</p> : null}
-            {!error && topics.length === 0 ? (
-              <p className="empty-copy">
-                You’re not following any topics yet. Browse the catalog below or
-                add one with keywords.
-              </p>
-            ) : null}
-            {!error && topics.length > 0 ? (
-              <ul className="manage-list">
-                {topics.map((topic) => {
-                  const crumb = formatPath(
-                    pathFromNodes(treeNodes, topic.name),
-                  );
-                  return (
-                    <li
-                      key={topic.id}
-                      id={`following-topic-${topic.id}`}
-                      className="manage-row"
-                    >
-                      <div className="manage-main">
-                        <p className="manage-title">{topic.name}</p>
-                        {crumb ? (
-                          <p className="topic-path list-path">{crumb}</p>
-                        ) : null}
-                        <p className="manage-meta">
-                          Weight {topic.weight}
-                          {topic.enabled ? "" : " · Disabled"}
-                        </p>
-                        <p className="keyword-line">
-                          {topic.keywords.length
-                            ? topic.keywords.join(", ")
-                            : "No keywords"}
-                        </p>
-                      </div>
-                      <div className="manage-actions">
-                        <button
-                          type="button"
-                          className="ghost"
-                          onClick={() => void toggleEnabled(topic)}
-                        >
-                          {topic.enabled ? "Disable" : "Enable"}
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost"
-                          onClick={() => startEdit(topic)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost danger-text"
-                          onClick={() => void onDelete(topic)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
+          <div className="topics-toolbar">
+            <p className="topics-following-count">
+              Following {topics.length}
+            </p>
+            <div
+              className="topics-filter-toggle"
+              role="group"
+              aria-label="Topic filter"
+            >
+              <button
+                type="button"
+                className={
+                  !followingOnly
+                    ? "topics-filter-btn active"
+                    : "topics-filter-btn"
+                }
+                aria-pressed={!followingOnly}
+                onClick={() => setFollowingOnly(false)}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={
+                  followingOnly
+                    ? "topics-filter-btn active"
+                    : "topics-filter-btn"
+                }
+                aria-pressed={followingOnly}
+                onClick={() => setFollowingOnly(true)}
+              >
+                Following only
+              </button>
+            </div>
           </div>
 
-          <div className="topics-section">
-            <h2 className="section-heading">Catalog</h2>
-            <p className="section-lede">
-              Browse all curated topics. Follow one to start ranking for it.
+          {error ? <p className="error">{error}</p> : null}
+          {followError ? <p className="error">{followError}</p> : null}
+          {followNote ? <p className="helper">{followNote}</p> : null}
+          {!error && topics.length === 0 ? (
+            <p className="empty-copy">
+              You’re not following any topics yet. Follow one below, then tune
+              keywords and weight.
             </p>
-            {followError ? <p className="error">{followError}</p> : null}
-            {followNote ? <p className="helper">{followNote}</p> : null}
-            {catalogFailed ? (
-              <p className="error">Couldn't load catalog.</p>
-            ) : (
-              <TopicCatalogTree
-                nodes={treeNodes}
-                topics={topics}
-                followingLabel={followingLabel}
-                onFollow={(label) => void onFollow(label)}
-                onManage={manageTopic}
-              />
-            )}
-          </div>
+          ) : null}
+
+          {catalogFailed ? (
+            <p className="error">Couldn't load catalog.</p>
+          ) : (
+            <TopicCatalogTree
+              nodes={treeNodes}
+              topics={topics}
+              followingOnly={followingOnly}
+              followingLabel={followingLabel}
+              managingId={editingId}
+              search={search}
+              onSearchChange={setSearch}
+              onFollow={(label) => void onFollow(label)}
+              onManage={manageTopic}
+              managePanel={managePanel}
+            />
+          )}
         </>
       )}
     </section>

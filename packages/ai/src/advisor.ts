@@ -47,10 +47,14 @@ function buildPrompt(input: AdviseTopicsInput): string {
     "You advise the user on which Newsroom topics to follow and which keywords to use.",
     "This is NOT article ranking. Do not score articles. Do not invent article titles.",
     "Never return a JSON array. Never use keys articleId, aiScore, nearDuplicateOfArticleId, or finalRank.",
-    "Topic names should prefer catalog leaf labels when suggesting Follow targets.",
-    "Keywords must be short substring-friendly tokens (e.g. llm, postgres, flower), not full multi-word catalog phrases alone.",
+    "The catalog is hierarchical: each leaf’s `path` is Root · … · Leaf (e.g. Technology · AI & Machine Learning · Evals & safety).",
+    "Match suggestions to the user’s interests by branch first: only suggest leaves under roots/branches that fit (politics / world affairs → Culture & Society or Policy & society — never Technology leaves; climate → Science; startups → Business & Startups).",
+    "Do not stretch a mismatched branch. If no leaf fits well, say so in reply, suggest the closest in-branch leaves only, and use keywords to cover the gap — never dump unrelated Technology (or other) leaves.",
+    "Topic names for Follow must be catalog leaf `label` values from catalogLeaves.",
+    "Keywords must be short substring-friendly tokens (e.g. llm, postgres, election), not full multi-word catalog phrases alone.",
+    "Ranking also weakly matches ancestor path tokens for followed leaves; still prefer leaves whose whole path fits the user’s stated interests.",
     "User topics/keywords are a guide only; synonyms or otherwise related words may be suggested as in-scope.",
-    "If the user’s interests are outside the catalog, say so in reply and still suggest the closest catalog leaves and useful keywords when possible.",
+    "If the user’s interests are outside the catalog, say so in reply and still suggest the closest fitting catalog leaves and useful keywords when possible.",
     "Reply with a single JSON object only, shaped exactly like:",
     '{"reply":"markdown-free prose for the user","suggestions":[{"topicLabel":"LLMs & agents","keywords":["llm","agent"],"rationale":"why"}]}',
     "suggestions may be an empty array. Prefer 1–5 high-quality suggestions.",
@@ -59,6 +63,11 @@ function buildPrompt(input: AdviseTopicsInput): string {
     `following: ${JSON.stringify(input.following)}`,
     `messages: ${JSON.stringify(input.messages)}`,
   ].join("\n");
+}
+
+/** Exported for unit tests. */
+export function buildAdvisorPrompt(input: AdviseTopicsInput): string {
+  return buildPrompt(input);
 }
 
 function extractJsonValue(text: string): unknown {
@@ -230,8 +239,13 @@ export async function adviseTopics(
         prompt: [
           "User messages:",
           JSON.stringify(input.messages),
-          "Catalog leaf labels:",
-          JSON.stringify(input.catalogLabels),
+          "Catalog leaves (label + hierarchical path). Only suggest leaves whose path fits the user’s interests:",
+          JSON.stringify(
+            input.catalogLabels.map((label, i) => ({
+              label,
+              path: input.catalogCrumbs?.[i] ?? label,
+            })),
+          ),
           "Bad model output to rewrite:",
           result.text.slice(0, 4000),
         ].join("\n"),

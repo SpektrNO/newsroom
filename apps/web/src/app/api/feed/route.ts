@@ -1,3 +1,4 @@
+import { inheritedKeywordsForTopicName } from "@newsroom/ai";
 import { and, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
 import {
   articleSources,
@@ -243,7 +244,8 @@ export async function GET(request: Request) {
     const keywords: string[] = [];
     const seenKw = new Set<string>();
     for (const topic of topicRows) {
-      for (const kw of topic.keywords ?? []) {
+      const inherited = inheritedKeywordsForTopicName(topic.name);
+      for (const kw of [...(topic.keywords ?? []), ...inherited]) {
         const key = kw.trim().toLowerCase();
         if (!key || seenKw.has(key)) continue;
         seenKw.add(key);

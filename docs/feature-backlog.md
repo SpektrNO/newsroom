@@ -130,9 +130,11 @@ Notes for `web-topics-tree` (shipped):
 
 Notes for `web-topics-catalog` (shipped):
 
-- `/topics` shows **Following** (user’s registered topics with CRUD) plus **Catalog** (full curated tree from `GET /api/topic-tree`).
-- Selectable leaves show **Following** vs **Available** via case-insensitive match of `topics.name` ↔ leaf `label` (session user only).
-- One-click **Follow** creates via `POST /api/topics` with defaults `name=label`, `keywords=[label]`, `weight=1`, `enabled=true`; refine via Edit.
+- `/topics` is a **single catalog browse tree** (search + Follow / Following + Manage). No separate Following list or always-on Add form.
+- Selectable leaves show **Follow** or **Following** + **Manage** via case-insensitive match of `topics.name` ↔ leaf `label` (session user only).
+- One-click **Follow** creates via `POST /api/topics` with defaults `name=label`, leaf starter keywords, `weight=1`, `enabled=true`; **Manage** opens keywords / weight / enabled / delete (auto-opens after Follow).
+- **Keyword inheritance:** ranking and feed `topic=` filters also match **ancestor** catalog path tokens (e.g. Evals & safety ← AI & Machine Learning ← Technology) at a weaker weight (`0.1 × topic.weight` vs `0.25` for primary keywords). Shared tree lives in `@newsroom/ai`.
+- Toolbar: Following count + **All | Following only** filter.
 - **Out of scope (unchanged):** other users’ topics, social/popular discovery, schema/ranking changes, mobile (`mobile-feed-topics`).
 - Client-side merge of listTopics + listTopicTree; no new follow endpoint.
 
