@@ -243,6 +243,7 @@ async function loadCandidateArticles(db: Database, userId: string) {
       id: articles.id,
       title: articles.title,
       summary: articles.summary,
+      showTitle: articles.showTitle,
       updatedAt: articles.updatedAt,
       publishedAt: articles.publishedAt,
       createdAt: articles.createdAt,
@@ -469,6 +470,7 @@ export async function runRank(
         articleId: string;
         title: string;
         summary: string | null;
+        showTitle: string | null;
         keywordScore: number;
       }> = [];
 
@@ -477,6 +479,7 @@ export async function runRank(
           cand.title,
           cand.summary,
           keywordTopics,
+          cand.showTitle,
         );
         if (!match.hit) continue;
 
@@ -493,6 +496,7 @@ export async function runRank(
           articleId: cand.id,
           title: cand.title,
           summary: cand.summary,
+          showTitle: cand.showTitle,
           keywordScore: match.keywordScore,
         });
       }
@@ -534,6 +538,7 @@ export async function runRank(
               articleId: c.articleId,
               title: c.title,
               summary: c.summary,
+              showTitle: c.showTitle,
             })),
           });
           if (ranked.usage) {

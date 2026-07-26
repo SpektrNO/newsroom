@@ -1,7 +1,7 @@
 /**
  * Keyword shortlist scoring for hybrid ranking.
  *
- * Match: case-insensitive substring on `title` + `summary` (title only if summary null).
+ * Match: case-insensitive substring on `title` + optional `showTitle` + `summary`.
  * Score: min(1, sum of primary hits × weight × 0.25 + inherited hits × weight × 0.1).
  */
 
@@ -36,8 +36,13 @@ export type KeywordMatchResult = {
   reason: string | null;
 };
 
-function haystack(title: string, summary: string | null | undefined): string {
+function haystack(
+  title: string,
+  summary: string | null | undefined,
+  showTitle?: string | null,
+): string {
   const parts = [title];
+  if (showTitle) parts.push(showTitle);
   if (summary) parts.push(summary);
   return parts.join("\n").toLowerCase();
 }
@@ -50,8 +55,9 @@ export function scoreKeywordMatch(
   title: string,
   summary: string | null | undefined,
   topics: KeywordTopic[],
+  showTitle?: string | null,
 ): KeywordMatchResult {
-  const text = haystack(title, summary);
+  const text = haystack(title, summary, showTitle);
   let sum = 0;
   const matchedTopicIds: string[] = [];
   const matchedKeywords: string[] = [];
@@ -106,10 +112,14 @@ export function articleMatchesTopicKeywords(
   summary: string | null | undefined,
   keywords: string[],
   inheritedKeywords?: string[],
+  showTitle?: string | null,
 ): boolean {
-  return scoreKeywordMatch(title, summary, [
-    { keywords, inheritedKeywords, weight: 1 },
-  ]).hit;
+  return scoreKeywordMatch(
+    title,
+    summary,
+    [{ keywords, inheritedKeywords, weight: 1 }],
+    showTitle,
+  ).hit;
 }
 
 /** Attach catalog ancestor keywords for ranking / feed filters. */

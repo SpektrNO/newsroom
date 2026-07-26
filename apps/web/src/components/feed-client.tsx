@@ -18,6 +18,7 @@ import {
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
 import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
+import { formatEpisodeDuration } from "@/lib/feed";
 
 type SourceFilter = "" | SourceTypeV1;
 type ViewFilter = "feed" | "saved" | "dismissed";
@@ -30,6 +31,7 @@ type TopicGroup = {
 function sourceLabel(type: string): string {
   if (type === "hackernews") return "Hacker News";
   if (type === "substack") return "Feed";
+  if (type === "podcast") return "Podcast";
   return type;
 }
 
@@ -512,6 +514,7 @@ export function FeedClient(): ReactNode {
             <option value="">All sources</option>
             <option value="hackernews">Hacker News</option>
             <option value="substack">Feed</option>
+            <option value="podcast">Podcast</option>
           </select>
         </label>
         <label className="filter-field">
@@ -585,9 +588,16 @@ export function FeedClient(): ReactNode {
           {items.map((item, index) => {
             const metaParts = [
               ...new Set(item.sources.map((s) => sourceLabel(s.sourceType))),
+              item.showTitle,
+              formatEpisodeDuration(item.durationSeconds),
               item.author,
               formatPublished(item.publishedAt),
             ].filter(Boolean);
+            const playAudio =
+              item.enclosureUrl &&
+              item.enclosureUrl !== item.canonicalUrl
+                ? item.enclosureUrl
+                : null;
             return (
               <li
                 key={item.articleId}
@@ -618,6 +628,17 @@ export function FeedClient(): ReactNode {
                   ) : null}
                   {metaParts.length > 0 ? (
                     <p className="story-meta">{metaParts.join(" · ")}</p>
+                  ) : null}
+                  {playAudio ? (
+                    <p className="story-meta">
+                      <a
+                        href={playAudio}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Play audio
+                      </a>
+                    </p>
                   ) : null}
                   {item.nearDuplicateOfArticleId ? (
                     <p className="story-note">

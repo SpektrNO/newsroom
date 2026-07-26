@@ -156,6 +156,7 @@ async function loadFeedCounts(args: {
       articleId: userArticleScores.articleId,
       title: articles.title,
       summary: articles.summary,
+      showTitle: articles.showTitle,
       reason: userArticleScores.reason,
     })
     .from(userArticleScores)
@@ -291,6 +292,9 @@ export async function GET(request: Request) {
         canonicalUrl: articles.canonicalUrl,
         author: articles.author,
         publishedAt: articles.publishedAt,
+        showTitle: articles.showTitle,
+        durationSeconds: articles.durationSeconds,
+        enclosureUrl: articles.enclosureUrl,
         keywordScore: userArticleScores.keywordScore,
         aiScore: userArticleScores.aiScore,
         finalRank: userArticleScores.finalRank,
@@ -369,7 +373,7 @@ export async function GET(request: Request) {
   for (const row of scoreRows) {
     if (
       topicKeywords !== null &&
-      !passesTopicFilter(row.title, row.summary, topicKeywords)
+      !passesTopicFilter(row.title, row.summary, topicKeywords, undefined, row.showTitle)
     ) {
       continue;
     }
@@ -401,6 +405,9 @@ export async function GET(request: Request) {
         canonicalUrl: row.canonicalUrl,
         author: row.author,
         publishedAt: row.publishedAt,
+        showTitle: row.showTitle,
+        durationSeconds: row.durationSeconds,
+        enclosureUrl: row.enclosureUrl,
         keywordScore: row.keywordScore,
         aiScore: row.aiScore,
         finalRank: row.finalRank,

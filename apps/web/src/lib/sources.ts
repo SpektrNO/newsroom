@@ -1,9 +1,11 @@
 import type { SourceSubscriptionConfig } from "@newsroom/db";
 import { normalizeCanonicalUrl } from "@newsroom/sources";
 
+export type SourceTypeV1 = "hackernews" | "substack" | "podcast";
+
 export type SourceJson = {
   id: string;
-  sourceType: "hackernews" | "substack";
+  sourceType: SourceTypeV1;
   config: SourceSubscriptionConfig;
   enabled: boolean;
   createdAt: string;
@@ -22,7 +24,7 @@ export type SourceRow = {
 export function toSourceJson(row: SourceRow): SourceJson {
   return {
     id: row.id,
-    sourceType: row.sourceType as "hackernews" | "substack",
+    sourceType: row.sourceType as SourceTypeV1,
     config: row.config ?? {},
     enabled: row.enabled,
     createdAt: row.createdAt.toISOString(),
@@ -33,7 +35,7 @@ export function toSourceJson(row: SourceRow): SourceJson {
 export type ParsedCreate =
   | {
       ok: true;
-      sourceType: "hackernews" | "substack";
+      sourceType: SourceTypeV1;
       config: SourceSubscriptionConfig;
       enabled: boolean;
     }
@@ -63,7 +65,11 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     return { ok: false, error: "unsupported_source_type" };
   }
 
-  if (sourceType !== "hackernews" && sourceType !== "substack") {
+  if (
+    sourceType !== "hackernews" &&
+    sourceType !== "substack" &&
+    sourceType !== "podcast"
+  ) {
     return { ok: false, error: "unsupported_source_type" };
   }
 
@@ -139,7 +145,7 @@ export function parsePatchBody(
         config.mode = mode;
       }
       result.config = config;
-    } else if (currentType === "substack") {
+    } else if (currentType === "substack" || currentType === "podcast") {
       const rssUrlRaw = configRaw.rssUrl;
       if (typeof rssUrlRaw !== "string" || !rssUrlRaw.trim()) {
         return { ok: false, error: "invalid_config" };

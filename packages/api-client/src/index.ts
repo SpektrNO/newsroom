@@ -9,7 +9,7 @@ export type HealthResponse = {
   timestamp: string;
 };
 
-export type SourceTypeV1 = "hackernews" | "substack";
+export type SourceTypeV1 = "hackernews" | "substack" | "podcast";
 
 export type SourceConfig = {
   mode?: "top" | "new";
@@ -94,6 +94,9 @@ export type FeedItem = {
   canonicalUrl: string;
   author: string | null;
   publishedAt: string | null;
+  showTitle: string | null;
+  durationSeconds: number | null;
+  enclosureUrl: string | null;
   sources: FeedSource[];
   keywordScore: number;
   aiScore: number | null;

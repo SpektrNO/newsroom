@@ -19,6 +19,17 @@ describe("scoreKeywordMatch", () => {
     assert.deepEqual(result.matchedTopicIds, ["t1"]);
   });
 
+  it("matches show title when provided", () => {
+    const result = scoreKeywordMatch(
+      "Weekly episode",
+      "misc notes",
+      [{ keywords: ["lex fridman"], weight: 1 }],
+      "Lex Fridman Podcast",
+    );
+    assert.equal(result.hit, true);
+    assert.equal(result.keywordScore, 0.25);
+  });
+
   it("uses title only when summary is null", () => {
     const result = scoreKeywordMatch("Typescript tips", null, [
       { keywords: ["typescript"], weight: 1 },

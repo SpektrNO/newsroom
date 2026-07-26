@@ -13,6 +13,9 @@ export type FeedItemJson = {
   canonicalUrl: string;
   author: string | null;
   publishedAt: string | null;
+  showTitle: string | null;
+  durationSeconds: number | null;
+  enclosureUrl: string | null;
   sources: FeedSourceJson[];
   keywordScore: number;
   aiScore: number | null;
@@ -59,9 +62,11 @@ export function parseFeedLimit(raw: string | null): number {
 
 export function parseFeedSourceFilter(
   raw: string | null,
-): "hackernews" | "substack" | null | "invalid" {
+): "hackernews" | "substack" | "podcast" | null | "invalid" {
   if (raw === null || raw === "") return null;
-  if (raw === "hackernews" || raw === "substack") return raw;
+  if (raw === "hackernews" || raw === "substack" || raw === "podcast") {
+    return raw;
+  }
   return "invalid";
 }
 
@@ -88,6 +93,9 @@ export type FeedRowInput = {
   canonicalUrl: string;
   author: string | null;
   publishedAt: Date | null;
+  showTitle?: string | null;
+  durationSeconds?: number | null;
+  enclosureUrl?: string | null;
   keywordScore: number;
   aiScore: number | null;
   finalRank: number;
@@ -106,6 +114,9 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
     canonicalUrl: row.canonicalUrl,
     author: row.author,
     publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+    showTitle: row.showTitle ?? null,
+    durationSeconds: row.durationSeconds ?? null,
+    enclosureUrl: row.enclosureUrl ?? null,
     sources: row.sources,
     keywordScore: row.keywordScore,
     aiScore: row.aiScore,
@@ -115,6 +126,26 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
     status: row.status as UserArticleScoreStatus,
     scoredAt: row.scoredAt.toISOString(),
   };
+}
+
+/** Human-readable episode duration for feed cards. */
+export function formatEpisodeDuration(
+  durationSeconds: number | null | undefined,
+): string | null {
+  if (
+    durationSeconds === null ||
+    durationSeconds === undefined ||
+    !Number.isFinite(durationSeconds) ||
+    durationSeconds < 0
+  ) {
+    return null;
+  }
+  const total = Math.floor(durationSeconds);
+  if (total < 60) return `${total}s`;
+  const hours = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  if (hours === 0) return `${mins} min`;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
 /** Collect topic ids from `topic` (repeatable) and/or `topics` (comma-separated). */
@@ -147,12 +178,14 @@ export function passesTopicFilter(
   summary: string | null,
   topicKeywords: string[],
   inheritedKeywords?: string[],
+  showTitle?: string | null,
 ): boolean {
   return articleMatchesTopicKeywords(
     title,
     summary,
     topicKeywords,
     inheritedKeywords,
+    showTitle,
   );
 }
 
@@ -206,6 +239,7 @@ export function countMatchingFeedRows(
     title: string;
     summary: string | null;
     reason?: string | null;
+    showTitle?: string | null;
   }>,
   opts: {
     topicKeywords: string[] | null;
@@ -218,7 +252,13 @@ export function countMatchingFeedRows(
   for (const row of rows) {
     if (
       opts.topicKeywords !== null &&
-      !passesTopicFilter(row.title, row.summary, opts.topicKeywords)
+      !passesTopicFilter(
+        row.title,
+        row.summary,
+        opts.topicKeywords,
+        undefined,
+        row.showTitle,
+      )
     ) {
       continue;
     }

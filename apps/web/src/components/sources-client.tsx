@@ -23,12 +23,19 @@ function configSummary(source: Source): string {
     const mode = source.config.mode === "new" ? "new" : "top";
     return `mode: ${mode}`;
   }
-  if (source.sourceType === "substack") {
+  if (source.sourceType === "substack" || source.sourceType === "podcast") {
     return typeof source.config.rssUrl === "string"
       ? source.config.rssUrl
       : "RSS feed";
   }
   return "";
+}
+
+function sourceTypeLabel(sourceType: string): string {
+  if (sourceType === "hackernews") return "Hacker News";
+  if (sourceType === "podcast") return "Podcast";
+  if (sourceType === "substack") return "Feed";
+  return sourceType;
 }
 
 export function SourcesClient(): ReactNode {
@@ -41,7 +48,9 @@ export function SourcesClient(): ReactNode {
   const [formError, setFormError] = useState<string | null>(null);
   const [catalogNote, setCatalogNote] = useState<string | null>(null);
   const [rssUrl, setRssUrl] = useState("");
+  const [podcastRssUrl, setPodcastRssUrl] = useState("");
   const [pending, setPending] = useState(false);
+  const [podcastPending, setPodcastPending] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState("");
 
@@ -113,6 +122,24 @@ export function SourcesClient(): ReactNode {
     }
   }
 
+  async function addPodcast(event: FormEvent) {
+    event.preventDefault();
+    setFormError(null);
+    setPodcastPending(true);
+    try {
+      await api.createSource({
+        sourceType: "podcast",
+        config: { rssUrl: podcastRssUrl.trim() },
+      });
+      setPodcastRssUrl("");
+      await refresh();
+    } catch (err) {
+      mapSourceError(err, setFormError);
+    } finally {
+      setPodcastPending(false);
+    }
+  }
+
   async function addCatalogFeed(feed: FeedCatalogEntry) {
     if (!window.confirm(`Add “${feed.label}” to your sources?`)) return;
     setCatalogNote(null);
@@ -161,8 +188,8 @@ export function SourcesClient(): ReactNode {
       <header className="page-header">
         <h1 className="page-title">Sources</h1>
         <p className="page-lede">
-          Connect Hacker News and RSS feeds that fill your ranked list. Browse
-          the catalog if you don’t already know a URL.
+          Connect Hacker News, newsletters, and podcasts that fill your ranked
+          list. Browse the catalog if you don’t already know a newsletter URL.
         </p>
       </header>
 
@@ -181,13 +208,13 @@ export function SourcesClient(): ReactNode {
           </label>
           {formError ? <p className="error">{formError}</p> : null}
           <div className="form-actions">
-            <button type="submit" disabled={pending}>
+            <button type="submit" disabled={pending || podcastPending}>
               {pending ? "Adding…" : "Add feed"}
             </button>
             <button
               type="button"
               className="ghost"
-              disabled={pending || hasHn}
+              disabled={pending || podcastPending || hasHn}
               onClick={() => void addHackerNews()}
             >
               Add Hacker News
@@ -196,6 +223,28 @@ export function SourcesClient(): ReactNode {
           {hasHn ? (
             <p className="helper">Hacker News is already connected.</p>
           ) : null}
+        </form>
+      </div>
+
+      <div className="manage-form panel-soft">
+        <h2 className="form-heading">Add podcast</h2>
+        <form className="form" onSubmit={(e) => void addPodcast(e)}>
+          <label>
+            Podcast RSS URL
+            <input
+              type="url"
+              value={podcastRssUrl}
+              onChange={(e) => setPodcastRssUrl(e.target.value)}
+              placeholder="https://feeds.example.com/show.xml"
+              required
+            />
+          </label>
+          <div className="form-actions">
+            <button type="submit" disabled={pending || podcastPending}>
+              {podcastPending ? "Adding…" : "Add podcast"}
+            </button>
+          </div>
+          {formError ? <p className="error">{formError}</p> : null}
         </form>
       </div>
 
@@ -209,8 +258,8 @@ export function SourcesClient(): ReactNode {
             <h2 className="section-heading">Your sources</h2>
             {sources.length === 0 ? (
               <p className="empty-copy">
-                No sources yet. Add Hacker News, paste an RSS URL, or pick from
-                the catalog below.
+                No sources yet. Add Hacker News, paste a newsletter or podcast
+                RSS URL, or pick from the catalog below.
               </p>
             ) : (
               <ul className="manage-list">
@@ -218,9 +267,7 @@ export function SourcesClient(): ReactNode {
                   <li key={source.id} className="manage-row">
                     <div className="manage-main">
                       <p className="manage-title">
-                        {source.sourceType === "hackernews"
-                          ? "Hacker News"
-                          : "Feed"}
+                        {sourceTypeLabel(source.sourceType)}
                       </p>
                       <p className="manage-meta">
                         {configSummary(source)}

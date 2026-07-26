@@ -18,6 +18,16 @@ export {
   type SubstackAdapterOptions,
 } from "./substack.js";
 export {
+  PodcastAdapter,
+  type PodcastConfig,
+  type PodcastAdapterOptions,
+} from "./podcast.js";
+export {
+  fetchAndParseRss,
+  parseDurationSeconds,
+  enclosureUrlFromItem,
+} from "./rss.js";
+export {
   createSourceAdapter,
   type AdapterConfig,
   type CreateAdapterOptions,
