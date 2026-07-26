@@ -403,6 +403,12 @@ export function FeedClient(): ReactNode {
             value={searchDraft}
             placeholder="Title, summary, or reason…"
             onChange={(e) => setSearchDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                setSearch(searchDraft.trim());
+              }
+            }}
             aria-label="Search feed"
           />
         </label>

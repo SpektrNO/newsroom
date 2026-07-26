@@ -174,13 +174,23 @@ export function passesSearchFilter(
   query: string,
 ): boolean {
   const hay = `${title}\n${summary ?? ""}\n${reason ?? ""}`.toLowerCase();
-  const tokens = query
+  const tokens = tokenizeFeedSearch(query);
+  if (tokens.length === 0) return true;
+  return tokens.every((t) => hay.includes(t));
+}
+
+/** Whitespace tokens for `q` (lowercased). */
+export function tokenizeFeedSearch(query: string): string[] {
+  return query
     .toLowerCase()
     .split(/\s+/)
     .map((t) => t.trim())
     .filter(Boolean);
-  if (tokens.length === 0) return true;
-  return tokens.every((t) => hay.includes(t));
+}
+
+/** Escape `%` / `_` for SQL ILIKE patterns. */
+export function escapeIlikePattern(raw: string): string {
+  return raw.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 /** Count rows that pass optional topic / source / search filters. */
