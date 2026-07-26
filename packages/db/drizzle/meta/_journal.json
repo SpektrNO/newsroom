@@ -29,6 +29,13 @@
       "when": 1785086890153,
       "tag": "0003_lumpy_mariko_yashida",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785088362718,
+      "tag": "0004_rank_per_user_jobs",
+      "breakpoints": true
     }
   ]
 }

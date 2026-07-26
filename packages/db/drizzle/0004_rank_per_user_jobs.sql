@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "jobs_rank_open_user_uidx" ON "jobs" USING btree (("payload" ->> 'userId')) WHERE "jobs"."type" = 'rank' AND "jobs"."status" IN ('pending', 'running') AND ("jobs"."payload" ->> 'userId') IS NOT NULL;
