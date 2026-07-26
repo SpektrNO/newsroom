@@ -2,8 +2,12 @@ export type AiCompleteRequest = {
   prompt: string;
   /** Optional system preamble */
   system?: string;
-  /** Prefer JSON-only model output when the backend supports it (e.g. Ollama `format`). */
-  json?: boolean;
+  /**
+   * Prefer JSON-only model output when the backend supports it.
+   * - `true` / `"object"` — unstructured JSON (advisor object shape)
+   * - `"rank-array"` — Ollama schema forcing a ranking result array
+   */
+  json?: boolean | "object" | "rank-array";
   /** Soft cap on generated tokens when the backend supports it (e.g. Ollama `num_predict`). */
   maxTokens?: number;
 };
