@@ -43,6 +43,13 @@
       "when": 1785088839093,
       "tag": "0005_ai_token_daily",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785090212161,
+      "tag": "0006_rank_ai_daily",
+      "breakpoints": true
     }
   ]
 }
