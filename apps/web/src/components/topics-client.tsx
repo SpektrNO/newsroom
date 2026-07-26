@@ -22,9 +22,12 @@ import {
   topicPathLabels,
 } from "@/lib/topic-tree";
 import {
+  extraKeywordsBeyondStarters,
   findTopicByLabel,
   followDefaultsForLabel,
   isFollowingLabel,
+  mergeTopicKeywords,
+  starterKeywordsFromLabel,
 } from "@/lib/topics-catalog";
 
 function readApiError(
@@ -586,17 +589,24 @@ function TopicTreePicker({
 }
 
 type KeywordChipsProps = {
-  keywords: string[];
-  onChange: (next: string[]) => void;
+  lockedKeywords: string[];
+  extraKeywords: string[];
+  onChangeExtras: (next: string[]) => void;
   disabled?: boolean;
 };
 
 function KeywordChips({
-  keywords,
-  onChange,
+  lockedKeywords,
+  extraKeywords,
+  onChangeExtras,
   disabled,
 }: KeywordChipsProps): ReactNode {
   const [draft, setDraft] = useState("");
+
+  const lockedKeys = useMemo(
+    () => new Set(lockedKeywords.map((k) => k.toLowerCase())),
+    [lockedKeywords],
+  );
 
   function commitToken(raw: string) {
     const parts = raw
@@ -604,18 +614,17 @@ function KeywordChips({
       .map((s) => s.trim())
       .filter(Boolean);
     if (!parts.length) return;
-    const next = [...keywords];
+    const next = [...extraKeywords];
+    const totalCap = 50 - lockedKeywords.length;
     for (const p of parts) {
       if (p.length > 64) continue;
-      if (next.length >= 50) break;
-      if (
-        next.some((k) => k.toLowerCase() === p.toLowerCase())
-      ) {
-        continue;
-      }
+      if (next.length >= totalCap) break;
+      const key = p.toLowerCase();
+      if (lockedKeys.has(key)) continue;
+      if (next.some((k) => k.toLowerCase() === key)) continue;
       next.push(p);
     }
-    onChange(next);
+    onChangeExtras(next);
     setDraft("");
   }
 
@@ -625,27 +634,38 @@ function KeywordChips({
       commitToken(draft);
       return;
     }
-    if (e.key === "Backspace" && draft === "" && keywords.length > 0) {
+    if (e.key === "Backspace" && draft === "" && extraKeywords.length > 0) {
       e.preventDefault();
-      onChange(keywords.slice(0, -1));
+      onChangeExtras(extraKeywords.slice(0, -1));
     }
   }
 
-  function removeAt(index: number) {
-    onChange(keywords.filter((_, i) => i !== index));
+  function removeExtraAt(index: number) {
+    onChangeExtras(extraKeywords.filter((_, i) => i !== index));
   }
+
+  const hasAny = lockedKeywords.length > 0 || extraKeywords.length > 0;
 
   return (
     <div className="keyword-chips">
       <span className="field-label">Keywords</span>
       <div className="keyword-chips-box">
-        {keywords.map((kw, i) => (
+        {lockedKeywords.map((kw) => (
+          <span
+            key={`locked-${kw}`}
+            className="keyword-chip keyword-chip-locked"
+            title="From topic name"
+          >
+            {kw}
+          </span>
+        ))}
+        {extraKeywords.map((kw, i) => (
           <button
-            key={`${kw}-${i}`}
+            key={`extra-${kw}-${i}`}
             type="button"
             className="keyword-chip"
             disabled={disabled}
-            onClick={() => removeAt(i)}
+            onClick={() => removeExtraAt(i)}
             aria-label={`Remove ${kw}`}
           >
             {kw}
@@ -654,8 +674,14 @@ function KeywordChips({
         ))}
         <input
           value={draft}
-          disabled={disabled}
-          placeholder={keywords.length ? "" : "Add keywords…"}
+          disabled={disabled || !lockedKeywords.length}
+          placeholder={
+            !lockedKeywords.length
+              ? "Pick a topic first"
+              : hasAny
+                ? "Add more…"
+                : "Add keywords…"
+          }
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           onBlur={() => {
@@ -664,6 +690,11 @@ function KeywordChips({
           aria-label="Add keywords"
         />
       </div>
+      {lockedKeywords.length > 0 ? (
+        <p className="keyword-chips-hint">
+          Words from the topic name stay fixed. Add more if you want.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -687,9 +718,16 @@ export function TopicsClient(): ReactNode {
 
   const [selectedLabel, setSelectedLabel] = useState("");
   const [legacyName, setLegacyName] = useState<string | null>(null);
-  const [keywords, setKeywords] = useState<string[]>([]);
+  const [extraKeywords, setExtraKeywords] = useState<string[]>([]);
   const [weight, setWeight] = useState("1");
   const [enabled, setEnabled] = useState(true);
+
+  const topicLabelForKeywords =
+    selectedLabel.trim() || legacyName?.trim() || "";
+  const lockedKeywords = useMemo(
+    () => starterKeywordsFromLabel(topicLabelForKeywords),
+    [topicLabelForKeywords],
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -734,7 +772,7 @@ export function TopicsClient(): ReactNode {
     setEditingId(null);
     setSelectedLabel("");
     setLegacyName(null);
-    setKeywords([]);
+    setExtraKeywords([]);
     setWeight("1");
     setEnabled(true);
     setFormError(null);
@@ -746,11 +784,16 @@ export function TopicsClient(): ReactNode {
     if (catalogNode?.selectable) {
       setSelectedLabel(catalogNode.label);
       setLegacyName(null);
+      setExtraKeywords(
+        extraKeywordsBeyondStarters(topic.keywords, catalogNode.label),
+      );
     } else {
       setSelectedLabel("");
       setLegacyName(topic.name);
+      setExtraKeywords(
+        extraKeywordsBeyondStarters(topic.keywords, topic.name),
+      );
     }
-    setKeywords([...topic.keywords]);
     setWeight(String(topic.weight));
     setEnabled(topic.enabled);
     setFormError(null);
@@ -798,25 +841,25 @@ export function TopicsClient(): ReactNode {
       setFormError("Check the topic and keywords.");
       return;
     }
-    if (keywords.length === 0) {
-      setFormError("Check the topic and keywords.");
-      return;
-    }
 
     setPending(true);
     const w = Number(weight);
+    const resolvedKeywords = mergeTopicKeywords(
+      selectedLabel.trim(),
+      extraKeywords,
+    );
     try {
       if (editingId) {
         await api.patchTopic(editingId, {
           name: selectedLabel.trim(),
-          keywords,
+          keywords: resolvedKeywords,
           weight: Number.isFinite(w) ? w : 1,
           enabled,
         });
       } else {
         await api.createTopic({
           name: selectedLabel.trim(),
-          keywords,
+          keywords: resolvedKeywords,
           weight: Number.isFinite(w) ? w : 1,
           enabled,
         });
@@ -886,11 +929,19 @@ export function TopicsClient(): ReactNode {
             onSelectLabel={(label) => {
               setSelectedLabel(label);
               setLegacyName(null);
+              // Keep only extras that aren't already covered by the new label.
+              setExtraKeywords((prev) =>
+                extraKeywordsBeyondStarters(prev, label),
+              );
             }}
             legacyName={legacyName}
           />
 
-          <KeywordChips keywords={keywords} onChange={setKeywords} />
+          <KeywordChips
+            lockedKeywords={lockedKeywords}
+            extraKeywords={extraKeywords}
+            onChangeExtras={setExtraKeywords}
+          />
 
           <div className="weight-field">
             <label className="weight-label" htmlFor="topic-weight">

@@ -342,6 +342,27 @@ button.danger-text {
   align-items: flex-start;
 }
 
+.feed-search-field {
+  flex: 1 1 100%;
+}
+
+.feed-search-field input[type="search"] {
+  width: 100%;
+  max-width: 28rem;
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+}
+
+.feed-search-field input[type="search"]:focus {
+  outline: 2px solid rgba(15, 118, 110, 0.35);
+  outline-offset: 1px;
+}
+
 .topic-filter {
   flex: 1 1 100%;
   display: grid;
@@ -965,6 +986,19 @@ button.danger-text {
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1;
+}
+
+.keyword-chip-locked {
+  cursor: default;
+  background: rgba(15, 23, 42, 0.06);
+  border-style: dashed;
+}
+
+.keyword-chips-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .weight-field {

@@ -7,21 +7,28 @@ import {
   sourceSubscriptions,
   topics,
   userArticleScores,
+  type UserArticleScoreStatus,
 } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
 import {
+  countMatchingFeedRows,
   decodeFeedCursor,
   encodeFeedCursor,
   parseFeedLimit,
+  parseFeedSearchQuery,
   parseFeedSourceFilter,
   parseFeedStatusFilter,
   parseFeedTopicIds,
+  passesSearchFilter,
   passesTopicFilter,
   toFeedItemJson,
   type FeedSourceJson,
 } from "@/lib/feed";
 
 export const dynamic = "force-dynamic";
+
+/** Cap for in-app topic/source matching when counting (personal-scale feed). */
+const MATCH_COUNT_SCAN_LIMIT = 2000;
 
 async function loadPipelineTimes(userId: string): Promise<{
   lastIngestAt: string | null;
@@ -47,6 +54,101 @@ async function loadPipelineTimes(userId: string): Promise<{
   };
 }
 
+async function loadSourceTypesForUser(
+  userId: string,
+  articleIds: string[],
+): Promise<Map<string, Set<string>>> {
+  const sourceTypesByArticle = new Map<string, Set<string>>();
+  if (articleIds.length === 0) return sourceTypesByArticle;
+
+  const sourceRows = await getDb()
+    .select({
+      articleId: articleSources.articleId,
+      sourceType: articleSources.sourceType,
+      subscriptionUserId: sourceSubscriptions.userId,
+    })
+    .from(articleSources)
+    .leftJoin(
+      sourceSubscriptions,
+      eq(sourceSubscriptions.id, articleSources.sourceSubscriptionId),
+    )
+    .where(inArray(articleSources.articleId, articleIds));
+
+  for (const row of sourceRows) {
+    if (
+      row.subscriptionUserId !== null &&
+      row.subscriptionUserId !== userId
+    ) {
+      continue;
+    }
+    const types = sourceTypesByArticle.get(row.articleId) ?? new Set();
+    types.add(row.sourceType);
+    sourceTypesByArticle.set(row.articleId, types);
+  }
+  return sourceTypesByArticle;
+}
+
+async function loadFeedCounts(args: {
+  userId: string;
+  statusFilter: UserArticleScoreStatus | null;
+  topicKeywords: string[] | null;
+  sourceFilter: string | null;
+  searchQuery: string | null;
+}): Promise<{ matchedCount: number; totalCount: number }> {
+  const db = getDb();
+  const statusCondition =
+    args.statusFilter !== null
+      ? eq(userArticleScores.status, args.statusFilter)
+      : ne(userArticleScores.status, "dismissed");
+  const baseWhere = and(
+    eq(userArticleScores.userId, args.userId),
+    statusCondition,
+  );
+
+  const [totalRow] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(userArticleScores)
+    .where(baseWhere);
+  const totalCount = Number(totalRow?.n ?? 0);
+
+  if (
+    args.topicKeywords === null &&
+    args.sourceFilter === null &&
+    args.searchQuery === null
+  ) {
+    return { matchedCount: totalCount, totalCount };
+  }
+
+  const scanRows = await db
+    .select({
+      articleId: userArticleScores.articleId,
+      title: articles.title,
+      summary: articles.summary,
+      reason: userArticleScores.reason,
+    })
+    .from(userArticleScores)
+    .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
+    .where(baseWhere)
+    .limit(MATCH_COUNT_SCAN_LIMIT);
+
+  const sourceTypesByArticle =
+    args.sourceFilter !== null
+      ? await loadSourceTypesForUser(
+          args.userId,
+          scanRows.map((r) => r.articleId),
+        )
+      : new Map<string, Set<string>>();
+
+  const matchedCount = countMatchingFeedRows(scanRows, {
+    topicKeywords: args.topicKeywords,
+    sourceFilter: args.sourceFilter,
+    searchQuery: args.searchQuery,
+    sourceTypesByArticle,
+  });
+
+  return { matchedCount, totalCount };
+}
+
 function toIsoOrNull(value: Date | string | null): string | null {
   if (value == null) return null;
   const d = value instanceof Date ? value : new Date(value);
@@ -64,11 +166,13 @@ export async function GET(request: Request) {
   const topicIds = parseFeedTopicIds(url);
   const sourceFilter = parseFeedSourceFilter(url.searchParams.get("source"));
   const statusFilter = parseFeedStatusFilter(url.searchParams.get("status"));
+  const searchQuery = parseFeedSearchQuery(url.searchParams.get("q"));
 
   if (
     topicIds === "invalid" ||
     sourceFilter === "invalid" ||
-    statusFilter === "invalid"
+    statusFilter === "invalid" ||
+    searchQuery === "invalid"
   ) {
     return Response.json({ error: "invalid_filter" }, { status: 400 });
   }
@@ -127,11 +231,12 @@ export async function GET(request: Request) {
     );
   }
 
-  // Over-fetch when filtering by topic/source in app layer.
-  const fetchLimit =
-    topicKeywords !== null || sourceFilter !== null ? Math.min(200, limit * 10) : limit + 1;
+  // Over-fetch when filtering by topic/source/search in app layer.
+  const needsAppFilter =
+    topicKeywords !== null || sourceFilter !== null || searchQuery !== null;
+  const fetchLimit = needsAppFilter ? Math.min(200, limit * 10) : limit + 1;
 
-  const [scoreRows, pipeline] = await Promise.all([
+  const [scoreRows, pipeline, counts] = await Promise.all([
     getDb()
       .select({
         articleId: userArticleScores.articleId,
@@ -154,6 +259,13 @@ export async function GET(request: Request) {
       .orderBy(desc(userArticleScores.finalRank), desc(userArticleScores.articleId))
       .limit(fetchLimit),
     loadPipelineTimes(authResult.userId),
+    loadFeedCounts({
+      userId: authResult.userId,
+      statusFilter,
+      topicKeywords,
+      sourceFilter,
+      searchQuery,
+    }),
   ]);
 
   if (scoreRows.length === 0) {
@@ -162,6 +274,8 @@ export async function GET(request: Request) {
       nextCursor: null,
       lastIngestAt: pipeline.lastIngestAt,
       lastRankedAt: pipeline.lastRankedAt,
+      matchedCount: counts.matchedCount,
+      totalCount: counts.totalCount,
     });
   }
 
@@ -216,6 +330,12 @@ export async function GET(request: Request) {
       const types = sourceTypesByArticle.get(row.articleId);
       if (!types?.has(sourceFilter)) continue;
     }
+    if (
+      searchQuery !== null &&
+      !passesSearchFilter(row.title, row.summary, row.reason, searchQuery)
+    ) {
+      continue;
+    }
     filtered.push(row);
     if (filtered.length >= limit + 1) break;
   }
@@ -253,5 +373,7 @@ export async function GET(request: Request) {
     nextCursor,
     lastIngestAt: pipeline.lastIngestAt,
     lastRankedAt: pipeline.lastRankedAt,
+    matchedCount: counts.matchedCount,
+    totalCount: counts.totalCount,
   });
 }

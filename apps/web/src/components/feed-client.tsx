@@ -131,12 +131,16 @@ export function FeedClient(): ReactNode {
   const [topicsReady, setTopicsReady] = useState(false);
   const [source, setSource] = useState<SourceFilter>("");
   const [view, setView] = useState<ViewFilter>("feed");
+  const [searchDraft, setSearchDraft] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [lastIngestAt, setLastIngestAt] = useState<string | null>(null);
   const [lastRankedAt, setLastRankedAt] = useState<string | null>(null);
+  const [matchedCount, setMatchedCount] = useState<number | null>(null);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [ranking, setRanking] = useState(false);
   const [rankNote, setRankNote] = useState<string | null>(null);
 
@@ -147,8 +151,15 @@ export function FeedClient(): ReactNode {
 
   const allTopicIds = useMemo(() => topics.map((t) => t.id), [topics]);
 
-  const topicFilterActive =
-    selectedTopicIds.size > 0 && selectedTopicIds.size < allTopicIds.length;
+  // Empty selection = all topics (no API filter). Any selection narrows the feed.
+  const topicFilterActive = selectedTopicIds.size > 0;
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearch(searchDraft.trim());
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [searchDraft]);
 
   const loadPage = useCallback(
     async (cursor?: string, append = false) => {
@@ -163,6 +174,7 @@ export function FeedClient(): ReactNode {
           topics: topicFilterActive ? [...selectedTopicIds] : undefined,
           source: source || undefined,
           status: view === "saved" ? "saved" : undefined,
+          q: search || undefined,
           limit: 20,
         });
         setItems((prev) => (append ? [...prev, ...page.items] : page.items));
@@ -170,6 +182,12 @@ export function FeedClient(): ReactNode {
         if (!append) {
           setLastIngestAt(page.lastIngestAt ?? null);
           setLastRankedAt(page.lastRankedAt ?? null);
+          setMatchedCount(
+            typeof page.matchedCount === "number" ? page.matchedCount : null,
+          );
+          setTotalCount(
+            typeof page.totalCount === "number" ? page.totalCount : null,
+          );
         }
       } catch (err) {
         const status =
@@ -187,13 +205,17 @@ export function FeedClient(): ReactNode {
         }
         console.error("[newsroom] feed load failed", err);
         setError("Couldn't load your feed.");
-        if (!append) setItems([]);
+        if (!append) {
+          setItems([]);
+          setMatchedCount(null);
+          setTotalCount(null);
+        }
       } finally {
         setLoading(false);
         setLoadingMore(false);
       }
     },
-    [api, router, source, selectedTopicIds, topicFilterActive, view],
+    [api, router, source, search, selectedTopicIds, topicFilterActive, view],
   );
 
   useEffect(() => {
@@ -203,7 +225,7 @@ export function FeedClient(): ReactNode {
         if (cancelled) return;
         setTopics(topicsRes.topics);
         setTreeNodes(treeRes.nodes);
-        setSelectedTopicIds(new Set(topicsRes.topics.map((t) => t.id)));
+        setSelectedTopicIds(new Set());
         setTopicsReady(true);
       })
       .catch(() => {
@@ -240,6 +262,8 @@ export function FeedClient(): ReactNode {
 
       if (action === "dismissed" || (view === "saved" && action === "seen")) {
         setItems((prev) => prev.filter((i) => i.articleId !== articleId));
+        setMatchedCount((prev) => (prev == null ? prev : Math.max(0, prev - 1)));
+        setTotalCount((prev) => (prev == null ? prev : Math.max(0, prev - 1)));
       } else {
         setItems((prev) =>
           prev.map((i) =>
@@ -283,10 +307,7 @@ export function FeedClient(): ReactNode {
   }
 
   function selectAllTopics() {
-    setSelectedTopicIds(new Set(allTopicIds));
-  }
-
-  function selectNoTopics() {
+    // "All" = no topic filter (full feed). Chips stay unselected.
     setSelectedTopicIds(new Set());
   }
 
@@ -324,12 +345,24 @@ export function FeedClient(): ReactNode {
     }
   }
 
-  const hasFilters = Boolean(topicFilterActive || source || view === "saved");
+  const hasFilters = Boolean(
+    topicFilterActive || source || view === "saved" || search,
+  );
 
   return (
     <section className="feed-page">
       <div className="feed-pipeline-row">
         <p className="feed-pipeline" aria-live="polite">
+          {matchedCount != null && totalCount != null ? (
+            <>
+              <span title="Visible (filters) / total in feed">
+                {matchedCount}/{totalCount}
+              </span>
+              <span className="feed-pipeline-sep" aria-hidden>
+                ·
+              </span>
+            </>
+          ) : null}
           <span title={absoluteTimeTitle(lastIngestAt)}>
             Ingested {formatPipelineTime(lastIngestAt)}
           </span>
@@ -355,6 +388,17 @@ export function FeedClient(): ReactNode {
         </p>
       ) : null}
       <div className="feed-filters" role="group" aria-label="Feed filters">
+        <label className="filter-field feed-search-field">
+          <span className="filter-label">Search</span>
+          <input
+            type="search"
+            value={searchDraft}
+            placeholder="Title, summary, or reason…"
+            onChange={(e) => setSearchDraft(e.target.value)}
+            aria-label="Search feed"
+          />
+        </label>
+
         <div className="topic-filter" role="group" aria-label="Topics">
           <div className="topic-filter-header">
             <span className="filter-label">Topics</span>
@@ -363,16 +407,10 @@ export function FeedClient(): ReactNode {
                 <button
                   type="button"
                   className="ghost topic-filter-link"
+                  aria-pressed={!topicFilterActive}
                   onClick={selectAllTopics}
                 >
                   All
-                </button>
-                <button
-                  type="button"
-                  className="ghost topic-filter-link"
-                  onClick={selectNoTopics}
-                >
-                  None
                 </button>
               </span>
             ) : null}
@@ -433,10 +471,8 @@ export function FeedClient(): ReactNode {
             <p className="topic-filter-hint">
               Showing {selectedTopicIds.size} of {allTopicIds.length} topics
             </p>
-          ) : selectedTopicIds.size === 0 && topics.length > 0 ? (
-            <p className="topic-filter-hint">
-              No topics selected — showing the full feed
-            </p>
+          ) : topics.length > 0 ? (
+            <p className="topic-filter-hint">All topics</p>
           ) : null}
         </div>
 
@@ -491,6 +527,8 @@ export function FeedClient(): ReactNode {
                   selectAllTopics();
                   setSource("");
                   setView("feed");
+                  setSearchDraft("");
+                  setSearch("");
                 }}
               >
                 Clear filters

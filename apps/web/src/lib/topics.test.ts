@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  extraKeywordsBeyondStarters,
   findTopicByLabel,
   followDefaultsForLabel,
   isFollowingLabel,
+  mergeTopicKeywords,
   parseTopicCreateBody,
   parseTopicPatchBody,
 } from "./topics.js";
@@ -39,6 +41,20 @@ describe("followDefaultsForLabel", () => {
   });
 });
 
+describe("mergeTopicKeywords / extras", () => {
+  it("locks starters and appends extras", () => {
+    assert.deepEqual(mergeTopicKeywords("LLMs & agents", ["rag", "agents"]), [
+      "LLMs",
+      "agents",
+      "rag",
+    ]);
+    assert.deepEqual(
+      extraKeywordsBeyondStarters(["LLMs", "rag", "agents", "openai"], "LLMs & agents"),
+      ["rag", "openai"],
+    );
+  });
+});
+
 describe("isFollowingLabel / findTopicByLabel", () => {
   const topics = [
     { id: "1", name: "AI & infra" },
@@ -68,20 +84,31 @@ describe("parseTopicCreateBody", () => {
     assert.equal(parsed.enabled, true);
   });
 
-  it("rejects empty name, non-catalog name, or empty keywords", () => {
+  it("rejects empty name or non-catalog name", () => {
     assert.equal(parseTopicCreateBody({ name: "", keywords: ["a"] }).ok, false);
     assert.equal(
-      parseTopicCreateBody({ name: "Custom Free Text", keywords: ["a"] }).ok,
+      parseTopicCreateBody({ name: "Custom FreeText", keywords: ["a"] }).ok,
       false,
     );
     assert.equal(
       parseTopicCreateBody({ name: "Technology", keywords: ["a"] }).ok,
       false,
     );
-    assert.equal(
-      parseTopicCreateBody({ name: "AI & infra", keywords: [] }).ok,
-      false,
-    );
+  });
+
+  it("allows empty keywords (follow now, tune later)", () => {
+    const parsed = parseTopicCreateBody({
+      name: "AI & infra",
+      keywords: [],
+    });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.deepEqual(parsed.keywords, []);
+
+    const omitted = parseTopicCreateBody({ name: "AI & infra" });
+    assert.equal(omitted.ok, true);
+    if (!omitted.ok) return;
+    assert.deepEqual(omitted.keywords, []);
   });
 
   it("accepts numeric string weight", () => {
@@ -114,5 +141,12 @@ describe("parseTopicPatchBody", () => {
     assert.equal(ok.ok, true);
     if (!ok.ok) return;
     assert.equal(ok.name, "LLMs & agents");
+  });
+
+  it("allows clearing keywords", () => {
+    const parsed = parseTopicPatchBody({ keywords: [] });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.deepEqual(parsed.keywords, []);
   });
 });

@@ -7,6 +7,8 @@ export {
   followDefaultsForLabel,
   isFollowingLabel,
   starterKeywordsFromLabel,
+  extraKeywordsBeyondStarters,
+  mergeTopicKeywords,
   type FollowTopicDefaults,
 } from "./topics-catalog";
 
@@ -101,8 +103,9 @@ export function parseTopicCreateBody(body: unknown): ParsedTopicCreate {
     return { ok: false, error: "invalid_topic" };
   }
 
-  const keywords = normalizeKeywords(record.keywords);
-  if (keywords === null || keywords.length === 0) {
+  const keywords =
+    record.keywords === undefined ? [] : normalizeKeywords(record.keywords);
+  if (keywords === null) {
     return { ok: false, error: "invalid_topic" };
   }
 
@@ -117,10 +120,6 @@ export function parseTopicCreateBody(body: unknown): ParsedTopicCreate {
 
   const enabled =
     record.enabled === undefined ? true : Boolean(record.enabled);
-
-  if (enabled && keywords.length === 0) {
-    return { ok: false, error: "invalid_topic" };
-  }
 
   return { ok: true, name, keywords, weight, enabled };
 }
@@ -160,7 +159,7 @@ export function parseTopicPatchBody(body: unknown): ParsedTopicPatch {
 
   if (record.keywords !== undefined) {
     const keywords = normalizeKeywords(record.keywords);
-    if (keywords === null || keywords.length === 0) {
+    if (keywords === null) {
       return { ok: false, error: "invalid_topic" };
     }
     result.keywords = keywords;

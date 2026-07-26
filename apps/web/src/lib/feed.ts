@@ -149,3 +149,79 @@ export function passesTopicFilter(
 ): boolean {
   return articleMatchesTopicKeywords(title, summary, topicKeywords);
 }
+
+const MAX_FEED_SEARCH_LEN = 200;
+
+/** Free-text `q` param: trim; empty → null; overlong → invalid. */
+export function parseFeedSearchQuery(
+  raw: string | null,
+): string | null | "invalid" {
+  if (raw === null || raw === "") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > MAX_FEED_SEARCH_LEN) return "invalid";
+  return trimmed;
+}
+
+/**
+ * Case-insensitive find-in-feed: every whitespace token must appear in
+ * title, summary, or reason (AND).
+ */
+export function passesSearchFilter(
+  title: string,
+  summary: string | null,
+  reason: string | null,
+  query: string,
+): boolean {
+  const hay = `${title}\n${summary ?? ""}\n${reason ?? ""}`.toLowerCase();
+  const tokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return true;
+  return tokens.every((t) => hay.includes(t));
+}
+
+/** Count rows that pass optional topic / source / search filters. */
+export function countMatchingFeedRows(
+  rows: Array<{
+    articleId: string;
+    title: string;
+    summary: string | null;
+    reason?: string | null;
+  }>,
+  opts: {
+    topicKeywords: string[] | null;
+    sourceFilter: string | null;
+    searchQuery: string | null;
+    sourceTypesByArticle: Map<string, Set<string>>;
+  },
+): number {
+  let n = 0;
+  for (const row of rows) {
+    if (
+      opts.topicKeywords !== null &&
+      !passesTopicFilter(row.title, row.summary, opts.topicKeywords)
+    ) {
+      continue;
+    }
+    if (opts.sourceFilter !== null) {
+      const types = opts.sourceTypesByArticle.get(row.articleId);
+      if (!types?.has(opts.sourceFilter)) continue;
+    }
+    if (
+      opts.searchQuery !== null &&
+      !passesSearchFilter(
+        row.title,
+        row.summary,
+        row.reason ?? null,
+        opts.searchQuery,
+      )
+    ) {
+      continue;
+    }
+    n += 1;
+  }
+  return n;
+}

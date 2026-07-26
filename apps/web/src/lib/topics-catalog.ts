@@ -33,6 +33,46 @@ export function starterKeywordsFromLabel(label: string): string[] {
   return out;
 }
 
+/** Keywords not already covered by label-derived starters (case-insensitive). */
+export function extraKeywordsBeyondStarters(
+  keywords: readonly string[],
+  label: string,
+): string[] {
+  const locked = new Set(
+    starterKeywordsFromLabel(label).map((k) => k.toLowerCase()),
+  );
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of keywords) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (locked.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+/** Label starters first, then user extras (deduped). */
+export function mergeTopicKeywords(
+  label: string,
+  extras: readonly string[],
+): string[] {
+  const locked = starterKeywordsFromLabel(label);
+  const seen = new Set(locked.map((k) => k.toLowerCase()));
+  const out = [...locked];
+  for (const raw of extras) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
 /**
  * Normative create payload when following a curated catalog leaf:
  * name = label, keywords = tokenized label parts, weight = 1, enabled = true.

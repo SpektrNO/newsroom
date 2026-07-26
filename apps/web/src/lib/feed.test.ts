@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  countMatchingFeedRows,
   decodeFeedCursor,
   encodeFeedCursor,
   parseFeedLimit,
+  parseFeedSearchQuery,
   parseFeedSourceFilter,
   parseFeedStatusFilter,
   parseFeedTopicIds,
+  passesSearchFilter,
 } from "./feed.js";
 
 describe("feed cursor", () => {
@@ -53,6 +56,89 @@ describe("feed query parsers", () => {
     assert.equal(
       parseFeedTopicIds(new URL("http://localhost/api/feed?topic=bad%20id")),
       "invalid",
+    );
+  });
+
+  it("parses search query", () => {
+    assert.equal(parseFeedSearchQuery(null), null);
+    assert.equal(parseFeedSearchQuery("  "), null);
+    assert.equal(parseFeedSearchQuery("  llm agents  "), "llm agents");
+    assert.equal(parseFeedSearchQuery("x".repeat(201)), "invalid");
+  });
+});
+
+describe("passesSearchFilter", () => {
+  it("requires all tokens (AND) across title, summary, reason", () => {
+    assert.equal(
+      passesSearchFilter("Local LLM tools", "Postgres tips", null, "llm postgres"),
+      true,
+    );
+    assert.equal(
+      passesSearchFilter("Local LLM tools", null, "discusses agents", "llm agents"),
+      true,
+    );
+    assert.equal(
+      passesSearchFilter("Local LLM tools", null, null, "llm postgres"),
+      false,
+    );
+  });
+});
+
+describe("countMatchingFeedRows", () => {
+  const rows = [
+    {
+      articleId: "1",
+      title: "LLM tools",
+      summary: null,
+      reason: "Matches AI topic",
+    },
+    { articleId: "2", title: "Postgres tips", summary: null, reason: null },
+    {
+      articleId: "3",
+      title: "LLM + Postgres",
+      summary: null,
+      reason: null,
+    },
+  ];
+
+  it("counts all when no filters", () => {
+    assert.equal(
+      countMatchingFeedRows(rows, {
+        topicKeywords: null,
+        sourceFilter: null,
+        searchQuery: null,
+        sourceTypesByArticle: new Map(),
+      }),
+      3,
+    );
+  });
+
+  it("applies topic keywords and source type", () => {
+    const sources = new Map<string, Set<string>>([
+      ["1", new Set(["hackernews"])],
+      ["2", new Set(["substack"])],
+      ["3", new Set(["hackernews"])],
+    ]);
+    assert.equal(
+      countMatchingFeedRows(rows, {
+        topicKeywords: ["llm"],
+        sourceFilter: "hackernews",
+        searchQuery: null,
+        sourceTypesByArticle: sources,
+      }),
+      2,
+    );
+  });
+
+  it("applies free-text search", () => {
+    assert.equal(
+      countMatchingFeedRows(rows, {
+        topicKeywords: null,
+        sourceFilter: null,
+        searchQuery: "ai topic",
+        sourceTypesByArticle: new Map(),
+      }),
+      1,
     );
   });
 });

@@ -67,7 +67,8 @@ export type TopicTreeResponse = {
 
 export type CreateTopicInput = {
   name: string;
-  keywords: string[];
+  /** Empty allowed — follow now, add keywords later. */
+  keywords?: string[];
   weight?: number;
   enabled?: boolean;
 };
@@ -110,6 +111,10 @@ export type FeedPage = {
   lastIngestAt?: string | null;
   /** ISO time of the latest score write for this user, if any. */
   lastRankedAt?: string | null;
+  /** Articles matching current topic/source/status/search filters. */
+  matchedCount?: number;
+  /** Articles in feed for current status (ignores topic/source/search filters). */
+  totalCount?: number;
 };
 
 export type ListFeedOptions = {
@@ -121,6 +126,8 @@ export type ListFeedOptions = {
   source?: SourceTypeV1;
   /** When set, only items with this status. When omitted, API excludes dismissed. */
   status?: FeedItemStatus;
+  /** Free-text find-in-feed (title / summary / reason). */
+  q?: string;
   limit?: number;
 };
 
@@ -284,6 +291,7 @@ export class ApiClient {
     }
     if (options.source) params.set("source", options.source);
     if (options.status) params.set("status", options.status);
+    if (options.q?.trim()) params.set("q", options.q.trim());
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     const qs = params.toString();
     return this.requestJson("GET", qs ? `/api/feed?${qs}` : "/api/feed");
