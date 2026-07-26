@@ -156,6 +156,7 @@ async function loadFeedCounts(args: {
       articleId: userArticleScores.articleId,
       title: articles.title,
       summary: articles.summary,
+      showTitle: articles.showTitle,
       reason: userArticleScores.reason,
     })
     .from(userArticleScores)
@@ -372,7 +373,7 @@ export async function GET(request: Request) {
   for (const row of scoreRows) {
     if (
       topicKeywords !== null &&
-      !passesTopicFilter(row.title, row.summary, topicKeywords)
+      !passesTopicFilter(row.title, row.summary, topicKeywords, undefined, row.showTitle)
     ) {
       continue;
     }

@@ -2,9 +2,11 @@ import type { SourceAdapter, SourceType } from "./types.js";
 import { StubSourceAdapter } from "./stub.js";
 import { HackerNewsAdapter, type HackerNewsConfig } from "./hackernews.js";
 import { SubstackAdapter, type SubstackConfig } from "./substack.js";
+import { PodcastAdapter, type PodcastConfig } from "./podcast.js";
 
 export type AdapterConfig = HackerNewsConfig &
-  Partial<SubstackConfig> & {
+  Partial<SubstackConfig> &
+  Partial<PodcastConfig> & {
     [key: string]: unknown;
   };
 
@@ -27,6 +29,10 @@ export function createSourceAdapter(
     case "substack": {
       const rssUrl = typeof config.rssUrl === "string" ? config.rssUrl : "";
       return new SubstackAdapter({ rssUrl }, { fetch: options.fetch });
+    }
+    case "podcast": {
+      const rssUrl = typeof config.rssUrl === "string" ? config.rssUrl : "";
+      return new PodcastAdapter({ rssUrl }, { fetch: options.fetch });
     }
     case "bluesky":
       return new StubSourceAdapter("bluesky");

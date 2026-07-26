@@ -158,12 +158,14 @@ export function passesTopicFilter(
   summary: string | null,
   topicKeywords: string[],
   inheritedKeywords?: string[],
+  showTitle?: string | null,
 ): boolean {
   return articleMatchesTopicKeywords(
     title,
     summary,
     topicKeywords,
     inheritedKeywords,
+    showTitle,
   );
 }
 
@@ -217,6 +219,7 @@ export function countMatchingFeedRows(
     title: string;
     summary: string | null;
     reason?: string | null;
+    showTitle?: string | null;
   }>,
   opts: {
     topicKeywords: string[] | null;
@@ -229,7 +232,13 @@ export function countMatchingFeedRows(
   for (const row of rows) {
     if (
       opts.topicKeywords !== null &&
-      !passesTopicFilter(row.title, row.summary, opts.topicKeywords)
+      !passesTopicFilter(
+        row.title,
+        row.summary,
+        opts.topicKeywords,
+        undefined,
+        row.showTitle,
+      )
     ) {
       continue;
     }

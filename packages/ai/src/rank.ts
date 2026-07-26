@@ -10,6 +10,8 @@ export type RankArticleInput = {
   articleId: string;
   title: string;
   summary: string | null;
+  /** Podcast show title — scored with title/summary; not shown as summary. */
+  showTitle?: string | null;
 };
 
 export type RankedItem = {
@@ -187,6 +189,7 @@ export async function rankArticleBatch(
       articleId: shortId,
       title: a.title,
       summary: truncate(a.summary, summaryMax),
+      ...(a.showTitle ? { showTitle: truncate(a.showTitle, summaryMax) } : {}),
     };
   });
   const knownShortIds = new Set(shortToReal.keys());

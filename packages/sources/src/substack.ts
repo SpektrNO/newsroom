@@ -1,7 +1,7 @@
-import Parser from "rss-parser";
 import type { NormalizedArticle, SourceAdapter } from "./types.js";
 import { normalizeCanonicalUrl } from "./url.js";
 import { hashArticleContent } from "./hash.js";
+import { fetchAndParseRss } from "./rss.js";
 
 export type SubstackConfig = {
   rssUrl: string;
@@ -19,7 +19,6 @@ export class SubstackAdapter implements SourceAdapter {
   readonly type = "substack" as const;
   private readonly rssUrl: string;
   private readonly fetchImpl: typeof fetch;
-  private readonly parser: Parser;
 
   constructor(config: SubstackConfig, options: SubstackAdapterOptions = {}) {
     if (!config.rssUrl?.trim()) {
@@ -27,27 +26,16 @@ export class SubstackAdapter implements SourceAdapter {
     }
     this.rssUrl = normalizeCanonicalUrl(config.rssUrl);
     this.fetchImpl = options.fetch ?? fetch;
-    this.parser = new Parser({
-      timeout: 15_000,
-    });
   }
 
   async fetchRecent(): Promise<NormalizedArticle[]> {
-    const res = await this.fetchImpl(this.rssUrl, {
-      headers: {
-        accept:
-          "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
-      },
+    const feed = await fetchAndParseRss(this.rssUrl, {
+      fetch: this.fetchImpl,
+      fetchErrorPrefix: "substack_fetch_failed",
     });
-    if (!res.ok) {
-      throw new Error(`substack_fetch_failed:${res.status}`);
-    }
-
-    const xml = await res.text();
-    const feed = await this.parser.parseString(xml);
     const articles: NormalizedArticle[] = [];
 
-    for (const item of feed.items ?? []) {
+    for (const item of feed.items) {
       const link = item.link?.trim() || item.guid?.trim();
       const title = item.title?.trim();
       if (!link || !title) continue;
