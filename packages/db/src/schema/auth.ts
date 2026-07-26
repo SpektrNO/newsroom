@@ -19,6 +19,10 @@ export const user = pgTable("user", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+  /** Set when preferences/ingest require a rank pass; cleared after successful rank. */
+  dirtyAt: timestamp("dirty_at", { withTimezone: true }),
+  /** Last authenticated feed read — used for dirty ∩ active cadence. */
+  lastFeedAt: timestamp("last_feed_at", { withTimezone: true }),
 });
 
 export const session = pgTable(
