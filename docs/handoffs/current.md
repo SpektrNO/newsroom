@@ -1,91 +1,70 @@
-# Handoff: Per-user (or sharded) rank jobs; fair dequeue
+# Handoff: Count, reveal, and cap AI tokens (rank + chat)
 
-**Status:** done  
+**Status:** spec  
 **Created:** 2026-07-26  
 **Specifier agent:** lean (supervisor)  
-**Developer agent:** complete (lean)
+**Developer agent:** pending
 
 ## GitHub tracking
 
 | Field | Value |
 |-------|-------|
-| Feature id | `rank-per-user-queue` |
-| Parent issue | #109 — https://github.com/SpektrNO/newsroom/issues/109 |
-| Open tasks | *(none)* |
-| Closed tasks | `spec` (#110), `db` (#111), `api` (#112), `worker` (#113), `verify` (#114), `docs` (#115) |
-| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-per-user-queue` |
+| Feature id | `ai-token-metering` |
+| Parent issue | #117 — https://github.com/SpektrNO/newsroom/issues/117 |
+| Open tasks | `spec` (#118), `db` (#119), `api` (#120), `worker` (#121), `verify` (#122), `docs` (#123) |
+| Backlog | `docs/feature-backlog.md` § B3 — Notes for `ai-token-metering` |
 
-Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`
+Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`  
+(No web/mobile slugs — Settings reveal ships under `api`.)
 
 ## Intent
 
-Enqueue one rank job per dirty∩active user (single-flight per user) so ranking no longer serializes everyone behind one global job.
+Meter AI tokens for rank + chat, show today’s usage in Settings, and enforce a shared daily hard cap (chat 429; rank degrades to keyword-only).
 
 ## User-facing spec
 
 | Field | Value |
 |-------|-------|
-| Trigger | Ingest marks users dirty; feed catch-up when dirty; CLI/worker drain |
-| Surfaces | worker jobs queue, feed catch-up enqueue, ingest post-hook |
-| Copy | None new (existing “Feed updating…” ok) |
-| Acceptance | See criteria below |
+| Trigger | Every `AiProvider.complete`; Settings load; chat before generate |
+| Surfaces | Settings, Advisor chat meta, worker rank |
+| Copy | Settings: “AI tokens today”; soft warn when over soft limit |
+| Acceptance | See criteria |
 
 ### Acceptance criteria
 
-1. Rank job `payload` includes `userId`; open job uniqueness is **per user** (pending/running), not global.
-2. After ingest dirty fanout, enqueue one pending rank job per **dirty ∩ active** user (coalesce if already open for that user).
-3. `GET /api/feed` catch-up calls `ensureNextRankJob` with the session `userId` only.
-4. Worker claim remains fair (`scheduled_at` ASC + `FOR UPDATE SKIP LOCKED`); multiple users can have pending rank jobs.
-5. `processRankJob` ranks that job’s `userId` only; clears dirty for that user on success (existing).
-6. Keep dirty∩active eligibility from `rank-dirty-incremental`. Out of scope: AI caps (`rank-ai-budgets`), hosted AI swap.
+1. `AiCompleteResult.usage` with `promptTokens` / `completionTokens` / `totalTokens` (+ `estimated` when guessed).
+2. Ollama maps `prompt_eval_count` / `eval_count`; else chars/4 estimator.
+3. Daily per-user rollup table by purpose (`rank` \| `chat` \| `other`); record after successful completes.
+4. `GET /api/ai-usage` (session) returns used/limit/soft + byPurpose for **today UTC**.
+5. Settings shows used vs hard limit (+ soft warn); optional chat response `tokens`.
+6. Env `AI_TOKEN_DAILY_LIMIT` (hard) and `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard). Shared pool across purposes.
+7. Chat over hard → `429` `{ "error": "token_budget_exceeded" }`; rank over hard → skip AI batches (keyword-only), still clear dirty.
+8. Out of scope: dollar UI, streaming ticks, per-model prices, admin consoles.
 
 ## API / DB contract
 
 | Field / Endpoint | Notes |
 |------------------|-------|
-| `jobs` | Unique partial index on `(payload->>'userId')` where `type=rank` and status in (`pending`,`running`) and userId present |
-| `ensureNextRankJob(db, { userId, delayMs? })` | **Requires** `userId`; per-user single-flight |
-| `enqueueRankJobsForEligibleUsers(db, { allDirty?, delayMs? })` | Lists dirty∩active (or all dirty) with topics; ensures one job each |
-| Ingest success path | `markUsersDirty` then `enqueueRankJobsForEligibleUsers` (not a global rank job) |
-| `POST /api/feed/rank` | Remains synchronous inline `runRank({ userId })` (unchanged product behavior) |
+| `ai_token_daily` | PK `(user_id, day, purpose)`; counters prompt/completion/total |
+| `GET /api/ai-usage` | Session; today’s rollup + limits |
+| `POST /api/chat` | Budget check → record `chat`; may return `tokens` |
+| Worker rank | Record `rank` per batch; skip AI when hard exceeded |
+| Env | `AI_TOKEN_DAILY_LIMIT` (default `200000`), `AI_TOKEN_DAILY_SOFT_LIMIT` |
 
 ## Touchpoints
 
-- `packages/db` — migration + schema index on `jobs`
-- `apps/worker/src/rank.ts`, `ingest.ts`, `index.ts` — enqueue/claim/process
-- `apps/web` — feed catch-up already passes `userId`; tighten types if needed
-- Tests under `apps/worker`
+- `packages/ai` — types, Ollama, estimate helper; rank/advisor preserve usage
+- `packages/db` — schema + `recordAiTokenUsage` / `getAiTokenUsageForDay` / budget helpers
+- `apps/web` — chat route, ai-usage route, Settings UI, api-client
+- `apps/worker` — rank AI path metering + degrade
 
 ## Out of scope
 
-- AI token metering / article budgets
-- Multiple worker processes beyond SKIP LOCKED fairness
-- Changing Rank latest UX
-- Closing parent #109 (PR `Closes #109`)
+- `rank-ai-budgets` (article/batch caps)
+- Closing parent #117 (PR `Closes #117`)
 
 ---
 
 ## Implementation result
 
-### Delivered
-
-- Migration `0004` + unique index `jobs_rank_open_user_uidx`
-- `ensureNextRankJob` requires `userId`; `enqueueRankJobsForEligibleUsers` for dirty∩active fanout
-- Ingest + one-shot CLI enqueue/drain per-user jobs; `processRankJob` fails without `userId`
-- Tests: coalesce per user; missing payload fails
-
-### Verification
-
-- `pnpm --filter @newsroom/db typecheck`
-- `pnpm --filter @newsroom/worker typecheck`
-- `pnpm --filter @newsroom/web typecheck`
-- `pnpm --filter @newsroom/worker test`
-
-### Deviations
-
-- No web/mobile task slugs; feed already passed `userId`.
-- Poll loop still processes one claimed job per tick (fairness via queue depth, not parallel workers in-process).
-
-### Follow-ups
-
-- `ai-token-metering`, `rank-ai-budgets`, `rank-score-retention`
+*(Developer agent fills this section.)*
