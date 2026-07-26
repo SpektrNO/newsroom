@@ -1,44 +1,66 @@
-# Handoff: AI caps, active-user priority, keyword-only fallback
+# Handoff: TTL / prune `user_article_scores`; keep saved
 
-**Status:** done  
+**Status:** spec  
 **Created:** 2026-07-26  
 **Specifier agent:** lean (supervisor)  
-**Developer agent:** complete (lean)
+**Developer agent:** pending
 
 ## GitHub tracking
 
 | Field | Value |
 |-------|-------|
-| Feature id | `rank-ai-budgets` |
-| Parent issue | #125 — https://github.com/SpektrNO/newsroom/issues/125 |
-| Open tasks | *(none)* |
-| Closed tasks | `spec` (#126), `db` (#127), `api` (#128), `worker` (#129), `verify` (#130), `docs` (#131) |
-| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-ai-budgets` |
+| Feature id | `rank-score-retention` |
+| Parent issue | #133 — https://github.com/SpektrNO/newsroom/issues/133 |
+| Open tasks | `spec` (#134), `db` (#135), `api` (#136), `worker` (#137), `verify` (#138), `docs` (#139) |
+| Backlog | `docs/feature-backlog.md` § B2 — Notes for `rank-score-retention` |
+
+Task order: `spec` → `db` → `api` → `worker` → `verify` → `docs`
 
 ## Intent
 
-Cap how many articles get AI-scored per user (per run and per day), so ranking stays keyword-only beyond the budget instead of burning Ollama on huge shortlists.
+Prune growing `user_article_scores` so feeds stay lean: drop stale `new`/`seen`/`dismissed` rows while always keeping `saved`.
+
+## User-facing spec
+
+| Field | Value |
+|-------|-------|
+| Trigger | After successful per-user rank; optional CLI prune |
+| Surfaces | worker (+ Rank latest path); no new UI |
+| Copy | None |
+| Acceptance | See criteria |
+
+### Acceptance criteria
+
+1. **Keep** all `saved` rows always.
+2. Delete `dismissed` older than TTL (`RANK_SCORE_TTL_DAYS`, default **30**).
+3. For `new`/`seen`: delete rows older than TTL **or** outside top-N by `final_rank` (desc) per user (`RANK_SCORE_KEEP_TOP_N`, default **500**). A row is kept only if it is within TTL **and** within top-N (saved exempt).
+4. `pruneUserArticleScores(db, userId?)` in `packages/db`; when `userId` omitted, prune all users with scores.
+5. Worker calls prune after successful `processRankJob` / inline `runRank` for that user; CLI `pnpm worker:prune-scores` (and `NEWSROOM_WORKER_ONCE=prune-scores`).
+6. `POST /api/feed/rank` prunes the session user after a successful rank.
+7. Feed API behavior unchanged for remaining rows. Out of scope: archive tables, UI for retention settings.
+
+## API / DB contract
+
+| Item | Notes |
+|------|-------|
+| No migration | Deletes only |
+| Env | `RANK_SCORE_TTL_DAYS` (30), `RANK_SCORE_KEEP_TOP_N` (500); `0` TTL or top-N = skip that dimension |
+| Helpers | `resolveRankScoreRetention`, `pruneUserArticleScores` |
+
+## Touchpoints
+
+- `packages/db` — prune helpers + tests
+- `apps/worker` — post-rank prune + CLI
+- `apps/web` — `POST /api/feed/rank` prune after success
+- README / architecture / `.env.example`
+
+## Out of scope
+
+- Closing parent #133 (PR `Closes #133`)
+- Changing feed pagination filters
+
+---
 
 ## Implementation result
 
-### Delivered
-
-- `rank_ai_daily` + `remainingRankAiBudget` / `recordRankAiArticles`
-- Env: `RANK_AI_MAX_PER_RUN` (60), `RANK_AI_MAX_PER_DAY` (200), `RANK_AI_MAX_GLOBAL_PER_DAY` (0=unlimited)
-- Worker slices shortlist before AI; records scored count; token hard cap still applies
-- `GET /api/ai-usage.rankAi` + Settings line
-
-### Verification
-
-- `pnpm --filter @newsroom/db` typecheck/build + `rank-ai.test.ts`
-- `pnpm --filter @newsroom/worker` typecheck + test
-- `pnpm --filter @newsroom/web` typecheck
-- `pnpm --filter @newsroom/api-client` typecheck
-
-### Deviations
-
-- Active-user priority already enforced by dirty∩active enqueue from prior features.
-
-### Follow-ups
-
-- `rank-score-retention`
+*(Developer agent fills this section.)*
