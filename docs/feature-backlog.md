@@ -87,9 +87,10 @@ Notes for `rank-ai-budgets`:
 
 Notes for `rank-score-retention`:
 
-- **Problem:** `user_article_scores` grows with users × retained items.
-- **GC:** Drop or archive old `new`/`seen` rows past TTL or outside top-N by `final_rank`; **keep** `saved` (and document `dismissed` policy).
-- **Worker:** Periodic cleanup job or rank-adjacent prune; feed/API behavior unchanged for remaining rows.
+- **Problem:** `user_article_scores` grows with users × retained items; shared `articles` also accumulate forever.
+- **GC scores:** Drop old `new`/`seen` rows past TTL or outside top-N by `final_rank`; **keep** `saved`; prune old `dismissed` by TTL.
+- **GC articles:** Delete ingested rows older than `ARTICLE_TTL_DAYS` (default **90**) by `COALESCE(published_at, created_at)`; **never** delete an article any user has `saved`. Cascades sources + remaining scores.
+- **Worker:** Periodic/`pnpm worker:prune-scores` runs score prune then article prune; rank-adjacent score prune per user after rank.
 - **Can ship after** dirty incremental; independent of AI budgets if storage pressure appears earlier.
 
 ### B3. AI token metering

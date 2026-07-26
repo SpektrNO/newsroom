@@ -42,7 +42,7 @@ One-shot ingest then rank (requires migrate + seed or your own subscriptions/top
 pnpm worker:ingest            # upserts articles; marks affected users dirty; enqueues per-user rank jobs
 pnpm worker:rank              # drains rank jobs for dirty ∩ active users (feed activity in last 30m)
 pnpm worker:rank -- --all-dirty  # enqueue/drain all dirty users (ignore activity gate)
-pnpm worker:prune-scores      # prune stale new/seen/dismissed scores (keeps saved)
+pnpm worker:prune-scores      # prune stale scores + articles older than ARTICLE_TTL_DAYS (keeps saved)
 # or: NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores pnpm --filter @newsroom/worker start
 ```
 
@@ -83,7 +83,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm --filter @newsroom/worker start` | Long-running ingest + rank job poller |
 | `pnpm worker:ingest` / `pnpm --filter @newsroom/worker ingest` | One-shot ingest then exit (enqueues rank) |
 | `pnpm worker:rank` / `pnpm --filter @newsroom/worker rank` | One-shot rank then exit |
-| `pnpm worker:prune-scores` | One-shot prune of stale score rows then exit |
+| `pnpm worker:prune-scores` | One-shot prune of stale scores + old articles then exit |
 | `pnpm --filter @newsroom/mobile start` | Expo dev server |
 | `pnpm sources:test` | Adapter + URL normalization fixture tests |
 | `pnpm worker:test` | Ingest + rank integration tests (needs Postgres; AI mocked) |
@@ -93,7 +93,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard), `RANK_AI_MAX_PER_RUN` (default 60), `RANK_AI_MAX_PER_DAY` (default 200), `RANK_AI_MAX_GLOBAL_PER_DAY` (default 0 = unlimited), `RANK_SCORE_TTL_DAYS` (default 30), `RANK_SCORE_KEEP_TOP_N` (default 500).
+Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard), `RANK_AI_MAX_PER_RUN` (default 60), `RANK_AI_MAX_PER_DAY` (default 200), `RANK_AI_MAX_GLOBAL_PER_DAY` (default 0 = unlimited), `RANK_SCORE_TTL_DAYS` (default 30), `RANK_SCORE_KEEP_TOP_N` (default 500), `ARTICLE_TTL_DAYS` (default 90; keeps saved bookmarks).
 
 ### Topics & feed API (session cookie)
 
