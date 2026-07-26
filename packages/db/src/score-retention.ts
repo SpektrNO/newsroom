@@ -4,6 +4,7 @@ import { userArticleScores } from "./schema/ranking.js";
 
 const DEFAULT_TTL_DAYS = 30;
 const DEFAULT_KEEP_TOP_N = 500;
+const DEFAULT_ARTICLE_TTL_DAYS = 90;
 
 export type RankScoreRetentionConfig = {
   /** Delete new/seen/dismissed older than this many days. `0` = no age prune. */
@@ -12,9 +13,18 @@ export type RankScoreRetentionConfig = {
   keepTopN: number;
 };
 
+export type ArticleRetentionConfig = {
+  /** Delete ingested articles older than this many days. `0` = disabled. */
+  ttlDays: number;
+};
+
 export type PruneScoresResult = {
   deleted: number;
   users: number;
+};
+
+export type PruneArticlesResult = {
+  deleted: number;
 };
 
 function parseNonNegInt(raw: string | undefined, fallback: number): number {
@@ -30,6 +40,14 @@ export function resolveRankScoreRetention(
   return {
     ttlDays: parseNonNegInt(env.RANK_SCORE_TTL_DAYS, DEFAULT_TTL_DAYS),
     keepTopN: parseNonNegInt(env.RANK_SCORE_KEEP_TOP_N, DEFAULT_KEEP_TOP_N),
+  };
+}
+
+export function resolveArticleRetention(
+  env: NodeJS.ProcessEnv = process.env,
+): ArticleRetentionConfig {
+  return {
+    ttlDays: parseNonNegInt(env.ARTICLE_TTL_DAYS, DEFAULT_ARTICLE_TTL_DAYS),
   };
 }
 
@@ -117,4 +135,43 @@ export async function pruneUserArticleScores(
     deleted,
     users: options.userId ? 1 : 0,
   };
+}
+
+/**
+ * Delete shared `articles` older than TTL (by `COALESCE(published_at, created_at)`).
+ * Never deletes an article that any user has **saved** (bookmarks survive).
+ * Cascades to `article_sources` and remaining scores via FK.
+ */
+export async function pruneOldArticles(
+  db: Database,
+  options: { config?: ArticleRetentionConfig } = {},
+): Promise<PruneArticlesResult> {
+  const config = options.config ?? resolveArticleRetention();
+  if (config.ttlDays <= 0) {
+    return { deleted: 0 };
+  }
+
+  const result = await db.execute<{ id: string }>(sql`
+    DELETE FROM articles AS a
+    WHERE COALESCE(a.published_at, a.created_at)
+      < NOW() - (${config.ttlDays}::bigint * INTERVAL '1 day')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM user_article_scores AS s
+        WHERE s.article_id = a.id
+          AND s.status = 'saved'
+      )
+    RETURNING a.id
+  `);
+  const rows = result as unknown as Array<{ id: string }>;
+  return { deleted: rows.length };
+}
+
+/** Score prune then article prune (CLI / ops retention pass). */
+export async function pruneRetention(
+  db: Database,
+): Promise<{ scores: PruneScoresResult; articles: PruneArticlesResult }> {
+  const scores = await pruneUserArticleScores(db);
+  const articleRows = await pruneOldArticles(db);
+  return { scores, articles: articleRows };
 }

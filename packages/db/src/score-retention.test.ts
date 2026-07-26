@@ -6,6 +6,7 @@ import {
   articles,
   createDb,
   pruneUserArticleScores,
+  resolveArticleRetention,
   resolveRankScoreRetention,
   user,
   userArticleScores,
@@ -150,5 +151,101 @@ describe("rank score retention", () => {
     assert.equal(byArticle.has(ids.old), false);
     // low is outside top-1 → deleted even if fresh
     assert.equal(byArticle.has(ids.low), false);
+  });
+});
+
+describe("article retention", () => {
+  let db: Database;
+  const userId = `art-ret-${randomUUID()}`;
+  const oldSaved = `art-old-saved-${randomUUID()}`;
+  const oldGone = `art-old-gone-${randomUUID()}`;
+  const fresh = `art-fresh-${randomUUID()}`;
+
+  before(async () => {
+    db = createDb(databaseUrl);
+    const now = new Date();
+    const old = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000);
+    await db.insert(user).values({
+      id: userId,
+      name: "ArtRet",
+      email: `${userId}@test.local`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(articles).values([
+      {
+        id: oldSaved,
+        canonicalUrl: `https://fixture.example/p/${oldSaved}`,
+        title: "old saved",
+        summary: null,
+        author: null,
+        publishedAt: old,
+        createdAt: old,
+        updatedAt: now,
+      },
+      {
+        id: oldGone,
+        canonicalUrl: `https://fixture.example/p/${oldGone}`,
+        title: "old gone",
+        summary: null,
+        author: null,
+        publishedAt: old,
+        createdAt: old,
+        updatedAt: now,
+      },
+      {
+        id: fresh,
+        canonicalUrl: `https://fixture.example/p/${fresh}`,
+        title: "fresh",
+        summary: null,
+        author: null,
+        publishedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    await db.insert(userArticleScores).values({
+      id: randomUUID(),
+      userId,
+      articleId: oldSaved,
+      keywordScore: 0.5,
+      aiScore: 0.5,
+      finalRank: 0.5,
+      status: "saved",
+      scoredAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  after(async () => {
+    await db
+      .delete(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+    for (const id of [oldSaved, oldGone, fresh]) {
+      await db.delete(articles).where(eq(articles.id, id));
+    }
+    await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("defaults ARTICLE_TTL_DAYS to 90", () => {
+    assert.deepEqual(resolveArticleRetention({} as NodeJS.ProcessEnv), {
+      ttlDays: 90,
+    });
+  });
+
+  it("deletes old articles but keeps saved bookmarks", async () => {
+    const { pruneOldArticles } = await import("./index.js");
+    const result = await pruneOldArticles(db, {
+      config: { ttlDays: 90 },
+    });
+    assert.ok(result.deleted >= 1);
+
+    const remaining = await db.select({ id: articles.id }).from(articles);
+    const ids = new Set(remaining.map((r) => r.id));
+    assert.equal(ids.has(oldSaved), true);
+    assert.equal(ids.has(oldGone), false);
+    assert.equal(ids.has(fresh), true);
   });
 });

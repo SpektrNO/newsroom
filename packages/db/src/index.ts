@@ -56,7 +56,12 @@ export {
 } from "./rank-ai.js";
 export {
   resolveRankScoreRetention,
+  resolveArticleRetention,
   pruneUserArticleScores,
+  pruneOldArticles,
+  pruneRetention,
   type RankScoreRetentionConfig,
+  type ArticleRetentionConfig,
   type PruneScoresResult,
+  type PruneArticlesResult,
 } from "./score-retention.js";

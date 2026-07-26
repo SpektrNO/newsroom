@@ -130,10 +130,10 @@ async function pollLoop(): Promise<void> {
 
 async function runOncePruneScores(): Promise<number> {
   const db = loadDb();
-  console.log("[newsroom-worker] one-shot score prune starting");
-  const { pruneUserArticleScores } = await import("@newsroom/db");
-  const result = await pruneUserArticleScores(db);
-  console.log("[newsroom-worker] score prune done:", result);
+  console.log("[newsroom-worker] one-shot retention prune starting");
+  const { pruneRetention } = await import("@newsroom/db");
+  const result = await pruneRetention(db);
+  console.log("[newsroom-worker] retention prune done:", result);
   return 0;
 }
 
