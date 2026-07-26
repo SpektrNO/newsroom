@@ -4,6 +4,7 @@ import {
   articleSources,
   articles,
   jobs,
+  markUsersDirty,
   sourceSubscriptions,
   type SourceSubscriptionConfig,
 } from "@newsroom/db";
@@ -24,6 +25,8 @@ export type IngestResult = {
   succeeded: number;
   failed: number;
   articlesUpserted: number;
+  /** Users whose enabled subscriptions produced upserts this run. */
+  affectedUserIds: string[];
   errors: string[];
 };
 
@@ -36,11 +39,13 @@ export async function runIngest(
     .from(sourceSubscriptions)
     .where(eq(sourceSubscriptions.enabled, true));
 
+  const affected = new Set<string>();
   const result: IngestResult = {
     subscriptions: subs.length,
     succeeded: 0,
     failed: 0,
     articlesUpserted: 0,
+    affectedUserIds: [],
     errors: [],
   };
 
@@ -61,6 +66,9 @@ export async function runIngest(
         result.articlesUpserted += 1;
       }
       result.succeeded += 1;
+      if (items.length > 0) {
+        affected.add(sub.userId);
+      }
     } catch (err) {
       result.failed += 1;
       const message = err instanceof Error ? err.message : String(err);
@@ -72,6 +80,7 @@ export async function runIngest(
     }
   }
 
+  result.affectedUserIds = [...affected];
   return result;
 }
 
@@ -248,6 +257,9 @@ export async function processIngestJob(
   });
 
   if (!allFailed) {
+    if (result.affectedUserIds.length > 0) {
+      await markUsersDirty(db, result.affectedUserIds);
+    }
     const { ensureNextRankJob } = await import("./rank.js");
     await ensureNextRankJob(db, { delayMs: 0 });
   }

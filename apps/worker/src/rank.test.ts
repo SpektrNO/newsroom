@@ -38,6 +38,12 @@ describe("runRank", () => {
     db = createDb(databaseUrl);
     const now = new Date();
 
+    await db
+      .delete(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+    await db.delete(user).where(eq(user.id, userId));
+    await db.delete(user).where(eq(user.id, otherUserId));
+
     await db.insert(user).values([
       {
         id: userId,
@@ -146,7 +152,7 @@ describe("runRank", () => {
           model: "fake",
           text: JSON.stringify([
             {
-              articleId,
+              articleId: "r0",
               aiScore: 0.88,
               reason: "Matches LLM + Postgres topic",
               nearDuplicateOfArticleId: null,
@@ -200,5 +206,126 @@ describe("runRank", () => {
       .from(userArticleScores)
       .where(eq(userArticleScores.userId, otherUserId));
     assert.equal(leaked.length, 0);
+  });
+
+  it("skips idle dirty users unless --all-dirty / allDirty", async () => {
+    const provider: AiProvider = {
+      async complete() {
+        return { model: "fake", text: "[]" };
+      },
+      async health() {
+        return true;
+      },
+    };
+
+    await db
+      .update(user)
+      .set({ dirtyAt: new Date(), lastFeedAt: null })
+      .where(eq(user.id, userId));
+
+    const skipped = await runRank(db, { provider, batchSize: 20 });
+    assert.equal(skipped.users, 0);
+
+    const forced = await runRank(db, {
+      provider,
+      batchSize: 20,
+      allDirty: true,
+    });
+    assert.equal(forced.users, 1);
+
+    const [row] = await db
+      .select({ dirtyAt: user.dirtyAt })
+      .from(user)
+      .where(eq(user.id, userId));
+    assert.equal(row?.dirtyAt, null);
+  });
+});
+
+describe("invalidatePreferenceScores", () => {
+  let db: Database;
+  const userId = `pref-user-${randomUUID()}`;
+  const articleNew = `pref-art-new-${randomUUID()}`;
+  const articleSaved = `pref-art-saved-${randomUUID()}`;
+
+  before(async () => {
+    db = createDb(databaseUrl);
+    const now = new Date();
+    await db.insert(user).values({
+      id: userId,
+      name: "Pref",
+      email: `${userId}@test.local`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(articles).values([
+      {
+        id: articleNew,
+        canonicalUrl: `https://fixture.example/p/${articleNew}`,
+        title: "New",
+        summary: null,
+        author: null,
+        publishedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: articleSaved,
+        canonicalUrl: `https://fixture.example/p/${articleSaved}`,
+        title: "Saved",
+        summary: null,
+        author: null,
+        publishedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    await db.insert(userArticleScores).values([
+      {
+        id: randomUUID(),
+        userId,
+        articleId: articleNew,
+        keywordScore: 0.5,
+        aiScore: 0.5,
+        finalRank: 0.5,
+        status: "new",
+        scoredAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: randomUUID(),
+        userId,
+        articleId: articleSaved,
+        keywordScore: 0.5,
+        aiScore: 0.5,
+        finalRank: 0.5,
+        status: "saved",
+        scoredAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+  });
+
+  after(async () => {
+    await db
+      .delete(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+    await db.delete(articles).where(eq(articles.id, articleNew));
+    await db.delete(articles).where(eq(articles.id, articleSaved));
+    await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("deletes new/seen scores and keeps saved", async () => {
+    const { invalidatePreferenceScores } = await import("@newsroom/db");
+    const n = await invalidatePreferenceScores(db, userId);
+    assert.equal(n, 1);
+    const rows = await db
+      .select()
+      .from(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.status, "saved");
   });
 });

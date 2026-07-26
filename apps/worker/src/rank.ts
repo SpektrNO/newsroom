@@ -10,7 +10,9 @@ import {
   type Database,
   articleSources,
   articles,
+  clearUserDirty,
   jobs,
+  listDirtyRankUserIds,
   sourceSubscriptions,
   topics,
   userArticleScores,
@@ -161,15 +163,24 @@ export async function claimNextWorkerJob(
 
 async function loadEligibleUsers(
   db: Database,
-  onlyUserId?: string,
+  options: { userId?: string; allDirty?: boolean } = {},
 ): Promise<string[]> {
-  const conditions = [eq(topics.enabled, true)];
-  if (onlyUserId) conditions.push(eq(topics.userId, onlyUserId));
+  if (options.userId) {
+    const userTopics = await loadUserTopics(db, options.userId);
+    return userTopics.length > 0 ? [options.userId] : [];
+  }
+
+  const dirtyIds = await listDirtyRankUserIds(db, {
+    allDirty: options.allDirty === true,
+  });
+  if (dirtyIds.length === 0) return [];
 
   const rows = await db
     .selectDistinct({ userId: topics.userId })
     .from(topics)
-    .where(and(...conditions));
+    .where(
+      and(eq(topics.enabled, true), inArray(topics.userId, dirtyIds)),
+    );
 
   return rows.map((r) => r.userId);
 }
@@ -380,6 +391,7 @@ export async function runRank(
   db: Database,
   options: {
     userId?: string;
+    allDirty?: boolean;
     provider?: AiProvider;
     batchSize?: number;
   } = {},
@@ -399,7 +411,10 @@ export async function runRank(
     errors: [],
   };
 
-  const userIds = await loadEligibleUsers(db, options.userId);
+  const userIds = await loadEligibleUsers(db, {
+    userId: options.userId,
+    allDirty: options.allDirty,
+  });
   result.users = userIds.length;
 
   let anyBatchOk = false;
@@ -493,6 +508,8 @@ export async function runRank(
           );
         }
       }
+
+      await clearUserDirty(db, userId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       result.errors.push(`${userId}:${message}`);
@@ -518,7 +535,11 @@ export async function runRank(
 export async function processRankJob(
   db: Database,
   jobId: string,
-  options: { provider?: AiProvider; batchSize?: number } = {},
+  options: {
+    provider?: AiProvider;
+    batchSize?: number;
+    allDirty?: boolean;
+  } = {},
 ): Promise<RankResult> {
   const [job] = await db
     .select()
@@ -529,6 +550,7 @@ export async function processRankJob(
   const payload = (job?.payload ?? {}) as { userId?: string };
   const result = await runRank(db, {
     userId: typeof payload.userId === "string" ? payload.userId : undefined,
+    allDirty: options.allDirty,
     provider: options.provider,
     batchSize: options.batchSize,
   });
