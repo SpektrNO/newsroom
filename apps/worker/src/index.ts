@@ -128,6 +128,15 @@ async function pollLoop(): Promise<void> {
   process.on("SIGTERM", shutdown);
 }
 
+async function runOncePruneScores(): Promise<number> {
+  const db = loadDb();
+  console.log("[newsroom-worker] one-shot score prune starting");
+  const { pruneUserArticleScores } = await import("@newsroom/db");
+  const result = await pruneUserArticleScores(db);
+  console.log("[newsroom-worker] score prune done:", result);
+  return 0;
+}
+
 async function main() {
   const onceIngest =
     process.env.NEWSROOM_WORKER_ONCE === "ingest" ||
@@ -137,6 +146,15 @@ async function main() {
   const onceRank =
     process.env.NEWSROOM_WORKER_ONCE === "rank" ||
     process.argv.includes("rank");
+
+  const oncePrune =
+    process.env.NEWSROOM_WORKER_ONCE === "prune-scores" ||
+    process.argv.includes("prune-scores");
+
+  if (oncePrune) {
+    const code = await runOncePruneScores();
+    process.exit(code);
+  }
 
   if (onceRank) {
     const code = await runOnceRank();
