@@ -13,6 +13,9 @@ export type FeedItemJson = {
   canonicalUrl: string;
   author: string | null;
   publishedAt: string | null;
+  showTitle: string | null;
+  durationSeconds: number | null;
+  enclosureUrl: string | null;
   sources: FeedSourceJson[];
   keywordScore: number;
   aiScore: number | null;
@@ -59,9 +62,11 @@ export function parseFeedLimit(raw: string | null): number {
 
 export function parseFeedSourceFilter(
   raw: string | null,
-): "hackernews" | "substack" | null | "invalid" {
+): "hackernews" | "substack" | "podcast" | null | "invalid" {
   if (raw === null || raw === "") return null;
-  if (raw === "hackernews" || raw === "substack") return raw;
+  if (raw === "hackernews" || raw === "substack" || raw === "podcast") {
+    return raw;
+  }
   return "invalid";
 }
 
@@ -88,6 +93,9 @@ export type FeedRowInput = {
   canonicalUrl: string;
   author: string | null;
   publishedAt: Date | null;
+  showTitle?: string | null;
+  durationSeconds?: number | null;
+  enclosureUrl?: string | null;
   keywordScore: number;
   aiScore: number | null;
   finalRank: number;
@@ -106,6 +114,9 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
     canonicalUrl: row.canonicalUrl,
     author: row.author,
     publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+    showTitle: row.showTitle ?? null,
+    durationSeconds: row.durationSeconds ?? null,
+    enclosureUrl: row.enclosureUrl ?? null,
     sources: row.sources,
     keywordScore: row.keywordScore,
     aiScore: row.aiScore,
