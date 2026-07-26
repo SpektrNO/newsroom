@@ -1,4 +1,5 @@
 import type { AiCompleteRequest, AiCompleteResult, AiProvider } from "./types.js";
+import { estimateTokenUsage } from "./types.js";
 
 export type OllamaProviderOptions = {
   host?: string;
@@ -100,10 +101,36 @@ export class OllamaProvider implements AiProvider {
       );
     }
 
-    const data = (await res.json()) as { response?: string; model?: string };
+    const data = (await res.json()) as {
+      response?: string;
+      model?: string;
+      prompt_eval_count?: number;
+      eval_count?: number;
+    };
+    const text = data.response ?? "";
+    const promptTokens = data.prompt_eval_count;
+    const completionTokens = data.eval_count;
+    let usage: AiCompleteResult["usage"];
+    if (
+      typeof promptTokens === "number" &&
+      Number.isFinite(promptTokens) &&
+      typeof completionTokens === "number" &&
+      Number.isFinite(completionTokens)
+    ) {
+      usage = {
+        promptTokens: Math.max(0, Math.floor(promptTokens)),
+        completionTokens: Math.max(0, Math.floor(completionTokens)),
+        totalTokens:
+          Math.max(0, Math.floor(promptTokens)) +
+          Math.max(0, Math.floor(completionTokens)),
+      };
+    } else {
+      usage = estimateTokenUsage(prompt, text);
+    }
     return {
-      text: data.response ?? "",
+      text,
       model: data.model ?? this.model,
+      usage,
     };
   }
 }

@@ -152,6 +152,32 @@ export type ChatRequest = {
 export type ChatResponse = {
   reply: string;
   suggestions: ChatSuggestion[];
+  tokens?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    estimated: boolean;
+  };
+  aiUsage?: {
+    used: number;
+    limit: number;
+    softExceeded: boolean;
+    hardExceeded: boolean;
+  };
+};
+
+export type AiUsageResponse = {
+  day: string;
+  used: number;
+  limit: number;
+  softLimit: number;
+  byPurpose: {
+    rank: number;
+    chat: number;
+    other: number;
+  };
+  softExceeded: boolean;
+  hardExceeded: boolean;
 };
 
 export type RankFeedLatestResponse = {
@@ -322,6 +348,10 @@ export class ApiClient {
 
   async postChat(input: ChatRequest): Promise<ChatResponse> {
     return this.requestJson("POST", "/api/chat", input);
+  }
+
+  async getAiUsage(): Promise<AiUsageResponse> {
+    return this.requestJson("GET", "/api/ai-usage");
   }
 
   /** Run keyword + AI rank for the signed-in user (may take minutes). */

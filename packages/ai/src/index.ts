@@ -1,4 +1,8 @@
-export type { AiCompleteRequest, AiCompleteResult, AiProvider } from "./types.js";
+export type { AiCompleteRequest, AiCompleteResult, AiProvider, AiTokenUsage } from "./types.js";
+export {
+  estimateTokenUsage,
+  mergeTokenUsage,
+} from "./types.js";
 export { OllamaProvider, type OllamaProviderOptions } from "./ollama.js";
 export {
   scoreKeywordMatch,
@@ -13,6 +17,7 @@ export {
   type RankArticleInput,
   type RankedItem,
   type RankArticleBatchInput,
+  type RankArticleBatchResult,
 } from "./rank.js";
 export {
   adviseTopics,

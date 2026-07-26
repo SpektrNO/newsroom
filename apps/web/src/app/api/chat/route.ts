@@ -1,5 +1,10 @@
 import { adviseTopics, OllamaProvider } from "@newsroom/ai";
-import { getDb } from "@newsroom/db";
+import {
+  canSpendAiTokens,
+  getDb,
+  getAiTokenUsageForDay,
+  recordAiTokenUsage,
+} from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
 import { listTopicsForUser } from "@/lib/topics-queries";
 import { getTopicTree } from "@/lib/topic-tree";
@@ -26,6 +31,12 @@ export async function POST(request: Request) {
     );
   }
 
+  const db = getDb();
+  const allowed = await canSpendAiTokens(db, authResult.userId);
+  if (!allowed) {
+    return Response.json({ error: "token_budget_exceeded" }, { status: 429 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -43,7 +54,7 @@ export async function POST(request: Request) {
     .filter((n) => n.selectable)
     .map((n) => n.label);
 
-  const topics = await listTopicsForUser(getDb(), authResult.userId);
+  const topics = await listTopicsForUser(db, authResult.userId);
   const following = topics.map((t) => ({
     name: t.name,
     keywords: t.keywords ?? [],
@@ -62,12 +73,36 @@ export async function POST(request: Request) {
       messages: parsed.messages,
     });
 
+    if (advised.usage) {
+      await recordAiTokenUsage(db, {
+        userId: authResult.userId,
+        purpose: "chat",
+        usage: advised.usage,
+      });
+    }
+
+    const usageStatus = await getAiTokenUsageForDay(db, authResult.userId);
+
     return Response.json({
       reply: advised.reply,
       suggestions: markSuggestionsInCatalog(
         advised.suggestions,
         selectableLabels,
       ),
+      tokens: advised.usage
+        ? {
+            promptTokens: advised.usage.promptTokens,
+            completionTokens: advised.usage.completionTokens,
+            totalTokens: advised.usage.totalTokens,
+            estimated: Boolean(advised.usage.estimated),
+          }
+        : undefined,
+      aiUsage: {
+        used: usageStatus.used,
+        limit: usageStatus.limit,
+        softExceeded: usageStatus.softExceeded,
+        hardExceeded: usageStatus.hardExceeded,
+      },
     });
   } catch (err) {
     console.error("[newsroom] POST /api/chat failed", err);
