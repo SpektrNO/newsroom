@@ -168,3 +168,15 @@ Notes for `web-source-discovery` (shipped — catalog v1):
 |----|---------|--------|------|
 | `multiuser-harden` | Registration, isolation, rate limits, host AI swap | ⬜ | `docs/architecture.md` |
 | `source-bluesky` | Bluesky adapter | ⬜ | `docs/architecture.md` |
+| `source-podcast` | Podcast RSS adapter + episode cards in feed | ⬜ | `docs/architecture.md` |
+
+Notes for `source-podcast`:
+
+- **Problem:** Finding good podcasts is hard; Newsroom already ranks text stories by topic — episodes should enter the same ranked feed.
+- **Ingest:** New `source_type` `podcast` (or shared RSS path with Substack). Subscribe via podcast RSS/Atom URL; map **episodes** → `NormalizedArticle` (title, summary/description, canonical episode or show URL, publishedAt). Parse common podcast namespaces (enclosure audio URL, duration, show/author) into config or article metadata as needed.
+- **Feed UX (v1):** Episode cards show show name, duration when known, and open/play via external link (Apple/Spotify/browser). **No** in-app audio player or transcripts in v1.
+- **Ranking:** Same hybrid keyword + AI path; match topics/keywords against show + episode title/description. Source filter includes `podcast`.
+- **Discovery:** Manual RSS URL first; extend `GET /api/feed-catalog` (or a podcast catalog) so users can Add show without hunting URLs — align with `web-source-discovery` patterns.
+- **Reuse:** Prefer extending `packages/sources` RSS parsing rather than a greenfield fetcher; keep paywall/scrape out of scope (enclosure URL only).
+- **Out of scope v1:** Built-in player, offline download, chapter markers, full-text transcript ranking, auto-follow “similar shows.”
+- **Depends on:** Existing ingest + feed UI; stronger with catalog discovery. Independent of Bluesky.
