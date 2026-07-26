@@ -24,6 +24,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-26 | `rank-per-user-queue` | Per-user (or sharded) rank jobs; fair dequeue | #109 | Per-user rank jobs; unique open job on payload.userId; ingest/CLI fanout |
 | 2026-07-26 | `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | #117 | Daily token rollups; Settings reveal; chat 429 / rank keyword-only on hard cap |
 | 2026-07-26 | `rank-ai-budgets` | AI caps, active-user priority, keyword-only fallback | #125 | Per-run/day AI article caps; keyword-only beyond budget; Settings reveal |
+| 2026-07-26 | `rank-score-retention` | TTL / prune `user_article_scores`; keep saved | #133 | Prune new/seen/dismissed by TTL+top-N; keep saved; post-rank + CLI |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -57,3 +58,4 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `rank-per-user-queue` | Per-user (or sharded) rank jobs; fair dequeue | 2026-07-26 | `docs/architecture.md` | Per-user rank jobs; unique open job on payload.userId; ingest/CLI fanout |
 | `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | 2026-07-26 | `docs/architecture.md` | Daily token rollups; Settings reveal; chat 429 / rank keyword-only on hard cap |
 | `rank-ai-budgets` | AI caps, active-user priority, keyword-only fallback | 2026-07-26 | `docs/architecture.md` | Per-run/day AI article caps; keyword-only beyond budget; Settings reveal |
+| `rank-score-retention` | TTL / prune `user_article_scores`; keep saved | 2026-07-26 | `docs/architecture.md` | Prune new/seen/dismissed by TTL+top-N; keep saved; post-rank + CLI |
