@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   combineFinalRank,
   OllamaProvider,
@@ -38,70 +38,95 @@ export function resolveRankBatchSize(
   return Math.min(50, Math.max(20, Math.floor(n)));
 }
 
-/** Ensure a single pending/running rank exists (single-flight). */
-export async function ensureNextRankJob(
-  db: Database,
-  options: { userId?: string; delayMs?: number } = {},
-): Promise<void> {
-  const open = await db
-    .select({ id: jobs.id })
-    .from(jobs)
-    .where(
-      and(
-        eq(jobs.type, "rank"),
-        or(eq(jobs.status, "pending"), eq(jobs.status, "running")),
-      ),
-    )
-    .limit(1);
-
-  if (open.length > 0) return;
-
-  const payload: Record<string, unknown> = {};
-  if (options.userId) payload.userId = options.userId;
-
-  await db.insert(jobs).values({
-    id: crypto.randomUUID(),
-    type: "rank",
-    status: "pending",
-    payload,
-    scheduledAt: new Date(Date.now() + (options.delayMs ?? 0)),
-    attempts: 0,
-    createdAt: new Date(),
-  });
+function isUniqueViolation(err: unknown): boolean {
+  let cur: unknown = err;
+  for (let i = 0; i < 4 && cur; i++) {
+    if (
+      typeof cur === "object" &&
+      cur !== null &&
+      "code" in cur &&
+      (cur as { code: unknown }).code === "23505"
+    ) {
+      return true;
+    }
+    cur =
+      typeof cur === "object" && cur !== null && "cause" in cur
+        ? (cur as { cause: unknown }).cause
+        : null;
+  }
+  return false;
 }
 
-/** Enqueue a rank job due immediately if none pending due now. */
+/**
+ * Ensure one pending/running rank job for this user (per-user single-flight).
+ * Requires `userId` — global rank jobs are not created.
+ */
+export async function ensureNextRankJob(
+  db: Database,
+  options: { userId: string; delayMs?: number },
+): Promise<void> {
+  const userId = options.userId.trim();
+  if (!userId) {
+    throw new Error("ensureNextRankJob requires userId");
+  }
+
+  const open = await db.execute<{ id: string }>(sql`
+    SELECT id FROM jobs
+    WHERE type = 'rank'
+      AND status IN ('pending', 'running')
+      AND payload->>'userId' = ${userId}
+    LIMIT 1
+  `);
+  const openRows = open as unknown as Array<{ id: string }>;
+  if (openRows[0]?.id) return;
+
+  try {
+    await db.insert(jobs).values({
+      id: crypto.randomUUID(),
+      type: "rank",
+      status: "pending",
+      payload: { userId },
+      scheduledAt: new Date(Date.now() + (options.delayMs ?? 0)),
+      attempts: 0,
+      createdAt: new Date(),
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return;
+    throw err;
+  }
+}
+
+/**
+ * Enqueue one rank job per dirty∩active user with enabled topics
+ * (`allDirty` skips the activity gate).
+ */
+export async function enqueueRankJobsForEligibleUsers(
+  db: Database,
+  options: { allDirty?: boolean; delayMs?: number } = {},
+): Promise<number> {
+  const userIds = await loadEligibleUsers(db, { allDirty: options.allDirty });
+  for (const id of userIds) {
+    await ensureNextRankJob(db, {
+      userId: id,
+      delayMs: options.delayMs ?? 0,
+    });
+  }
+  return userIds.length;
+}
+
+/** Enqueue due-now rank job(s): one user, or all eligible users. */
 export async function enqueueRankNow(
   db: Database,
-  options: { userId?: string } = {},
-): Promise<string> {
-  const existing = await db
-    .select({ id: jobs.id })
-    .from(jobs)
-    .where(
-      and(
-        eq(jobs.type, "rank"),
-        or(eq(jobs.status, "pending"), eq(jobs.status, "running")),
-      ),
-    )
-    .limit(1);
-
-  if (existing[0]) return existing[0].id;
-
-  const id = crypto.randomUUID();
-  const payload: Record<string, unknown> = {};
-  if (options.userId) payload.userId = options.userId;
-
-  await db.insert(jobs).values({
-    id,
-    type: "rank",
-    status: "pending",
-    payload,
-    scheduledAt: new Date(),
-    attempts: 0,
-    createdAt: new Date(),
+  options: { userId?: string; allDirty?: boolean } = {},
+): Promise<void> {
+  if (options.userId) {
+    await ensureNextRankJob(db, { userId: options.userId, delayMs: 0 });
+    return;
+  }
+  await enqueueRankJobsForEligibleUsers(db, {
+    allDirty: options.allDirty,
+    delayMs: 0,
   });
-  return id;
 }
 
 export async function claimNextRankJob(
@@ -548,8 +573,26 @@ export async function processRankJob(
     .limit(1);
 
   const payload = (job?.payload ?? {}) as { userId?: string };
+  const userId =
+    typeof payload.userId === "string" ? payload.userId.trim() : "";
+
+  if (!userId) {
+    const empty: RankResult = {
+      users: 0,
+      scored: 0,
+      aiBatches: 0,
+      aiBatchFailures: 0,
+      errors: ["missing_userId"],
+    };
+    await completeJob(db, jobId, {
+      status: "failed",
+      lastError: "missing_userId",
+    });
+    return empty;
+  }
+
   const result = await runRank(db, {
-    userId: typeof payload.userId === "string" ? payload.userId : undefined,
+    userId,
     allDirty: options.allDirty,
     provider: options.provider,
     batchSize: options.batchSize,

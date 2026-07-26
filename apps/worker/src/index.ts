@@ -10,7 +10,7 @@ import {
 import {
   claimNextRankJob,
   claimNextWorkerJob,
-  enqueueRankNow,
+  enqueueRankJobsForEligibleUsers,
   processRankJob,
   runRank,
 } from "./rank.js";
@@ -36,8 +36,8 @@ async function runOnceIngest(): Promise<number> {
       const { markUsersDirty } = await import("@newsroom/db");
       await markUsersDirty(db, result.affectedUserIds);
     }
-    const { ensureNextRankJob } = await import("./rank.js");
-    await ensureNextRankJob(db, { delayMs: 0 });
+    const { enqueueRankJobsForEligibleUsers } = await import("./rank.js");
+    await enqueueRankJobsForEligibleUsers(db, { delayMs: 0 });
     return result.subscriptions > 0 &&
       result.succeeded === 0 &&
       result.failed > 0
@@ -59,10 +59,24 @@ async function runOnceRank(): Promise<number> {
   console.log(
     `[newsroom-worker] one-shot rank starting${allDirty ? " (--all-dirty)" : ""}`,
   );
-  await enqueueRankNow(db);
+  const enqueued = await enqueueRankJobsForEligibleUsers(db, { allDirty });
+  console.log(`[newsroom-worker] enqueued ${enqueued} per-user rank job(s)`);
+
+  let drained = 0;
+  let lastAllAiFailed = false;
   // Prefer rank-only claim so a due ingest job does not steal this one-shot.
-  const claimed = await claimNextRankJob(db);
-  if (!claimed) {
+  for (;;) {
+    const claimed = await claimNextRankJob(db);
+    if (!claimed) break;
+    drained += 1;
+    const result = await processRankJob(db, claimed.id, { allDirty });
+    console.log("[newsroom-worker] rank job done:", claimed.id, result);
+    lastAllAiFailed =
+      result.aiBatches > 0 && result.aiBatchFailures === result.aiBatches;
+  }
+
+  if (drained === 0) {
+    // No queue rows (e.g. races cleared) — fall back to in-process pass.
     const result = await runRank(db, { allDirty });
     console.log("[newsroom-worker] one-shot rank (inline):", result);
     const allAiFailed =
@@ -70,11 +84,7 @@ async function runOnceRank(): Promise<number> {
     return allAiFailed ? 1 : 0;
   }
 
-  const result = await processRankJob(db, claimed.id, { allDirty });
-  console.log("[newsroom-worker] one-shot rank done:", result);
-  const allAiFailed =
-    result.aiBatches > 0 && result.aiBatchFailures === result.aiBatches;
-  return allAiFailed ? 1 : 0;
+  return lastAllAiFailed ? 1 : 0;
 }
 
 async function pollLoop(): Promise<void> {

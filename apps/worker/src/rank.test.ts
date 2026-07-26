@@ -5,12 +5,13 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { AiProvider } from "@newsroom/ai";
 import {
   articleSources,
   articles,
   createDb,
+  jobs,
   sourceSubscriptions,
   topics,
   user,
@@ -238,6 +239,152 @@ describe("runRank", () => {
       .from(user)
       .where(eq(user.id, userId));
     assert.equal(row?.dirtyAt, null);
+  });
+});
+
+describe("per-user rank jobs", () => {
+  let db: Database;
+  const userA = `q-user-a-${randomUUID()}`;
+  const userB = `q-user-b-${randomUUID()}`;
+  const topicA = `q-topic-a-${randomUUID()}`;
+  const topicB = `q-topic-b-${randomUUID()}`;
+
+  before(async () => {
+    db = createDb(databaseUrl);
+    const now = new Date();
+    await db.insert(user).values([
+      {
+        id: userA,
+        name: "Queue A",
+        email: `${userA}@test.local`,
+        emailVerified: true,
+        dirtyAt: now,
+        lastFeedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: userB,
+        name: "Queue B",
+        email: `${userB}@test.local`,
+        emailVerified: true,
+        dirtyAt: now,
+        lastFeedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    await db.insert(topics).values([
+      {
+        id: topicA,
+        userId: userA,
+        name: "Topic A",
+        keywords: ["alpha"],
+        weight: 1,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: topicB,
+        userId: userB,
+        name: "Topic B",
+        keywords: ["beta"],
+        weight: 1,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+  });
+
+  after(async () => {
+    await db.execute(sql`
+      DELETE FROM jobs
+      WHERE type = 'rank'
+        AND (
+          payload->>'userId' = ${userA}
+          OR payload->>'userId' = ${userB}
+        )
+    `);
+    await db.delete(topics).where(eq(topics.userId, userA));
+    await db.delete(topics).where(eq(topics.userId, userB));
+    await db.delete(user).where(eq(user.id, userA));
+    await db.delete(user).where(eq(user.id, userB));
+  });
+
+  it("enqueues one open job per user and coalesces duplicates", async () => {
+    const {
+      ensureNextRankJob,
+      enqueueRankJobsForEligibleUsers,
+    } = await import("./rank.js");
+
+    await db.execute(sql`
+      DELETE FROM jobs
+      WHERE type = 'rank'
+        AND (
+          payload->>'userId' = ${userA}
+          OR payload->>'userId' = ${userB}
+        )
+    `);
+
+    await ensureNextRankJob(db, { userId: userA });
+    await ensureNextRankJob(db, { userId: userA });
+    await ensureNextRankJob(db, { userId: userB });
+
+    const open = (
+      await db
+        .select({ id: jobs.id, payload: jobs.payload })
+        .from(jobs)
+        .where(and(eq(jobs.type, "rank"), eq(jobs.status, "pending")))
+    ).filter((r) => {
+      const uid = r.payload?.userId;
+      return uid === userA || uid === userB;
+    });
+
+    const userIds = open
+      .map((r) =>
+        typeof r.payload?.userId === "string" ? r.payload.userId : null,
+      )
+      .filter(Boolean)
+      .sort();
+    assert.deepEqual(userIds, [userA, userB].sort());
+
+    const n = await enqueueRankJobsForEligibleUsers(db, { allDirty: true });
+    assert.ok(n >= 2);
+
+    const still = (
+      await db
+        .select({ id: jobs.id, payload: jobs.payload })
+        .from(jobs)
+        .where(and(eq(jobs.type, "rank"), eq(jobs.status, "pending")))
+    ).filter((r) => {
+      const uid = r.payload?.userId;
+      return uid === userA || uid === userB;
+    });
+    assert.equal(still.length, open.length);
+  });
+
+  it("fails processRankJob without userId", async () => {
+    const { processRankJob } = await import("./rank.js");
+    const id = randomUUID();
+    await db.insert(jobs).values({
+      id,
+      type: "rank",
+      status: "pending",
+      payload: {},
+      scheduledAt: new Date(),
+      attempts: 0,
+      createdAt: new Date(),
+    });
+    // Mark running so unique index doesn't care (no userId).
+    await db.update(jobs).set({ status: "running" }).where(eq(jobs.id, id));
+
+    const result = await processRankJob(db, id);
+    assert.deepEqual(result.errors, ["missing_userId"]);
+
+    const [row] = await db.select().from(jobs).where(eq(jobs.id, id));
+    assert.equal(row?.status, "failed");
   });
 });
 
