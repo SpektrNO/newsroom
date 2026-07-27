@@ -199,7 +199,6 @@ function CatalogItem({
               ) : (
                 <button
                   type="button"
-                  className="catalog-follow"
                   disabled={pending}
                   onClick={() => onFollow(node.label)}
                 >
@@ -738,7 +737,17 @@ export function TopicsClient(): ReactNode {
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
           />
-          <div className="weight-help">{WEIGHT_HELP}</div>
+          <div className="weight-help">
+            <p>
+              Weight controls how much this topic&apos;s keyword matches push
+              stories up your feed. Higher weight ranks matches higher; lower
+              weight lets them count for less.
+            </p>
+            <details>
+              <summary>How weight scoring works</summary>
+              {WEIGHT_HELP}
+            </details>
+          </div>
         </div>
 
         <label className="checkbox-row">
@@ -759,7 +768,7 @@ export function TopicsClient(): ReactNode {
           </button>
           <button
             type="button"
-            className="ghost danger-text"
+            className="danger-text"
             onClick={() => void onDeleteEditing()}
           >
             Delete

@@ -284,7 +284,7 @@ export function SourcesClient(): ReactNode {
                       </button>
                       <button
                         type="button"
-                        className="ghost danger-text"
+                        className="danger-text"
                         onClick={() => void onDelete(source)}
                       >
                         Delete
