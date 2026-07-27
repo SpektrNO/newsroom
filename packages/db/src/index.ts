@@ -40,8 +40,10 @@ export {
   touchFeedActivity,
   invalidatePreferenceScores,
   markUserPreferenceDirty,
+  wipeUserRankings,
   isUserDirty,
   listDirtyRankUserIds,
+  type WipeUserRankingsResult,
 } from "./rank-dirty.js";
 export {
   recordAiTokenUsage,

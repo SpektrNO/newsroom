@@ -1,9 +1,9 @@
 # Handoff: Wipe current rankings
 
-**Status:** spec  
+**Status:** implementing  
 **Created:** 2026-07-27  
 **Specifier agent:** lean (in-supervisor)  
-**Developer agent:** pending
+**Developer agent:** in progress (lean)
 
 ## GitHub tracking
 

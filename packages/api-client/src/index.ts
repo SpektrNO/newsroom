@@ -212,6 +212,11 @@ export type RankFeedLatestResponse = {
   aiBatchFailures: number;
 };
 
+export type WipeFeedRankingsResponse = {
+  scoresDeleted: number;
+  evaluationsDeleted: number;
+};
+
 export type FeedCatalogEntry = {
   id: string;
   label: string;
@@ -382,6 +387,11 @@ export class ApiClient {
   /** Run keyword + AI rank for the signed-in user (may take minutes). */
   async rankFeedLatest(): Promise<RankFeedLatestResponse> {
     return this.requestJson("POST", "/api/feed/rank");
+  }
+
+  /** Clear new/seen rankings; keep saved/dismissed. Does not auto re-rank. */
+  async wipeFeedRankings(): Promise<WipeFeedRankingsResponse> {
+    return this.requestJson("POST", "/api/feed/wipe-rankings");
   }
 
   private async requestJson<T>(

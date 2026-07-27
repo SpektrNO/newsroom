@@ -1,7 +1,10 @@
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "./index.js";
 import { user } from "./schema/auth.js";
-import { userArticleScores } from "./schema/ranking.js";
+import {
+  userArticleEvaluations,
+  userArticleScores,
+} from "./schema/ranking.js";
 import { invalidatePreferenceEvaluations } from "./article-evaluations.js";
 
 /** Recent feed activity window for dirty ∩ active rank (30 minutes). */
@@ -74,6 +77,43 @@ export async function markUserPreferenceDirty(
   await invalidatePreferenceScores(db, userId);
   await invalidatePreferenceEvaluations(db, userId);
   await markUserDirty(db, userId);
+}
+
+export type WipeUserRankingsResult = {
+  scoresDeleted: number;
+  evaluationsDeleted: number;
+};
+
+/**
+ * Wipe ranked feed rows for a user without auto re-rank.
+ * Keeps saved/dismissed scores (+ their evaluations); clears dirtyAt.
+ */
+export async function wipeUserRankings(
+  db: Database,
+  userId: string,
+): Promise<WipeUserRankingsResult> {
+  const scoresDeleted = await invalidatePreferenceScores(db, userId);
+
+  const deletedEvals = await db
+    .delete(userArticleEvaluations)
+    .where(
+      and(
+        eq(userArticleEvaluations.userId, userId),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${userArticleScores} AS s
+          WHERE s.user_id = ${userArticleEvaluations.userId}
+            AND s.article_id = ${userArticleEvaluations.articleId}
+        )`,
+      ),
+    )
+    .returning({ id: userArticleEvaluations.id });
+
+  await clearUserDirty(db, userId);
+
+  return {
+    scoresDeleted,
+    evaluationsDeleted: deletedEvals.length,
+  };
 }
 
 export async function isUserDirty(
