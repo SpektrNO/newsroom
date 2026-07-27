@@ -46,7 +46,7 @@ pnpm worker:prune-scores      # prune stale scores + articles older than ARTICLE
 # or: NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores pnpm --filter @newsroom/worker start
 ```
 
-After ingest + rank, refresh the Feed on http://localhost:3000 — story rows appear with Save / Dismiss; filter by topic, source, search, or Saved. Topic/source changes mark you dirty and clear unscored feed rows; opening the Feed records activity and enqueues catch-up rank when dirty. **Rank latest** always ranks the signed-in user.
+After ingest + rank, refresh the Feed on http://localhost:3000 — story rows appear with Save / Dismiss; filter by topic, source, search, or Saved. Topic/source changes mark you dirty and clear unscored feed rows; opening the Feed records activity and enqueues catch-up rank when dirty. **Rank latest** always ranks the signed-in user. **Wipe rankings** clears `new`/`seen` scores (Saved/Dismissed stay) and does not auto re-rank.
 
 Long-running worker (claims `ingest` and `rank` jobs; ingest cadence ~12 minutes):
 

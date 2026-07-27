@@ -120,7 +120,7 @@ Notes for `ai-token-metering`:
 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | ✅ | `docs/architecture.md` |
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
-| `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ⬜ | `docs/architecture.md` |
+| `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
 
 Notes for `wipe-rankings`:
 

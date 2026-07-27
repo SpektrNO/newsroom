@@ -1,9 +1,9 @@
 # Handoff: Wipe current rankings
 
-**Status:** implementing  
+**Status:** done  
 **Created:** 2026-07-27  
 **Specifier agent:** lean (in-supervisor)  
-**Developer agent:** in progress (lean)
+**Developer agent:** complete (lean)
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `wipe-rankings` |
 | Parent issue | #143 — https://github.com/SpektrNO/newsroom/issues/143 |
-| Open tasks | `api`, `web`, `verify`, `docs` |
-| Closed / Phase-1 | `spec` (#144) |
+| Open tasks | *(none)* |
+| Closed / Phase-1 | `spec` (#144), `api` (#145), `web` (#146), `verify` (#147), `docs` (#148) |
 | Backlog | `docs/feature-backlog.md` § C — Notes for `wipe-rankings` |
 
 Task order: `spec` → `api` → `web` → `verify` → `docs`
@@ -64,21 +64,22 @@ Signed-in users can wipe ranked feed scores while keeping Saved/Dismissed, then 
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- `wipeUserRankings` in `packages/db` — drop `new`/`seen` scores, orphan evaluations, clear dirty
+- `POST /api/feed/wipe-rankings` + `api-client.wipeFeedRankings()`
+- Feed toolbar **Wipe rankings** with confirm
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `pnpm --filter @newsroom/db exec tsx --test --test-force-exit src/wipe-rankings.test.ts`
+- [x] typecheck db / api-client / web
+- [ ] Manual: Wipe rankings on feed → empty new feed; Saved intact; Rank latest rebuilds
 
 ### Deviations from spec
 
-- None / list with rationale
+- None
 
 ### Follow-ups
 
-- 
+- None
