@@ -91,3 +91,41 @@ export const userArticleScores = pgTable(
     index("user_article_scores_user_status_idx").on(table.userId, table.status),
   ],
 );
+
+/**
+ * Per-user keyword evaluation markers (hits and misses).
+ * Lets rank walk past recent misses instead of re-checking them forever.
+ * Not shown in the feed — only `user_article_scores` are.
+ */
+export const userArticleEvaluations = pgTable(
+  "user_article_evaluations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    articleId: text("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** True when keyword pass matched; false = checked miss. */
+    hit: boolean("hit").notNull(),
+    evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("user_article_evaluations_user_article_uidx").on(
+      table.userId,
+      table.articleId,
+    ),
+    index("user_article_evaluations_user_evaluated_at_idx").on(
+      table.userId,
+      table.evaluatedAt,
+    ),
+  ],
+);

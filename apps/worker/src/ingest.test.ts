@@ -118,4 +118,46 @@ describe("runIngest", () => {
     assert.equal(link.sourceType, "substack");
     assert.equal(link.externalId, "fixture-guid-1");
   });
+
+  it("does not bump articles.updatedAt when contentHash is unchanged", async () => {
+    const fetchMock: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("hacker-news.firebaseio.com")) {
+        if (url.includes("topstories") || url.includes("newstories")) {
+          return new Response("[]", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response("null", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(SAMPLE_RSS, {
+        status: 200,
+        headers: { "content-type": "application/rss+xml" },
+      });
+    };
+
+    await runIngest(db, { fetch: fetchMock });
+    const [before] = await db
+      .select()
+      .from(articles)
+      .where(eq(articles.canonicalUrl, canonicalUrl))
+      .limit(1);
+    assert.ok(before);
+
+    await new Promise((r) => setTimeout(r, 20));
+    await runIngest(db, { fetch: fetchMock });
+
+    const [after] = await db
+      .select()
+      .from(articles)
+      .where(eq(articles.canonicalUrl, canonicalUrl))
+      .limit(1);
+    assert.ok(after);
+    assert.equal(after.contentHash, before.contentHash);
+    assert.equal(after.updatedAt.getTime(), before.updatedAt.getTime());
+  });
 });

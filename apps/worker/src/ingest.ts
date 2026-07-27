@@ -123,7 +123,9 @@ async function upsertArticleAndSource(
         enclosureUrl: item.enclosureUrl ?? null,
         raw: item.raw ?? null,
         contentHash,
-        updatedAt: now,
+        // Only bump updatedAt when content changes — otherwise every ingest
+        // stales evaluations/scores and Rank Latest re-walks the newest N.
+        updatedAt: sql`CASE WHEN ${articles.contentHash} IS DISTINCT FROM ${contentHash} THEN NOW() ELSE ${articles.updatedAt} END`,
       },
     })
     .returning({ id: articles.id });

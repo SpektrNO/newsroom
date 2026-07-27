@@ -9,6 +9,7 @@ export {
 export {
   topics,
   userArticleScores,
+  userArticleEvaluations,
   userArticleScoreStatuses,
   type TopicKeywords,
   type UserArticleScoreStatus,

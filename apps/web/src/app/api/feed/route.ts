@@ -3,6 +3,8 @@ import { and, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
 import {
   articleSources,
   articles,
+  countUserAvailableArticles,
+  countUserEvaluatedArticles,
   getDb,
   isUserDirty,
   jobs,
@@ -111,7 +113,13 @@ async function loadFeedCounts(args: {
   topicKeywords: string[] | null;
   sourceFilter: string | null;
   searchQuery: string | null;
-}): Promise<{ matchedCount: number; totalCount: number }> {
+}): Promise<{
+  matchedCount: number;
+  totalCount: number;
+  rankedCount: number;
+  evaluatedCount: number;
+  articlesCount: number;
+}> {
   const db = getDb();
   const statusCondition =
     args.statusFilter !== null
@@ -122,18 +130,29 @@ async function loadFeedCounts(args: {
     statusCondition,
   );
 
-  const [totalRow] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(userArticleScores)
-    .where(baseWhere);
+  const [[totalRow], evaluatedCount, articlesCount] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userArticleScores)
+      .where(baseWhere),
+    countUserEvaluatedArticles(db, args.userId),
+    countUserAvailableArticles(db, args.userId),
+  ]);
   const totalCount = Number(totalRow?.n ?? 0);
+  const rankedCount = totalCount;
 
   if (
     args.topicKeywords === null &&
     args.sourceFilter === null &&
     args.searchQuery === null
   ) {
-    return { matchedCount: totalCount, totalCount };
+    return {
+      matchedCount: totalCount,
+      totalCount,
+      rankedCount,
+      evaluatedCount,
+      articlesCount,
+    };
   }
 
   const searchConds =
@@ -148,7 +167,13 @@ async function loadFeedCounts(args: {
       .from(userArticleScores)
       .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
       .where(scoredWhere);
-    return { matchedCount: Number(matchedRow?.n ?? 0), totalCount };
+    return {
+      matchedCount: Number(matchedRow?.n ?? 0),
+      totalCount,
+      rankedCount,
+      evaluatedCount,
+      articlesCount,
+    };
   }
 
   const scanRows = await db
@@ -180,7 +205,13 @@ async function loadFeedCounts(args: {
     sourceTypesByArticle,
   });
 
-  return { matchedCount, totalCount };
+  return {
+    matchedCount,
+    totalCount,
+    rankedCount,
+    evaluatedCount,
+    articlesCount,
+  };
 }
 
 function toIsoOrNull(value: Date | string | null): string | null {
@@ -326,6 +357,9 @@ export async function GET(request: Request) {
       lastRankedAt: pipeline.lastRankedAt,
       matchedCount: counts.matchedCount,
       totalCount: counts.totalCount,
+      rankedCount: counts.rankedCount,
+      evaluatedCount: counts.evaluatedCount,
+      articlesCount: counts.articlesCount,
       needsRank,
     });
   }
@@ -423,6 +457,9 @@ export async function GET(request: Request) {
     lastRankedAt: pipeline.lastRankedAt,
     matchedCount: counts.matchedCount,
     totalCount: counts.totalCount,
+    rankedCount: counts.rankedCount,
+    evaluatedCount: counts.evaluatedCount,
+    articlesCount: counts.articlesCount,
     needsRank,
   });
 }

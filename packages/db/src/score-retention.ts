@@ -1,6 +1,7 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import type { Database } from "./index.js";
 import { userArticleScores } from "./schema/ranking.js";
+import { pruneUserArticleEvaluations } from "./article-evaluations.js";
 
 const DEFAULT_TTL_DAYS = 30;
 const DEFAULT_KEEP_TOP_N = 500;
@@ -21,6 +22,7 @@ export type ArticleRetentionConfig = {
 export type PruneScoresResult = {
   deleted: number;
   users: number;
+  evaluationsDeleted?: number;
 };
 
 export type PruneArticlesResult = {
@@ -56,6 +58,7 @@ export function resolveArticleRetention(
  * - Always keep `saved`.
  * - Delete `dismissed` older than TTL (when ttlDays > 0).
  * - Delete `new`/`seen` that are older than TTL **or** outside top-N by final_rank.
+ * - Also prune stale evaluation markers with the same TTL.
  */
 export async function pruneUserArticleScores(
   db: Database,
@@ -66,7 +69,7 @@ export async function pruneUserArticleScores(
 ): Promise<PruneScoresResult> {
   const config = options.config ?? resolveRankScoreRetention();
   if (config.ttlDays <= 0 && config.keepTopN <= 0) {
-    return { deleted: 0, users: 0 };
+    return { deleted: 0, users: 0, evaluationsDeleted: 0 };
   }
 
   const userFilter = options.userId
@@ -131,16 +134,22 @@ export async function pruneUserArticleScores(
     deleted += rows.length;
   }
 
+  const evalPrune = await pruneUserArticleEvaluations(db, {
+    userId: options.userId,
+    ttlDays: config.ttlDays,
+  });
+
   return {
     deleted,
     users: options.userId ? 1 : 0,
+    evaluationsDeleted: evalPrune.deleted,
   };
 }
 
 /**
  * Delete shared `articles` older than TTL (by `COALESCE(published_at, created_at)`).
  * Never deletes an article that any user has **saved** (bookmarks survive).
- * Cascades to `article_sources` and remaining scores via FK.
+ * Cascades to `article_sources`, scores, and evaluations via FK.
  */
 export async function pruneOldArticles(
   db: Database,

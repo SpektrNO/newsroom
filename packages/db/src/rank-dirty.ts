@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "./index.js";
 import { user } from "./schema/auth.js";
 import { userArticleScores } from "./schema/ranking.js";
+import { invalidatePreferenceEvaluations } from "./article-evaluations.js";
 
 /** Recent feed activity window for dirty ∩ active rank (30 minutes). */
 export const FEED_ACTIVE_WINDOW_MS = 30 * 60 * 1000;
@@ -65,12 +66,13 @@ export async function invalidatePreferenceScores(
   return deleted.length;
 }
 
-/** Mark dirty and invalidate new/seen scores (topic preference path). */
+/** Mark dirty and invalidate new/seen scores + evaluations (topic preference path). */
 export async function markUserPreferenceDirty(
   db: Database,
   userId: string,
 ): Promise<void> {
   await invalidatePreferenceScores(db, userId);
+  await invalidatePreferenceEvaluations(db, userId);
   await markUserDirty(db, userId);
 }
 

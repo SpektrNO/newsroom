@@ -4,7 +4,8 @@ import { rankAiDaily } from "./schema/rank-ai.js";
 import { utcDayString } from "./ai-usage.js";
 
 const DEFAULT_PER_RUN = 60;
-const DEFAULT_PER_DAY = 200;
+/** 0 = unlimited — daily cost is governed by AI_TOKEN_DAILY_LIMIT. */
+const DEFAULT_PER_DAY = 0;
 
 export type RankAiLimits = {
   perRun: number;

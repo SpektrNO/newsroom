@@ -65,6 +65,9 @@ export async function POST() {
 
     return Response.json({
       scored: result.scored,
+      evaluated: result.evaluated,
+      aiScored: result.aiScored,
+      aiSkipped: result.aiSkipped,
       users: result.users,
       aiBatches: result.aiBatches,
       aiBatchFailures: result.aiBatchFailures,

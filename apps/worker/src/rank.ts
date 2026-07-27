@@ -21,6 +21,8 @@ import {
   remainingRankAiBudget,
   sourceSubscriptions,
   topics,
+  upsertArticleEvaluation,
+  userArticleEvaluations,
   userArticleScores,
 } from "@newsroom/db";
 import { completeJob } from "./jobs.js";
@@ -31,6 +33,11 @@ const DEFAULT_BATCH_SIZE = 30;
 export type RankResult = {
   users: number;
   scored: number;
+  evaluated: number;
+  /** Articles that received an AI score this run. */
+  aiScored: number;
+  /** Shortlist hits left keyword-only (AI day/run/token budget). */
+  aiSkipped: number;
   aiBatches: number;
   aiBatchFailures: number;
   errors: string[];
@@ -252,6 +259,9 @@ async function loadCandidateArticles(db: Database, userId: string) {
       scoredAt: userArticleScores.scoredAt,
       status: userArticleScores.status,
       keywordScore: userArticleScores.keywordScore,
+      evaluationId: userArticleEvaluations.id,
+      evaluationHit: userArticleEvaluations.hit,
+      evaluatedAt: userArticleEvaluations.evaluatedAt,
     })
     .from(articles)
     .innerJoin(articleSources, eq(articleSources.articleId, articles.id))
@@ -262,25 +272,56 @@ async function loadCandidateArticles(db: Database, userId: string) {
         eq(userArticleScores.userId, userId),
       ),
     )
+    .leftJoin(
+      userArticleEvaluations,
+      and(
+        eq(userArticleEvaluations.articleId, articles.id),
+        eq(userArticleEvaluations.userId, userId),
+      ),
+    )
     .where(inArray(articleSources.sourceSubscriptionId, ids))
     .orderBy(
+      // Never-evaluated first, then stale vs article content — so we walk the
+      // corpus instead of thrashing needs-AI hits on the newest slice.
+      sql`(${userArticleEvaluations.id} IS NULL) DESC`,
+      sql`(${userArticleEvaluations.evaluatedAt} < ${articles.updatedAt}) DESC`,
       desc(sql`coalesce(${articles.publishedAt}, ${articles.createdAt})`),
     )
-    .limit(CANDIDATE_CAP_PER_USER * 3);
+    .limit(CANDIDATE_CAP_PER_USER * 5);
 
-  // Dedupe articles (multiple source links) and filter need-score.
+  // Dedupe articles (multiple source links) and filter need-eval / need-AI.
   const seen = new Set<string>();
   const out: typeof rows = [];
   for (const row of rows) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);
 
-    const needsScore =
-      !row.scoreId ||
-      row.aiScore === null ||
-      (row.scoredAt !== null && row.scoredAt < row.updatedAt);
+    const evalFresh =
+      row.evaluationId != null &&
+      row.evaluatedAt != null &&
+      row.evaluatedAt >= row.updatedAt;
+    const scoreFresh =
+      row.scoreId != null &&
+      row.scoredAt != null &&
+      row.scoredAt >= row.updatedAt;
 
-    if (!needsScore) continue;
+    // Fresh keyword miss → skip (already considered).
+    if (evalFresh && row.evaluationHit === false) continue;
+
+    // Fully scored hit with AI → skip.
+    if (evalFresh && row.evaluationHit === true && scoreFresh && row.aiScore !== null) {
+      continue;
+    }
+
+    // Need keyword eval, or need to finish AI on a hit.
+    const needsKeywordEval = !evalFresh;
+    const needsAiFinish =
+      evalFresh &&
+      row.evaluationHit === true &&
+      (!row.scoreId || row.aiScore === null || !scoreFresh);
+
+    if (!needsKeywordEval && !needsAiFinish) continue;
+
     out.push(row);
     if (out.length >= CANDIDATE_CAP_PER_USER) break;
   }
@@ -438,6 +479,9 @@ export async function runRank(
   const result: RankResult = {
     users: 0,
     scored: 0,
+    evaluated: 0,
+    aiScored: 0,
+    aiSkipped: 0,
     aiBatches: 0,
     aiBatchFailures: 0,
     errors: [],
@@ -475,12 +519,35 @@ export async function runRank(
       }> = [];
 
       for (const cand of candidates) {
+        const evalFresh =
+          cand.evaluationId != null &&
+          cand.evaluatedAt != null &&
+          cand.evaluatedAt >= cand.updatedAt;
+
+        // Already keyword-checked hit awaiting AI — don't re-count as scored.
+        if (evalFresh && cand.evaluationHit === true) {
+          shortlist.push({
+            articleId: cand.id,
+            title: cand.title,
+            summary: cand.summary,
+            showTitle: cand.showTitle,
+            keywordScore: cand.keywordScore ?? 0,
+          });
+          continue;
+        }
+
         const match = scoreKeywordMatch(
           cand.title,
           cand.summary,
           keywordTopics,
           cand.showTitle,
         );
+        result.evaluated += 1;
+        await upsertArticleEvaluation(db, {
+          userId,
+          articleId: cand.id,
+          hit: match.hit,
+        });
         if (!match.hit) continue;
 
         await upsertKeywordScore(db, {
@@ -504,9 +571,11 @@ export async function runRank(
       // AI pass: cap by run/day/global article budget, then token hard cap.
       const budget = await remainingRankAiBudget(db, userId);
       const needingAi = shortlist.slice(0, Math.max(0, budget.remaining));
-      if (shortlist.length > needingAi.length) {
+      const deferredByArticleCap = shortlist.length - needingAi.length;
+      if (deferredByArticleCap > 0) {
+        result.aiSkipped += deferredByArticleCap;
         result.errors.push(
-          `${userId}:rank_ai_budget_keyword_only:${shortlist.length - needingAi.length}`,
+          `${userId}:rank_ai_budget_keyword_only:${deferredByArticleCap}`,
         );
         console.warn(
           `[newsroom-worker] rank AI article budget for ${userId}: scoring ${needingAi.length}/${shortlist.length} (remaining=${budget.remaining})`,
@@ -514,10 +583,12 @@ export async function runRank(
       }
 
       let aiArticlesThisUser = 0;
+      let aiQueued = 0;
 
       for (let i = 0; i < needingAi.length; i += batchSize) {
         const allowed = await canSpendAiTokens(db, userId);
         if (!allowed) {
+          result.aiSkipped += needingAi.length - aiQueued;
           result.errors.push(`${userId}:token_budget_exceeded_skip_ai`);
           console.warn(
             `[newsroom-worker] token budget exceeded for ${userId}; keyword-only for remaining batches`,
@@ -526,6 +597,7 @@ export async function runRank(
         }
 
         const chunk = needingAi.slice(i, i + batchSize);
+        aiQueued += chunk.length;
         result.aiBatches += 1;
         try {
           const ranked = await rankArticleBatch(provider, {
@@ -550,6 +622,7 @@ export async function runRank(
           }
           if (ranked.items.length === 0 && chunk.length > 0) {
             result.aiBatchFailures += 1;
+            result.aiSkipped += chunk.length;
             result.errors.push(`${userId}:empty_or_unparseable_ai_batch`);
           } else {
             anyBatchOk = true;
@@ -563,9 +636,12 @@ export async function runRank(
               ranked.items,
             );
             aiArticlesThisUser += ranked.items.length;
+            const missed = chunk.length - ranked.items.length;
+            if (missed > 0) result.aiSkipped += missed;
           }
         } catch (err) {
           result.aiBatchFailures += 1;
+          result.aiSkipped += chunk.length;
           const message = err instanceof Error ? err.message : String(err);
           result.errors.push(`${userId}:ai:${message}`);
           console.error(
@@ -576,6 +652,7 @@ export async function runRank(
       }
 
       if (aiArticlesThisUser > 0) {
+        result.aiScored += aiArticlesThisUser;
         await recordRankAiArticles(db, {
           userId,
           count: aiArticlesThisUser,
@@ -644,6 +721,9 @@ export async function processRankJob(
     const empty: RankResult = {
       users: 0,
       scored: 0,
+      evaluated: 0,
+      aiScored: 0,
+      aiSkipped: 0,
       aiBatches: 0,
       aiBatchFailures: 0,
       errors: ["missing_userId"],

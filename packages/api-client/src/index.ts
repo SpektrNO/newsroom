@@ -116,8 +116,17 @@ export type FeedPage = {
   lastRankedAt?: string | null;
   /** Articles matching current topic/source/status/search filters. */
   matchedCount?: number;
-  /** Articles in feed for current status (ignores topic/source/search filters). */
+  /**
+   * Ranked articles in feed for current status
+   * (score rows; ignores topic/source/search filters).
+   */
   totalCount?: number;
+  /** Alias for totalCount — score rows (ranked into the feed). */
+  rankedCount?: number;
+  /** Keyword-evaluated articles (hits + misses) for enabled sources. */
+  evaluatedCount?: number;
+  /** Distinct articles available via enabled subscriptions. */
+  articlesCount?: number;
   /** True when the user is dirty and a catch-up rank was enqueued. */
   needsRank?: boolean;
 };
@@ -193,6 +202,11 @@ export type AiUsageResponse = {
 
 export type RankFeedLatestResponse = {
   scored: number;
+  evaluated: number;
+  /** Articles that got an Ollama AI score this run. */
+  aiScored: number;
+  /** Hits left on keyword-only scores (AI day/run/token budget). */
+  aiSkipped: number;
   users: number;
   aiBatches: number;
   aiBatchFailures: number;

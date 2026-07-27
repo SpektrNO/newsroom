@@ -73,3 +73,12 @@ export {
   type PruneScoresResult,
   type PruneArticlesResult,
 } from "./score-retention.js";
+export {
+  upsertArticleEvaluation,
+  invalidatePreferenceEvaluations,
+  pruneUserArticleEvaluations,
+  countUserAvailableArticles,
+  countUserEvaluatedArticles,
+  type UpsertEvaluationInput,
+  type PruneEvaluationsResult,
+} from "./article-evaluations.js";

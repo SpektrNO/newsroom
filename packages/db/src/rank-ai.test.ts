@@ -45,6 +45,13 @@ describe("rank AI article budgets", () => {
     assert.deepEqual(limits, { perRun: 10, perDay: 25, globalPerDay: 0 });
   });
 
+  it("defaults day article cap to unlimited (0); per-run stays 60", () => {
+    const limits = resolveRankAiLimits({} as NodeJS.ProcessEnv);
+    assert.equal(limits.perDay, 0);
+    assert.equal(limits.perRun, 60);
+    assert.equal(limits.globalPerDay, 0);
+  });
+
   it("reduces remaining after recording scores", async () => {
     const before = await remainingRankAiBudget(db, userId, {
       perRun: 50,

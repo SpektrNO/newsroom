@@ -103,18 +103,37 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
               </p>
             ) : null}
             {aiUsage.rankAi ? (
-              <p className="manage-meta">
-                Rank AI articles today · {formatTokens(aiUsage.rankAi.used)}
-                {aiUsage.rankAi.dayLimit > 0
-                  ? ` / ${formatTokens(aiUsage.rankAi.dayLimit)}`
-                  : ""}
-                {aiUsage.rankAi.runLimit > 0
-                  ? ` · up to ${formatTokens(aiUsage.rankAi.runLimit)} per run`
-                  : ""}
-                {aiUsage.rankAi.remaining === 0 && aiUsage.rankAi.dayLimit > 0
-                  ? " · remaining shortlist stays keyword-only"
-                  : ""}
-              </p>
+              <div className="manage-meta">
+                <p>
+                  Ollama scored {formatTokens(aiUsage.rankAi.used)} article
+                  {aiUsage.rankAi.used === 1 ? "" : "s"} today
+                  {aiUsage.rankAi.dayLimit > 0
+                    ? ` (cap ${formatTokens(aiUsage.rankAi.dayLimit)} / UTC day)`
+                    : " (no daily article cap — token budget above applies)"}.
+                </p>
+                {aiUsage.rankAi.runLimit > 0 ? (
+                  <p>
+                    Each Rank latest run AI-scores at most{" "}
+                    {formatTokens(aiUsage.rankAi.runLimit)} articles; anything
+                    beyond that stays keyword-only until a later run (or until
+                    the token budget is used up).
+                  </p>
+                ) : null}
+                {aiUsage.rankAi.remaining === 0 &&
+                aiUsage.rankAi.dayLimit > 0 ? (
+                  <p role="status">
+                    Today’s AI article limit is used up. Rank latest will keep
+                    adding keyword matches, but Ollama won’t score them until
+                    tomorrow (UTC).
+                  </p>
+                ) : aiUsage.rankAi.remaining > 0 &&
+                  aiUsage.rankAi.dayLimit > 0 ? (
+                  <p>
+                    {formatTokens(aiUsage.rankAi.remaining)} AI article
+                    {aiUsage.rankAi.remaining === 1 ? "" : "s"} left today.
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </>
         )}

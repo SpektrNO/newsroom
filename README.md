@@ -93,7 +93,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard), `RANK_AI_MAX_PER_RUN` (default 60), `RANK_AI_MAX_PER_DAY` (default 200), `RANK_AI_MAX_GLOBAL_PER_DAY` (default 0 = unlimited), `RANK_SCORE_TTL_DAYS` (default 30), `RANK_SCORE_KEEP_TOP_N` (default 500), `ARTICLE_TTL_DAYS` (default 90; keeps saved bookmarks).
+Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard), `RANK_AI_MAX_PER_RUN` (default 60), `RANK_AI_MAX_PER_DAY` (default 0 = unlimited; prefer token cap), `RANK_AI_MAX_GLOBAL_PER_DAY` (default 0 = unlimited), `RANK_SCORE_TTL_DAYS` (default 30), `RANK_SCORE_KEEP_TOP_N` (default 500), `ARTICLE_TTL_DAYS` (default 90; keeps saved bookmarks).
 
 ### Topics & feed API (session cookie)
 
@@ -102,7 +102,7 @@ Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH
 | `GET` | `/api/topic-tree` | Curated catalog `{ version, nodes[] }` (selectable leaves for topic names) |
 | `GET/POST` | `/api/topics` | List / create (caller’s topics only; `name` = catalog leaf label) |
 | `PATCH/DELETE` | `/api/topics/:id` | Update / delete own topic |
-| `GET` | `/api/feed?cursor=&topic=&source=&status=&limit=` | Ranked scores; default excludes `dismissed`; `status=saved` (etc.) filters to that status |
+| `GET` | `/api/feed?cursor=&topic=&source=&status=&limit=` | Ranked scores; default excludes `dismissed`; `status=saved` (etc.) filters to that status; returns `rankedCount` / `evaluatedCount` / `articlesCount` pipeline counters |
 | `POST` | `/api/feed/:articleId/seen\|saved\|dismissed` | Update status; `404` if no score row |
 
 Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md). Health, seed, Compose: [docs/ops-local.md](docs/ops-local.md).

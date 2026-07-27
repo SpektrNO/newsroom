@@ -12,6 +12,7 @@ import {
 import {
   ApiError,
   type FeedItem,
+  type RankFeedLatestResponse,
   type SourceTypeV1,
   type Topic,
   type TopicTreeNode,
@@ -27,6 +28,44 @@ type TopicGroup = {
   root: string;
   topics: Topic[];
 };
+
+function formatRankLatestNote(result: RankFeedLatestResponse): string {
+  const aiScored = result.aiScored ?? 0;
+  const aiSkipped = result.aiSkipped ?? 0;
+  const parts: string[] = [];
+
+  if (result.scored > 0) {
+    parts.push(
+      `Added ${result.scored} keyword match${result.scored === 1 ? "" : "es"} to your feed`,
+    );
+  } else if (result.evaluated > 0) {
+    parts.push(
+      `Checked ${result.evaluated} article${result.evaluated === 1 ? "" : "s"} — no new keyword matches`,
+    );
+  } else if (aiScored > 0) {
+    parts.push(
+      `Applied AI to ${aiScored} already-ranked article${aiScored === 1 ? "" : "s"}`,
+    );
+  } else {
+    parts.push("Nothing left to rank right now");
+  }
+
+  if (result.scored > 0 || result.evaluated > 0 || aiScored > 0) {
+    if (aiScored > 0 && aiSkipped > 0) {
+      parts.push(
+        `AI scored ${aiScored}; ${aiSkipped} stayed keyword-only (per-run limit or token budget)`,
+      );
+    } else if (aiScored > 0 && result.scored > 0) {
+      parts.push(`AI scored ${aiScored} of them`);
+    } else if (aiSkipped > 0 && aiScored === 0) {
+      parts.push(
+        "AI was not applied — per-run AI article limit or token budget reached (keyword scores only; try Rank latest again later)",
+      );
+    }
+  }
+
+  return `${parts.join(". ")}.`;
+}
 
 function sourceLabel(type: string): string {
   if (type === "hackernews") return "Hacker News";
@@ -72,7 +111,7 @@ function rankDetail(item: FeedItem): string {
   if (item.aiScore !== null && item.aiScore !== undefined) {
     parts.push(`AI ${formatRank(item.aiScore)}`);
   } else {
-    parts.push("AI —");
+    parts.push("keywords only (no AI yet)");
   }
   parts.push(`Final ${formatRank(item.finalRank)}`);
   return parts.join(" · ");
@@ -141,8 +180,9 @@ export function FeedClient(): ReactNode {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [lastIngestAt, setLastIngestAt] = useState<string | null>(null);
   const [lastRankedAt, setLastRankedAt] = useState<string | null>(null);
-  const [matchedCount, setMatchedCount] = useState<number | null>(null);
-  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [rankedCount, setRankedCount] = useState<number | null>(null);
+  const [evaluatedCount, setEvaluatedCount] = useState<number | null>(null);
+  const [articlesCount, setArticlesCount] = useState<number | null>(null);
   const [needsRank, setNeedsRank] = useState(false);
   const [ranking, setRanking] = useState(false);
   const [rankNote, setRankNote] = useState<string | null>(null);
@@ -190,11 +230,22 @@ export function FeedClient(): ReactNode {
         if (!append) {
           setLastIngestAt(page.lastIngestAt ?? null);
           setLastRankedAt(page.lastRankedAt ?? null);
-          setMatchedCount(
-            typeof page.matchedCount === "number" ? page.matchedCount : null,
+          setRankedCount(
+            typeof page.rankedCount === "number"
+              ? page.rankedCount
+              : typeof page.totalCount === "number"
+                ? page.totalCount
+                : null,
           );
-          setTotalCount(
-            typeof page.totalCount === "number" ? page.totalCount : null,
+          setEvaluatedCount(
+            typeof page.evaluatedCount === "number"
+              ? page.evaluatedCount
+              : null,
+          );
+          setArticlesCount(
+            typeof page.articlesCount === "number"
+              ? page.articlesCount
+              : null,
           );
           setNeedsRank(Boolean(page.needsRank));
         }
@@ -216,8 +267,9 @@ export function FeedClient(): ReactNode {
         setError("Couldn't load your feed.");
         if (!append) {
           setItems([]);
-          setMatchedCount(null);
-          setTotalCount(null);
+          setRankedCount(null);
+          setEvaluatedCount(null);
+          setArticlesCount(null);
         }
       } finally {
         setLoading(false);
@@ -275,8 +327,9 @@ export function FeedClient(): ReactNode {
         (view === "dismissed" && (action === "seen" || action === "saved"))
       ) {
         setItems((prev) => prev.filter((i) => i.articleId !== articleId));
-        setMatchedCount((prev) => (prev == null ? prev : Math.max(0, prev - 1)));
-        setTotalCount((prev) => (prev == null ? prev : Math.max(0, prev - 1)));
+        setRankedCount((prev) =>
+          prev == null ? prev : Math.max(0, prev - 1),
+        );
       } else {
         setItems((prev) =>
           prev.map((i) =>
@@ -331,11 +384,7 @@ export function FeedClient(): ReactNode {
     setError(null);
     try {
       const result = await api.rankFeedLatest();
-      setRankNote(
-        result.scored > 0
-          ? `Ranked ${result.scored} article${result.scored === 1 ? "" : "s"}.`
-          : "No new articles to rank.",
-      );
+      setRankNote(formatRankLatestNote(result));
       await loadPage();
       setNeedsRank(false);
     } catch (err) {
@@ -371,10 +420,12 @@ export function FeedClient(): ReactNode {
     <section className="feed-page">
       <div className="feed-pipeline-row">
         <p className="feed-pipeline" aria-live="polite">
-          {matchedCount != null && totalCount != null ? (
+          {rankedCount != null &&
+          evaluatedCount != null &&
+          articlesCount != null ? (
             <>
-              <span title="Visible (filters) / total in feed">
-                {matchedCount}/{totalCount}
+              <span title="Ranked (in feed) / keyword-evaluated / available from sources">
+                {rankedCount}/{evaluatedCount}/{articlesCount}
               </span>
               <span className="feed-pipeline-sep" aria-hidden>
                 ·

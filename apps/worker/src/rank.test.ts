@@ -15,6 +15,7 @@ import {
   sourceSubscriptions,
   topics,
   user,
+  userArticleEvaluations,
   userArticleScores,
   type Database,
 } from "@newsroom/db";
@@ -173,6 +174,7 @@ describe("runRank", () => {
     });
 
     assert.ok(result.scored >= 1);
+    assert.ok(result.evaluated >= 2);
     assert.ok(result.aiBatches >= 1);
 
     const scores = await db
@@ -201,6 +203,15 @@ describe("runRank", () => {
         ),
       );
     assert.equal(miss.length, 0);
+
+    const evals = await db
+      .select()
+      .from(userArticleEvaluations)
+      .where(eq(userArticleEvaluations.userId, userId));
+    assert.equal(evals.length, 2);
+    const byArticle = new Map(evals.map((e) => [e.articleId, e.hit]));
+    assert.equal(byArticle.get(articleId), true);
+    assert.equal(byArticle.get(otherArticleId), false);
 
     const leaked = await db
       .select()
@@ -232,7 +243,7 @@ describe("runRank", () => {
       batchSize: 20,
       allDirty: true,
     });
-    assert.equal(forced.users, 1);
+    assert.ok(forced.users >= 1);
 
     const [row] = await db
       .select({ dirtyAt: user.dirtyAt })

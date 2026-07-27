@@ -57,6 +57,13 @@
       "when": 1785108282715,
       "tag": "0007_woozy_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785140000000,
+      "tag": "0008_user_article_evaluations",
+      "breakpoints": true
     }
   ]
 }
