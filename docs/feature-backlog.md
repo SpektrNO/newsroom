@@ -121,6 +121,7 @@ Notes for `ai-token-metering`:
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
+| `web-elegant-refresh` | Elegant visual/UX polish across web client | ✅ | `docs/architecture.md` |
 
 Notes for `wipe-rankings`:
 
@@ -128,6 +129,21 @@ Notes for `wipe-rankings`:
 - **Behavior:** Delete `new`/`seen` `user_article_scores`; drop orphan keyword evaluations; clear dirty so feed does **not** auto catch-up rank. No auto re-rank — user hits **Rank latest** when ready.
 - **Surface:** Feed toolbar beside Rank latest; confirm before wipe.
 - **Out of scope:** Wiping saved/dismissed; cancelling in-flight rank jobs; mobile.
+
+Notes for `web-elegant-refresh`:
+
+- **Goal:** Same simple, editorial app — slightly more elegant, a touch of restrained color, clearer button/filter/dropdown hierarchy. Visual/structural only; no behavior or API changes.
+- **Scope:** All authenticated surfaces — Feed, masthead/app-shell, Topics, Sources, Advisor (chat), Settings. **Out of scope:** landing/sign-in/sign-up, mobile (Expo), new UI dependencies, dark mode.
+- **Buttons:** consolidate to exactly two variants — **primary** (solid `--accent` fill; one main action per view: Follow, Add feed, Save) and **secondary/ghost** (outlined; everything else: Rank latest, Wipe rankings, Save/Dismiss, filter toggles). Remove `.catalog-follow` as a separate idiom; reuse primary. Keep plain **danger-text** for destructive text actions.
+- **Selects:** keep native `<select>` (no new JS dependency); restyle via `appearance: none` + custom chevron + matching border/radius/focus ring to match text inputs.
+- **Chips:** round `.topic-filter-chip` to match input/button radius; active state gets soft teal fill + border, inactive stays neutral outline.
+- **Color accents:** add one secondary accent token (`--accent-warm`, reusing the existing amber radial already in the body gradient) for sparing emphasis (e.g. "needs rank" / unread state). Teal stays primary; no broader color system.
+- **Feed pipeline row → compact status bar:** clearer labeled stat cluster, right-aligned Rank latest / Wipe rankings grouped as a pair, warm accent when `needsRank` is true.
+- **Topics weight help:** short 1–2 line summary + native `<details>` disclosure instead of an inline wall of prose.
+- **Empty feed state:** replace developer CLI copy (`pnpm db:seed`) with user-facing guidance + links to `/topics` and `/sources`.
+- **Tokens:** define `--surface` (currently referenced but undefined); add `--radius-sm` / `--radius-md` / `--radius-lg` reused consistently for inputs, chips, buttons, panels.
+- **Orphan classes:** give `.feed-page` / `.chat-page` / `.manage-main` real layout rules or remove from JSX if redundant — decide per-case, note in handoff.
+- **Docs:** short `docs/decisions/00N-web-design-tokens.md` capturing the button/radius/select/chip conventions for future UI consistency.
 
 Notes for `web-topics-tree` (shipped):
 

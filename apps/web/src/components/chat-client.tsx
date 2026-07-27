@@ -172,7 +172,7 @@ export function ChatClient(): ReactNode {
   }
 
   return (
-    <section className="manage-page chat-page">
+    <section className="manage-page">
       <header className="page-header">
         <h1 className="page-title">Advisor</h1>
         <p className="page-lede">

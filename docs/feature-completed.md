@@ -27,6 +27,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-26 | `rank-score-retention` | TTL / prune `user_article_scores`; keep saved | #133 | Prune new/seen/dismissed by TTL+top-N; keep saved; post-rank + CLI |
 | 2026-07-27 | `source-podcast` | Podcast RSS adapter + episode cards in feed | #100 | Podcast RSS adapter + episode cards; mobile deferred to mobile-feed-topics |
 | 2026-07-27 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | #143 | Wipe rankings button; keep saved/dismissed; no auto re-rank |
+| 2026-07-28 | `web-elegant-refresh` | Elegant visual/UX polish across web client | #150 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -52,6 +53,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | 2026-07-26 | `docs/architecture.md` | Completed via spec→implement pipeline |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | 2026-07-26 | `docs/architecture.md` | Completed via spec→implement pipeline |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | 2026-07-27 | `docs/architecture.md` | Wipe rankings button; keep saved/dismissed; no auto re-rank |
+| `web-elegant-refresh` | Elegant visual/UX polish across web client | 2026-07-28 | `docs/architecture.md` | Completed via spec→implement pipeline |
 ## Other
 
 | ID | Feature | Completed | Spec | Notes |

@@ -455,47 +455,60 @@ export function FeedClient(): ReactNode {
   );
 
   return (
-    <section className="feed-page">
+    <section>
       <div className="feed-pipeline-row">
-        <p className="feed-pipeline" aria-live="polite">
+        <div
+          className={needsRank ? "feed-stats needs-rank" : "feed-stats"}
+          aria-live="polite"
+        >
           {rankedCount != null &&
           evaluatedCount != null &&
           articlesCount != null ? (
-            <>
-              <span title="Ranked (in feed) / keyword-evaluated / available from sources">
-                {rankedCount}/{evaluatedCount}/{articlesCount}
-              </span>
-              <span className="feed-pipeline-sep" aria-hidden>
-                ·
-              </span>
-            </>
+            <dl className="feed-stat-group">
+              <div className="feed-stat" title="Ranked (in feed)">
+                <dt>Ranked</dt>
+                <dd>{rankedCount}</dd>
+              </div>
+              <div className="feed-stat" title="Keyword-evaluated">
+                <dt>Evaluated</dt>
+                <dd>{evaluatedCount}</dd>
+              </div>
+              <div className="feed-stat" title="Available from sources">
+                <dt>Articles</dt>
+                <dd>{articlesCount}</dd>
+              </div>
+            </dl>
           ) : null}
-          <span title={absoluteTimeTitle(lastIngestAt)}>
-            Ingested {formatPipelineTime(lastIngestAt)}
+          <span className="feed-stat-times">
+            <span title={absoluteTimeTitle(lastIngestAt)}>
+              Ingested {formatPipelineTime(lastIngestAt)}
+            </span>
+            <span className="feed-pipeline-sep" aria-hidden>
+              ·
+            </span>
+            <span title={absoluteTimeTitle(lastRankedAt)}>
+              Ranked {formatPipelineTime(lastRankedAt)}
+            </span>
           </span>
-          <span className="feed-pipeline-sep" aria-hidden>
-            ·
-          </span>
-          <span title={absoluteTimeTitle(lastRankedAt)}>
-            Ranked {formatPipelineTime(lastRankedAt)}
-          </span>
-        </p>
-        <button
-          type="button"
-          className="ghost feed-rank-btn"
-          disabled={ranking || wiping}
-          onClick={() => void onRankLatest()}
-        >
-          {ranking ? "Ranking…" : "Rank latest"}
-        </button>
-        <button
-          type="button"
-          className="ghost feed-rank-btn"
-          disabled={ranking || wiping}
-          onClick={() => void onWipeRankings()}
-        >
-          {wiping ? "Wiping…" : "Wipe rankings"}
-        </button>
+        </div>
+        <div className="feed-actions">
+          <button
+            type="button"
+            className="ghost feed-rank-btn"
+            disabled={ranking || wiping}
+            onClick={() => void onRankLatest()}
+          >
+            {ranking ? "Ranking…" : "Rank latest"}
+          </button>
+          <button
+            type="button"
+            className="ghost feed-rank-btn"
+            disabled={ranking || wiping}
+            onClick={() => void onWipeRankings()}
+          >
+            {wiping ? "Wiping…" : "Wipe rankings"}
+          </button>
+        </div>
       </div>
       {rankNote ? (
         <p className="feed-rank-note" aria-live="polite">
@@ -666,11 +679,7 @@ export function FeedClient(): ReactNode {
             <>
               <p className="feed-state-title">Your feed is quiet.</p>
               <p className="feed-state-body">
-                Add topics and sources, then let ingest and ranking run. Seeded
-                demos: try Topics and Sources after{" "}
-                <code>pnpm db:seed</code> and{" "}
-                <code>pnpm worker:ingest</code> /{" "}
-                <code>pnpm worker:rank</code>.
+                Follow a topic and add a source to get started.
               </p>
               <p className="feed-state-ctas">
                 <Link href="/topics">Topics</Link>
@@ -762,6 +771,7 @@ export function FeedClient(): ReactNode {
                     <>
                       <button
                         type="button"
+                        className="ghost"
                         onClick={() =>
                           void updateStatus(item.articleId, "seen")
                         }
@@ -770,7 +780,6 @@ export function FeedClient(): ReactNode {
                       </button>
                       <button
                         type="button"
-                        className="ghost"
                         onClick={() =>
                           void updateStatus(item.articleId, "saved")
                         }
@@ -789,7 +798,6 @@ export function FeedClient(): ReactNode {
                   ) : (
                     <button
                       type="button"
-                      className="ghost"
                       onClick={() => void updateStatus(item.articleId, "saved")}
                       disabled={item.status === "saved"}
                     >

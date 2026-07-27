@@ -5,13 +5,18 @@
   --panel: rgba(255, 252, 247, 0.88);
   --accent: #0f766e;
   --accent-hover: #0d9488;
+  --accent-warm: #b45309;
   --danger: #b91c1c;
+  --surface: #fffefb;
   --border: rgba(28, 25, 23, 0.12);
   --hairline: rgba(28, 25, 23, 0.1);
   --shadow: 0 18px 50px rgba(28, 25, 23, 0.08);
   --font-display: "Fraunces", Georgia, serif;
   --font-body: "Source Sans 3", "Segoe UI", sans-serif;
   --frame-max: 44rem;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
 }
 
 * {
@@ -79,7 +84,7 @@ a:hover {
 .button-link {
   display: inline-block;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 0.75rem 1.1rem;
   background: var(--accent);
   color: #f8fffe;
@@ -95,7 +100,7 @@ a:hover {
   width: min(420px, 100%);
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   padding: 1.75rem 1.5rem 1.5rem;
   backdrop-filter: blur(8px);
@@ -104,7 +109,7 @@ a:hover {
 .panel-soft {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   padding: 1.25rem 1.15rem;
   backdrop-filter: blur(6px);
 }
@@ -139,10 +144,20 @@ input,
 select {
   font: inherit;
   padding: 0.7rem 0.8rem;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: #fffefb;
+  background: var(--surface);
   color: var(--ink);
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.1rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%2357534e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 0.7rem auto;
 }
 
 input:focus,
@@ -155,7 +170,7 @@ button {
   font: inherit;
   font-weight: 600;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   background: var(--accent);
   color: #f8fffe;
@@ -171,7 +186,21 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button.ghost,
+button.ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.35rem 0.45rem;
+  font-weight: 600;
+}
+
+button.ghost:hover {
+  background: rgba(15, 118, 110, 0.08);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  text-decoration: none;
+}
+
 .linkish {
   background: transparent;
   color: var(--accent);
@@ -179,14 +208,21 @@ button.ghost,
   font-weight: 600;
 }
 
-button.ghost:hover,
 .linkish:hover {
   background: rgba(15, 118, 110, 0.08);
   text-decoration: none;
 }
 
 button.danger-text {
+  background: transparent;
+  border: 0;
+  padding: 0.35rem 0.45rem;
+  font-weight: 600;
   color: var(--danger);
+}
+
+button.danger-text:hover {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 .error {
@@ -314,16 +350,67 @@ button.danger-text {
   animation: rise-in 0.45s ease both;
 }
 
-.feed-pipeline {
-  margin: 0;
+.feed-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.9rem;
   font-size: 0.82rem;
   color: var(--muted);
   letter-spacing: 0.01em;
 }
 
+.feed-stats.needs-rank {
+  border-left: 2px solid var(--accent-warm);
+  padding-left: 0.55rem;
+}
+
+.feed-stat-group {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 0.3rem 0.9rem;
+}
+
+.feed-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.feed-stat dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.feed-stat dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.feed-stats.needs-rank .feed-stat dd {
+  color: var(--accent-warm);
+}
+
+.feed-stat-times {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
 .feed-pipeline-sep {
   margin: 0 0.4rem;
   opacity: 0.7;
+}
+
+.feed-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
 }
 
 .feed-rank-btn {
@@ -357,8 +444,8 @@ button.danger-text {
   font-size: 0.95rem;
   padding: 0.45rem 0.65rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface, #fff);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -447,7 +534,7 @@ button.danger-text {
   font-size: 0.85rem;
   font-weight: 500;
   padding: 0.35rem 0.7rem;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     color 0.15s ease,
@@ -462,8 +549,8 @@ button.danger-text {
 
 .topic-filter-chip.on {
   color: var(--ink);
-  border-color: color-mix(in srgb, var(--ink) 55%, var(--hairline));
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--hairline));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .topic-filter-hint {
@@ -602,7 +689,7 @@ button.danger-text {
 .skeleton-lines span {
   display: block;
   height: 0.85rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(
     90deg,
     rgba(28, 25, 23, 0.06),
@@ -722,6 +809,11 @@ button.danger-text {
   line-height: 1.4;
 }
 
+.manage-main {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
 .manage-actions {
   display: flex;
   flex-wrap: wrap;
@@ -746,7 +838,7 @@ button.danger-text {
   font: inherit;
   font-weight: 500;
   padding: 0.65rem 0.75rem;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: rgba(255, 252, 247, 0.95);
   color: var(--ink);
@@ -777,7 +869,7 @@ button.danger-text {
 
 .topic-tree-panel {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(255, 252, 247, 0.96);
   padding: 0.65rem;
   max-height: 18rem;
@@ -832,7 +924,7 @@ button.danger-text {
   background: transparent;
   font: inherit;
   padding: 0.3rem 0.4rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--ink);
 }
@@ -875,7 +967,7 @@ button.danger-text {
 .topics-filter-toggle {
   display: inline-flex;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: rgba(255, 252, 247, 0.9);
 }
@@ -911,7 +1003,7 @@ button.danger-text {
 
 .catalog-row-managing {
   background: rgba(15, 118, 110, 0.08);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .section-heading {
@@ -950,7 +1042,7 @@ button.danger-text {
 
 .topic-catalog {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(255, 252, 247, 0.96);
   padding: 0.65rem;
   max-height: 28rem;
@@ -987,27 +1079,6 @@ button.danger-text {
   font-size: 0.85rem;
 }
 
-.catalog-follow {
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 0.3rem 0.65rem;
-  border-radius: 8px;
-  border: 1px solid rgba(15, 118, 110, 0.35);
-  background: rgba(15, 118, 110, 0.1);
-  color: var(--accent);
-  cursor: pointer;
-}
-
-.catalog-follow:hover:not(:disabled) {
-  background: rgba(15, 118, 110, 0.16);
-}
-
-.catalog-follow:disabled {
-  opacity: 0.65;
-  cursor: wait;
-}
-
 .keyword-chips {
   display: grid;
   gap: 0.35rem;
@@ -1021,7 +1092,7 @@ button.danger-text {
   min-height: 2.6rem;
   padding: 0.4rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgba(255, 252, 247, 0.95);
 }
 
@@ -1045,7 +1116,7 @@ button.danger-text {
   font: inherit;
   font-size: 0.9rem;
   padding: 0.25rem 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(15, 118, 110, 0.08);
   color: var(--ink);
@@ -1095,6 +1166,16 @@ button.danger-text {
 .weight-help strong {
   color: var(--ink);
   font-weight: 600;
+}
+
+.weight-help summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.weight-help details p {
+  margin-top: 0.55rem;
 }
 
 .settings-block {
@@ -1188,7 +1269,7 @@ button.danger-text {
 
 .chat-bubble {
   padding: 0.75rem 0.9rem;
-  border-radius: 0.35rem;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--paper) 88%, var(--ink) 12%);
   animation: rise-in 0.35s ease both;
 }
