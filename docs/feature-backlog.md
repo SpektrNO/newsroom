@@ -120,6 +120,14 @@ Notes for `ai-token-metering`:
 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | ✅ | `docs/architecture.md` |
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
+| `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ⬜ | `docs/architecture.md` |
+
+Notes for `wipe-rankings`:
+
+- **Goal:** Signed-in user can clear ranked feed scores without losing Saved/Dismissed.
+- **Behavior:** Delete `new`/`seen` `user_article_scores`; drop orphan keyword evaluations; clear dirty so feed does **not** auto catch-up rank. No auto re-rank — user hits **Rank latest** when ready.
+- **Surface:** Feed toolbar beside Rank latest; confirm before wipe.
+- **Out of scope:** Wiping saved/dismissed; cancelling in-flight rank jobs; mobile.
 
 Notes for `web-topics-tree` (shipped):
 
