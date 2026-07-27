@@ -893,6 +893,10 @@ button.danger-text:hover {
   margin-top: 0.15rem;
 }
 
+.topic-tree-item + .topic-tree-item {
+  margin-top: 0.2rem;
+}
+
 .topic-tree-row {
   display: flex;
   align-items: center;
@@ -1076,6 +1080,11 @@ button.danger-text:hover {
 }
 
 .catalog-manage {
+  font-size: 0.85rem;
+}
+
+.catalog-follow-btn {
+  padding: 0.35rem 0.7rem;
   font-size: 0.85rem;
 }
 

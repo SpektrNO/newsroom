@@ -199,6 +199,7 @@ function CatalogItem({
               ) : (
                 <button
                   type="button"
+                  className="catalog-follow-btn"
                   disabled={pending}
                   onClick={() => onFollow(node.label)}
                 >
