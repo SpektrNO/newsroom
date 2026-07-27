@@ -185,6 +185,7 @@ export function FeedClient(): ReactNode {
   const [articlesCount, setArticlesCount] = useState<number | null>(null);
   const [needsRank, setNeedsRank] = useState(false);
   const [ranking, setRanking] = useState(false);
+  const [wiping, setWiping] = useState(false);
   const [rankNote, setRankNote] = useState<string | null>(null);
 
   const topicGroups = useMemo(
@@ -378,7 +379,7 @@ export function FeedClient(): ReactNode {
   }
 
   async function onRankLatest() {
-    if (ranking) return;
+    if (ranking || wiping) return;
     setRanking(true);
     setRankNote(null);
     setError(null);
@@ -405,6 +406,43 @@ export function FeedClient(): ReactNode {
       }
     } finally {
       setRanking(false);
+    }
+  }
+
+  async function onWipeRankings() {
+    if (ranking || wiping) return;
+    if (
+      !window.confirm(
+        "Clear ranked feed items? Saved and Dismissed stay. Rank latest when you want a fresh feed.",
+      )
+    ) {
+      return;
+    }
+    setWiping(true);
+    setRankNote(null);
+    setError(null);
+    try {
+      const result = await api.wipeFeedRankings();
+      const scores = result.scoresDeleted;
+      setRankNote(
+        scores === 0
+          ? "No ranked items to clear."
+          : `Cleared ${scores} ranked item${scores === 1 ? "" : "s"}. Saved and Dismissed unchanged.`,
+      );
+      await loadPage();
+      setNeedsRank(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.push("/sign-in?callbackUrl=%2F");
+        return;
+      }
+      if (err instanceof ApiError && err.code === "rate_limited") {
+        setRankNote("Too many wipe requests — wait a few minutes.");
+      } else {
+        setRankNote("Couldn't wipe rankings — try again.");
+      }
+    } finally {
+      setWiping(false);
     }
   }
 
@@ -445,10 +483,18 @@ export function FeedClient(): ReactNode {
         <button
           type="button"
           className="ghost feed-rank-btn"
-          disabled={ranking}
+          disabled={ranking || wiping}
           onClick={() => void onRankLatest()}
         >
           {ranking ? "Ranking…" : "Rank latest"}
+        </button>
+        <button
+          type="button"
+          className="ghost feed-rank-btn"
+          disabled={ranking || wiping}
+          onClick={() => void onWipeRankings()}
+        >
+          {wiping ? "Wiping…" : "Wipe rankings"}
         </button>
       </div>
       {rankNote ? (
@@ -456,7 +502,7 @@ export function FeedClient(): ReactNode {
           {rankNote}
         </p>
       ) : null}
-      {needsRank && !ranking ? (
+      {needsRank && !ranking && !wiping ? (
         <p className="feed-rank-note" aria-live="polite">
           Feed updating…
         </p>
