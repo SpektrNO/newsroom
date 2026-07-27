@@ -121,7 +121,7 @@ Notes for `ai-token-metering`:
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
-| `web-elegant-refresh` | Elegant visual/UX polish across web client | ⬜ | `docs/architecture.md` |
+| `web-elegant-refresh` | Elegant visual/UX polish across web client | ✅ | `docs/architecture.md` |
 
 Notes for `wipe-rankings`:
 

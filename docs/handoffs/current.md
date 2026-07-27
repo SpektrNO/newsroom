@@ -1,9 +1,9 @@
 # Handoff: web-elegant-refresh
 
-**Status:** spec
+**Status:** done
 **Created:** 2026-07-28
 **Specifier agent:** spec complete
-**Developer agent:** pending
+**Developer agent:** implementation complete
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `web-elegant-refresh` |
 | Parent issue | #150 — https://github.com/SpektrNO/newsroom/issues/150 |
-| Open tasks | `web` (#153), `verify` (#154), `docs` (#155) |
-| Closed tasks | `spec` (#151, this handoff) · `api` (#152, N/A — design-only pass, no API/contract changes) |
+| Open tasks | None — all task sub-issues closed. Parent #150 stays open until the PR merges (`Closes #150`). |
+| Closed tasks | `spec` (#151, this handoff) · `api` (#152, N/A — design-only pass, no API/contract changes) · `web` (#153, commit `6931fdd`) · `verify` (#154, no code fixes needed) · `docs` (#155) |
 
 Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`
 
@@ -174,21 +174,86 @@ Must not contradict `docs/architecture.md`.
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
--
+**`apps/web/src/app/globals.css`**
+
+- `:root`: added `--accent-warm: #b45309`, `--surface: #fffefb`, `--radius-sm: 8px`, `--radius-md: 12px`, `--radius-lg: 18px`.
+- Tokenized all 18 `border-radius` declarations per the mapping table; no raw px/rem radius values remain in the file.
+- `input, select`: `background: #fffefb` → `var(--surface)`; radius → `--radius-md`. New `select`-only rule adds `appearance: none` / `-webkit-appearance: none`, `padding-right: 2.1rem`, and an inline data-URI chevron (`background-image` + `no-repeat` + `right 0.75rem center`). Focus ring and border stay shared with `input`.
+- Split `button.ghost, .linkish` into two rules. `.ghost` gains `border: 1px solid var(--border)` and `border-radius: var(--radius-md)`; its hover strengthens the border toward accent. `.linkish` keeps today's borderless inline-text treatment verbatim.
+- `button.danger-text` is now standalone: transparent background, `border: 0`, `.ghost`'s padding/font-weight, `color: var(--danger)`, plus an explicit hover so it no longer inherits the primary `button:hover` fill once `.ghost` is off it.
+- Removed `.catalog-follow`, `.catalog-follow:hover:not(:disabled)`, `.catalog-follow:disabled`.
+- Removed the orphaned `.feed-pipeline` rule; replaced with `.feed-stats`, `.feed-stats.needs-rank`, `.feed-stat-group`, `.feed-stat`, `.feed-stat dt`, `.feed-stat dd`, `.feed-stats.needs-rank .feed-stat dd`, `.feed-stat-times`, `.feed-actions`. `.feed-pipeline-row` and `.feed-pipeline-sep` kept.
+- `.topic-filter-chip`: radius `2px` → `--radius-sm`; `.on` swapped from an `--ink` mix to `color-mix(in srgb, var(--accent) 12%, transparent)` fill with a 45%-accent border. Inactive state unchanged apart from radius.
+- Added `.manage-main { flex: 1 1 16rem; min-width: 0; }` (mirrors `.story-main`).
+- Added `.weight-help summary` and `.weight-help details p` so the disclosure keeps the block's spacing and reads as clickable.
+
+**`apps/web/src/components/feed-client.tsx`**
+
+- `<section className="feed-page">` → `<section>`.
+- Pipeline row rebuilt: the single `<p className="feed-pipeline">` becomes a `.feed-stats` container holding a `<dl className="feed-stat-group">` with three labeled `Ranked` / `Evaluated` / `Articles` stats (each `title` carries the meaning the old combined tooltip held) and a `.feed-stat-times` span with the unchanged `Ingested …` / `Ranked …` timestamps. `needsRank` toggles `.needs-rank` on the container. `Rank latest` and `Wipe rankings` moved into `<div className="feed-actions">` (right-aligned via `margin-left: auto`). No prop, state, or data changes.
+- Button hierarchy: `Save` (dismissed view and feed view) dropped `className="ghost"` → primary; `Restore` gained `className="ghost"` → secondary. `Dismiss`, `Remove from saved`, `Clear filters`, `Load more`, `All` unchanged as `.ghost`; `Try again` unchanged as primary.
+- Empty (no-filters) state body replaced with "Follow a topic and add a source to get started."; `Topics` / `Sources` links untouched.
+
+**`apps/web/src/components/topics-client.tsx`**
+
+- Follow button: dropped `className="catalog-follow"` → bare primary.
+- Delete button: `className="ghost danger-text"` → `className="danger-text"`.
+- Weight help: always-visible summary paragraph added, with the existing three-paragraph `WEIGHT_HELP` block moved verbatim into `<details><summary>How weight scoring works</summary>…</details>`. No copy lost, no JS added.
+
+**`apps/web/src/components/sources-client.tsx`**
+
+- Delete button: `className="ghost danger-text"` → `className="danger-text"`.
+
+**`apps/web/src/components/chat-client.tsx`**
+
+- `className="manage-page chat-page"` → `className="manage-page"`.
+
+**`apps/web/src/components/app-shell.tsx`** — no change, as the handoff anticipated. The `.linkish` / `.ghost` split is entirely in CSS.
+
+**`apps/web/src/components/settings-client.tsx`** — confirmed no change needed. Its only controls are the primary `Sign out` button and read-only lists; it picks up the shared token changes automatically.
+
+**`docs/decisions/003-web-design-tokens.md`** — new ADR (context / decisions / alternatives considered / consequences).
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+Automated (all run against the final tree):
+
+- [x] `pnpm --filter @newsroom/web typecheck` — pass.
+- [x] `pnpm --filter @newsroom/web build` — pass, 10/10 static pages generated. Next's build also runs its own lint + type-validity step.
+- [ ] `pnpm --filter @newsroom/web lint` — **cannot run.** The repo has no ESLint config anywhere, so `next lint` drops into an interactive setup prompt and exits 1. Pre-existing and unchanged by this diff; see Follow-ups.
+- [x] AC1 — `grep -rn "catalog-follow" apps/web/src` returns only `.catalog-following-status` (an unrelated class); zero `.catalog-follow` rules and zero JSX usages.
+- [x] AC2 — `grep -rn "ghost danger-text" apps/web/src` returns nothing.
+- [x] AC6 — `--accent-warm` defined in `:root`, referenced only by `.feed-stats.needs-rank` and `.feed-stats.needs-rank .feed-stat dd`.
+- [x] AC9 — `grep -n "pnpm\|worker:ingest\|worker:rank" feed-client.tsx` returns nothing; `/topics` and `/sources` links still present.
+- [x] AC10 — `--surface` defined; both consumers use bare `var(--surface)` with no fallback.
+- [x] AC11 — all three radius tokens defined; all 18 `border-radius` declarations in `globals.css` reference one.
+- [x] AC12 — `grep -rn "feed-page\|chat-page" apps/web/src` returns nothing; `.manage-main` has a non-empty rule.
+- [x] AC13 — `docs/decisions/003-web-design-tokens.md` exists.
+- [x] AC14 / AC15 — `git diff` touches only the five files in Touchpoints plus the new ADR and this handoff. No landing / sign-in / sign-up / mobile / dark-mode paths, no route, API, or schema files.
+- [x] No orphan classes introduced — every new class (`feed-stats`, `feed-stat-group`, `feed-stat`, `feed-stat-times`, `feed-actions`, `needs-rank`, `manage-main`) has both a CSS rule and a JSX usage.
+
+What remains manual (no browser or screenshot tooling was available to this agent — a human should click through these):
+
+- [ ] Load **Feed** and confirm the status bar reads as three labeled stats (`Ranked` / `Evaluated` / `Articles`) with the two timestamps beside them, and that `Rank latest` + `Wipe rankings` sit as a right-aligned pair at the end of the row.
+- [ ] Trigger the **`needsRank` = true** state (ingest new articles without ranking, or wipe rankings) and confirm the warm amber left border and amber stat values appear — then rank and confirm they disappear.
+- [ ] Narrow the browser to ~500px and confirm the status bar and its action pair wrap sensibly instead of overflowing.
+- [ ] Toggle a **topic filter chip** and confirm the active state is a soft teal fill/border (not grey), with rounded 8px corners, and that inactive chips stay a neutral outline.
+- [ ] Open the Feed **Source** and **View** selects and the Sources **Topic tag** select: confirm each shows the custom chevron (not the browser-default arrow), that the border/radius match the adjacent Search input, and that the focus ring matches on keyboard tab.
+- [ ] On Feed, compare a story row's `Save` (should be solid teal) against `Dismiss` (should be outlined). In **Dismissed** view confirm the inverse pairing: `Restore` outlined, `Save` solid.
+- [ ] On **Topics** and **Sources**, confirm `Delete` renders as plain red text with no border or box, and that hovering it does not turn it teal.
+- [ ] On **Topics**, confirm the catalog `Follow` button now renders as a standard primary button (it is visibly larger than the old pill) and that following a topic still works end to end.
+- [ ] On **Topics**, open a topic's Manage panel: confirm the one-paragraph weight summary is visible by default and that "How weight scoring works" expands to the original three paragraphs with correct spacing.
+- [ ] In the **masthead**, confirm `Sign out` still looks like plain inline text with no border — it must *not* have picked up the new `.ghost` outline.
+- [ ] With no topics/sources and no filters, confirm the empty Feed reads "Follow a topic and add a source to get started." with the Topics · Sources links below.
+- [ ] Spot-check **landing**, **sign-in**, and **sign-up**: they share `globals.css`, so confirm the slightly larger radii on `.button-link` and `.panel-soft` look intentional and nothing else shifted.
 
 ### Deviations from spec
 
-- None / list with rationale
+- **None substantive.** One wording ambiguity was resolved from the spec's own text: Buttons §1 says the `Save` buttons have "all three call sites — dismissed/saved/feed views", but there are only two `Save` buttons in `feed-client.tsx`; the saved view's button reads `Remove from saved`, which the variant table and the same bullet's closing sentence both assign to `.ghost`/secondary. Implemented per the table: `Save` ×2 → primary, `Remove from saved` → unchanged `.ghost`.
+- Two small additions the spec left unstated but that its own changes required: an explicit `button.danger-text:hover` (without it, removing `.ghost` lets the primary `button:hover` teal fill leak onto Delete), and `.weight-help summary` / `.weight-help details p` rules (without them the disclosure body loses the block's paragraph spacing, since `.weight-help p { margin: 0 }`).
 
 ### Follow-ups
 
--
+- **`pnpm --filter @newsroom/web lint` is a dead command.** There is no ESLint config in the repo, so `next lint` prompts interactively and fails. `next lint` is also deprecated and removed in Next.js 16. Worth a small feature to add a flat `eslint.config.mjs` with `eslint-config-next` and switch the script to the ESLint CLI — deliberately not done here, since it adds a dependency and touches files outside this handoff's scope.
