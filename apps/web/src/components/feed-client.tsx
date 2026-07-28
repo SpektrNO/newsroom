@@ -180,6 +180,7 @@ export function FeedClient(): ReactNode {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [lastIngestAt, setLastIngestAt] = useState<string | null>(null);
   const [lastRankedAt, setLastRankedAt] = useState<string | null>(null);
+  const [matchedCount, setMatchedCount] = useState<number | null>(null);
   const [rankedCount, setRankedCount] = useState<number | null>(null);
   const [evaluatedCount, setEvaluatedCount] = useState<number | null>(null);
   const [articlesCount, setArticlesCount] = useState<number | null>(null);
@@ -231,6 +232,9 @@ export function FeedClient(): ReactNode {
         if (!append) {
           setLastIngestAt(page.lastIngestAt ?? null);
           setLastRankedAt(page.lastRankedAt ?? null);
+          setMatchedCount(
+            typeof page.matchedCount === "number" ? page.matchedCount : null,
+          );
           setRankedCount(
             typeof page.rankedCount === "number"
               ? page.rankedCount
@@ -268,6 +272,7 @@ export function FeedClient(): ReactNode {
         setError("Couldn't load your feed.");
         if (!append) {
           setItems([]);
+          setMatchedCount(null);
           setRankedCount(null);
           setEvaluatedCount(null);
           setArticlesCount(null);
@@ -609,6 +614,9 @@ export function FeedClient(): ReactNode {
           {topicFilterActive ? (
             <p className="topic-filter-hint">
               Showing {selectedTopicIds.size} of {allTopicIds.length} topics
+              {matchedCount != null
+                ? ` · ${matchedCount} article${matchedCount === 1 ? "" : "s"}`
+                : null}
             </p>
           ) : topics.length > 0 ? (
             <p className="topic-filter-hint">All topics</p>
