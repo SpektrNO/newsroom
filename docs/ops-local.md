@@ -30,6 +30,13 @@ Ollama listens on `http://localhost:11434` (`OLLAMA_HOST`). First time, pull the
 docker exec -it newsroom-ollama ollama pull llama3.2
 ```
 
+Optional: also pull one of the stronger models (see [Model options](#model-options)) if `llama3.2`'s ranking `reason` text is too often generic or boilerplate for your taste:
+
+```bash
+docker exec -it newsroom-ollama ollama pull llama3.1:8b
+docker exec -it newsroom-ollama ollama pull qwen2.5:7b
+```
+
 Install Ollama on the **host** only if you want easier GPU access — see [Ollama](#ollama). Do not run host and Compose Ollama at the same time (both use port `11434`).
 
 ## Health (`GET /api/health`)
@@ -96,8 +103,8 @@ Newsroom talks to Ollama over HTTP (`OLLAMA_HOST`, default `http://localhost:114
 
 | Approach | When to use |
 |----------|-------------|
-| **Docker Compose (recommended)** | Default — `docker compose up -d` starts Postgres and Ollama together |
-| **Host install (Linux)** | Optional — mainly to use the machine’s **GPU** more easily than with the stock Compose service |
+| **Docker Compose (recommended)** | Default — `docker compose up -d` starts Postgres and Ollama together. Add `docker-compose.gpu.yml` for NVIDIA GPU passthrough (see [GPU with Docker Compose](#gpu-with-docker-compose)) |
+| **Host install (Linux)** | Optional — GPU without touching Docker's runtime config, or non-NVIDIA (AMD ROCm) |
 
 Both expose the same API. App env does not change. Do **not** run both at once on port `11434`.
 
@@ -109,6 +116,25 @@ Newsroom defaults (see `.env.example`):
 | `OLLAMA_MODEL` | `llama3.2` |
 
 Without Ollama: auth, ingest, topics, and keyword-only ranking still work; health is `degraded` (`checks.ollama: "error"`). AI scores, AI “why” reasons, and near-dup hints are missing until a model is reachable.
+
+### Model options
+
+`llama3.2` (3B) is the default — fast and light, but a weak instruction-follower: it sometimes echoes the rank prompt's own JSON schema/instructions into the `reason` field instead of describing the article (mitigated in code, see [002-hybrid-ranking.md](./decisions/002-hybrid-ranking.md) decision 7, but not eliminated). Stronger local alternatives, same `AiProvider`/`OllamaProvider` interface, just pull + set `OLLAMA_MODEL`:
+
+| Model | Size | Notes |
+|-------|------|-------|
+| `llama3.2` | 2.0 GB | Default. Fastest, weakest instruction-following. |
+| `llama3.1:8b` | 4.9 GB | Noticeably better instruction-following; slower per batch. |
+| `qwen2.5:7b` | 4.7 GB | Similar tier to `llama3.1:8b`; often stronger structured-JSON output. |
+
+Pull whichever you want to try, then switch via env (no code change):
+
+```bash
+docker exec -it newsroom-ollama ollama pull llama3.1:8b   # or qwen2.5:7b
+# .env: OLLAMA_MODEL=llama3.1:8b
+```
+
+Larger/slower models may need a higher `OLLAMA_TIMEOUT_MS` (default 5 minutes) for CPU-only ranking batches.
 
 ### Recommended: Docker Compose
 
@@ -134,7 +160,37 @@ OLLAMA_SMOKE=1 pnpm --filter @newsroom/ai smoke
 pnpm worker:rank
 ```
 
-The Compose service as checked in is typically **CPU-only** (no GPU device passthrough). That is fine for light ranking; switch to a host install (below) when you want GPU acceleration without extending Compose.
+The Compose service as checked in is **CPU-only** by default (no GPU device passthrough). That is fine for light ranking. For GPU acceleration you have two options: the Compose override below (keeps everything in Docker), or a host install (further below, e.g. if you don't want to touch Docker's runtime config).
+
+### GPU with Docker Compose (NVIDIA)
+
+One-time host prerequisite — install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) and register it with Docker (Ubuntu/Debian, incl. WSL2 with an NVIDIA driver already working — check with `nvidia-smi` first):
+
+```bash
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker   # WSL2 without systemd: restart Docker Desktop instead
+```
+
+Then start Ollama with the GPU override layered on top of the base Compose file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d ollama
+```
+
+Without the toolkit installed, that command fails fast with `could not select device driver "nvidia"` — plain `docker compose up -d` (no override) still works CPU-only. Verify the container sees the GPU:
+
+```bash
+docker exec newsroom-ollama nvidia-smi
+docker logs newsroom-ollama | grep -i -E "gpu|cuda"
+```
 
 ### Optional: host install for GPU
 
@@ -267,6 +323,10 @@ journalctl -e -u ollama
 ```bash
 ollama pull llama3.2
 # Or match whatever you set as OLLAMA_MODEL
+
+# Optional stronger alternatives — see Model options above:
+ollama pull llama3.1:8b
+ollama pull qwen2.5:7b
 
 curl -s "$OLLAMA_HOST/api/tags" | head   # default OLLAMA_HOST=http://localhost:11434
 pnpm --filter @newsroom/ai smoke

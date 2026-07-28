@@ -1,0 +1,16 @@
+### Optional override: GPU passthrough for the Compose Ollama service.
+### Requires the NVIDIA Container Toolkit on the host — see
+### docs/ops-local.md#gpu-with-docker-compose.
+###
+### Usage:
+###   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -73,7 +73,9 @@ pnpm --filter @newsroom/worker start
 | `pnpm install` | Install workspace deps |
 | `docker compose up -d` | Start Postgres + Ollama |
 | `docker compose up -d postgres` | Postgres only (skip Ollama) |
+| `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d` | Start with NVIDIA GPU passthrough for Ollama (needs NVIDIA Container Toolkit on host, see [docs/ops-local.md#gpu-with-docker-compose](docs/ops-local.md#gpu-with-docker-compose)) |
 | `docker exec -it newsroom-ollama ollama pull llama3.2` | Pull ranking model into the Compose Ollama volume |
+| `docker exec -it newsroom-ollama ollama pull llama3.1:8b` / `qwen2.5:7b` | Optional stronger models — better `reason` quality, slower (see [docs/ops-local.md#model-options](docs/ops-local.md#model-options)) |
 | `pnpm db:generate` | Generate Drizzle migrations from schema |
 | `pnpm db:migrate` | Apply migrations to `DATABASE_URL` |
 | `pnpm db:seed` | Demo user + HN + Platformer Substack + `AI & infra` topic |

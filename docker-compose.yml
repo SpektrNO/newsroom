@@ -17,8 +17,10 @@ services:
       timeout: 5s
       retries: 10
 
-  # Default local Ollama (same `docker compose up -d` as Postgres).
-  # Host install is optional — mainly for easier GPU access (do not bind both to :11434).
+  # Default local Ollama (same `docker compose up -d` as Postgres). CPU-only.
+  # For GPU passthrough, layer docker-compose.gpu.yml on top — see
+  # docs/ops-local.md#gpu-with-docker-compose (requires NVIDIA Container
+  # Toolkit on the host first).
   # Postgres-only: docker compose up -d postgres
   ollama:
     image: ollama/ollama:latest
