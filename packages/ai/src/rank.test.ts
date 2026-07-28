@@ -238,6 +238,31 @@ describe("rankArticleBatch", () => {
     assert.equal(ranked.items[0]?.reason, "Matched keywords: llm");
   });
 
+  it("falls back to the keyword reason when the model leaks internal topic refs", async () => {
+    const provider = fakeProvider(
+      JSON.stringify([
+        {
+          articleId: "r0",
+          aiScore: 0.5,
+          reason: "matches multiple candidateTopics including t0, t6 and more",
+        },
+      ]),
+    );
+    const articlesWithKeywordReason = [
+      {
+        articleId: "uuid-1111",
+        title: "LLM news",
+        summary: "About models",
+        keywordReason: "Matched keywords: llm",
+      },
+    ];
+    const ranked = await rankArticleBatch(provider, {
+      topics,
+      articles: articlesWithKeywordReason,
+    });
+    assert.equal(ranked.items[0]?.reason, "Matched keywords: llm");
+  });
+
   it("uses the generic default when neither the model nor keyword reason is available", async () => {
     const provider = fakeProvider(
       JSON.stringify([{ articleId: "r0", aiScore: 0.5 }]),
