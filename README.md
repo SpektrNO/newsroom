@@ -115,6 +115,7 @@ Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/d
 | [docs/ops-local.md](docs/ops-local.md) | Local Compose / health / ingest / rank; Ollama via Compose (easy) or host (GPU) |
 | [docs/decisions/001-ingest-url-and-hn.md](docs/decisions/001-ingest-url-and-hn.md) | Canonical URL + HN Firebase choices |
 | [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md) | Keyword + AI rank formulas and jobs |
+| [docs/decisions/004-ai-confirmed-topic-membership.md](docs/decisions/004-ai-confirmed-topic-membership.md) | Why the feed's topic filter uses AI-narrowed, not raw keyword, matches |
 | [docs/feature-backlog.md](docs/feature-backlog.md) | Feature segmentation index |
 | [docs/feature-completed.md](docs/feature-completed.md) | Shipped registry |
 | [docs/github-workflow.md](docs/github-workflow.md) | Issues, handoffs, scripts |

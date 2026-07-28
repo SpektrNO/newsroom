@@ -5,6 +5,7 @@ import {
   decodeFeedCursor,
   encodeFeedCursor,
   escapeIlikePattern,
+  matchesTopicIds,
   parseFeedLimit,
   parseFeedSearchQuery,
   parseFeedSourceFilter,
@@ -107,6 +108,21 @@ describe("tokenizeFeedSearch / escapeIlikePattern", () => {
   });
 });
 
+describe("matchesTopicIds", () => {
+  it("matches when the stored set overlaps the selected topics", () => {
+    assert.equal(matchesTopicIds(["t1", "t2"], ["t2"]), "match");
+  });
+
+  it("no-match when the stored set has no overlap", () => {
+    assert.equal(matchesTopicIds(["t1"], ["t2"]), "no-match");
+  });
+
+  it("unknown for pre-migration rows (null matchedTopicIds)", () => {
+    assert.equal(matchesTopicIds(null, ["t2"]), "unknown");
+    assert.equal(matchesTopicIds(undefined, ["t2"]), "unknown");
+  });
+});
+
 describe("countMatchingFeedRows", () => {
   const rows = [
     {
@@ -127,6 +143,7 @@ describe("countMatchingFeedRows", () => {
   it("counts all when no filters", () => {
     assert.equal(
       countMatchingFeedRows(rows, {
+        topicIds: null,
         topicKeywords: null,
         sourceFilter: null,
         searchQuery: null,
@@ -136,7 +153,7 @@ describe("countMatchingFeedRows", () => {
     );
   });
 
-  it("applies topic keywords and source type", () => {
+  it("falls back to keyword re-check for legacy rows with no matchedTopicIds", () => {
     const sources = new Map<string, Set<string>>([
       ["1", new Set(["hackernews"])],
       ["2", new Set(["substack"])],
@@ -144,6 +161,7 @@ describe("countMatchingFeedRows", () => {
     ]);
     assert.equal(
       countMatchingFeedRows(rows, {
+        topicIds: ["topic-llm"],
         topicKeywords: ["llm"],
         sourceFilter: "hackernews",
         searchQuery: null,
@@ -153,9 +171,28 @@ describe("countMatchingFeedRows", () => {
     );
   });
 
+  it("uses stored matchedTopicIds when present, ignoring keyword overlap", () => {
+    const rowsWithMatches = [
+      { ...rows[0]!, matchedTopicIds: ["topic-llm"] },
+      // Keyword-matches "llm" too, but AI narrowed it to a different topic.
+      { ...rows[2]!, matchedTopicIds: ["topic-postgres"] },
+    ];
+    assert.equal(
+      countMatchingFeedRows(rowsWithMatches, {
+        topicIds: ["topic-llm"],
+        topicKeywords: ["llm"],
+        sourceFilter: null,
+        searchQuery: null,
+        sourceTypesByArticle: new Map(),
+      }),
+      1,
+    );
+  });
+
   it("applies free-text search", () => {
     assert.equal(
       countMatchingFeedRows(rows, {
+        topicIds: null,
         topicKeywords: null,
         sourceFilter: null,
         searchQuery: "ai topic",

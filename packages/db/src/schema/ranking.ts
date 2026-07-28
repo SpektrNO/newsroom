@@ -65,6 +65,13 @@ export const userArticleScores = pgTable(
     aiScore: real("ai_score"),
     finalRank: real("final_rank").notNull(),
     reason: text("reason"),
+    /**
+     * Best-known set of `topics.id` this article belongs to for this user.
+     * Set optimistically to the keyword-matched topics when first scored;
+     * narrowed to the AI-confirmed subset once the AI batch scores it.
+     * NULL = pre-migration row — feed falls back to a live keyword re-check.
+     */
+    matchedTopicIds: jsonb("matched_topic_ids").$type<string[] | null>(),
     nearDuplicateOfArticleId: text("near_duplicate_of_article_id").references(
       () => articles.id,
       { onDelete: "set null" },

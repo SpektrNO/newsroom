@@ -7,6 +7,26 @@ import {
 } from "./keyword.js";
 
 describe("scoreKeywordMatch", () => {
+  it("does not match a keyword inside an unrelated longer word", () => {
+    // Regression: "space" (starter keyword for "Space & matter") must not
+    // fire inside "workspace".
+    const result = scoreKeywordMatch(
+      "Show HN: Wmux - A workspace multiplexer for AI agents",
+      null,
+      [{ id: "space", keywords: ["space", "matter"], weight: 1 }],
+    );
+    assert.equal(result.hit, false);
+    assert.equal(result.keywordScore, 0);
+  });
+
+  it("still matches a keyword as a standalone word", () => {
+    const result = scoreKeywordMatch("New rover explores deep space", null, [
+      { id: "space", keywords: ["space"], weight: 1 },
+    ]);
+    assert.equal(result.hit, true);
+    assert.equal(result.keywordScore, 0.25);
+  });
+
   it("matches case-insensitive substrings in title and summary", () => {
     const result = scoreKeywordMatch(
       "New LLM Tools",

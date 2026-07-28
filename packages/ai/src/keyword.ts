@@ -1,7 +1,9 @@
 /**
  * Keyword shortlist scoring for hybrid ranking.
  *
- * Match: case-insensitive substring on `title` + optional `showTitle` + `summary`.
+ * Match: case-insensitive whole-word/phrase match on `title` + optional
+ * `showTitle` + `summary` (word-boundary, not raw substring — "space" won't
+ * fire inside "workspace").
  * Score: min(1, sum of primary hits × weight × 0.25 + inherited hits × weight × 0.1).
  */
 
@@ -47,6 +49,19 @@ function haystack(
   return parts.join("\n").toLowerCase();
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Whole-word/phrase match (word-boundary), not raw substring — prevents
+ * short keywords like "space" or "ai" from firing inside unrelated words
+ * like "workspace" or "said".
+ */
+function matchesKeyword(text: string, keyword: string): boolean {
+  return new RegExp(`\\b${escapeRegExp(keyword)}\\b`).test(text);
+}
+
 /**
  * Score one article against enabled topics.
  * Disabled topics should be filtered out by the caller.
@@ -72,7 +87,7 @@ export function scoreKeywordMatch(
     for (const raw of topic.keywords) {
       const kw = raw.trim().toLowerCase();
       if (!kw) continue;
-      if (text.includes(kw)) {
+      if (matchesKeyword(text, kw)) {
         sum += weight * 0.25;
         topicHit = true;
         if (!matchedKeywords.includes(kw)) matchedKeywords.push(kw);
@@ -81,7 +96,7 @@ export function scoreKeywordMatch(
     for (const raw of topic.inheritedKeywords ?? []) {
       const kw = raw.trim().toLowerCase();
       if (!kw || primaryKeys.has(kw)) continue;
-      if (text.includes(kw)) {
+      if (matchesKeyword(text, kw)) {
         sum += weight * INHERITED_KEYWORD_WEIGHT_FACTOR;
         topicHit = true;
         if (!matchedKeywords.includes(kw)) matchedKeywords.push(kw);

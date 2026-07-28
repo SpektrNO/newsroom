@@ -21,6 +21,7 @@ import {
   decodeFeedCursor,
   encodeFeedCursor,
   escapeIlikePattern,
+  matchesTopicIds,
   parseFeedLimit,
   parseFeedSearchQuery,
   parseFeedSourceFilter,
@@ -110,6 +111,7 @@ function feedSearchConditions(searchQuery: string) {
 async function loadFeedCounts(args: {
   userId: string;
   statusFilter: UserArticleScoreStatus | null;
+  topicIds: string[] | null;
   topicKeywords: string[] | null;
   sourceFilter: string | null;
   searchQuery: string | null;
@@ -142,7 +144,7 @@ async function loadFeedCounts(args: {
   const rankedCount = totalCount;
 
   if (
-    args.topicKeywords === null &&
+    args.topicIds === null &&
     args.sourceFilter === null &&
     args.searchQuery === null
   ) {
@@ -161,7 +163,7 @@ async function loadFeedCounts(args: {
     searchConds.length > 0 ? and(baseWhere, ...searchConds) : baseWhere;
 
   // Search alone can be counted in SQL; topic/source still need an app scan.
-  if (args.topicKeywords === null && args.sourceFilter === null) {
+  if (args.topicIds === null && args.sourceFilter === null) {
     const [matchedRow] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(userArticleScores)
@@ -183,6 +185,7 @@ async function loadFeedCounts(args: {
       summary: articles.summary,
       showTitle: articles.showTitle,
       reason: userArticleScores.reason,
+      matchedTopicIds: userArticleScores.matchedTopicIds,
     })
     .from(userArticleScores)
     .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
@@ -198,6 +201,7 @@ async function loadFeedCounts(args: {
       : new Map<string, Set<string>>();
 
   const matchedCount = countMatchingFeedRows(scanRows, {
+    topicIds: args.topicIds,
     topicKeywords: args.topicKeywords,
     sourceFilter: args.sourceFilter,
     // Search already applied in SQL.
@@ -333,6 +337,7 @@ export async function GET(request: Request) {
         nearDuplicateOfArticleId: userArticleScores.nearDuplicateOfArticleId,
         status: userArticleScores.status,
         scoredAt: userArticleScores.scoredAt,
+        matchedTopicIds: userArticleScores.matchedTopicIds,
       })
       .from(userArticleScores)
       .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
@@ -343,6 +348,7 @@ export async function GET(request: Request) {
     loadFeedCounts({
       userId: authResult.userId,
       statusFilter,
+      topicIds: topicIds.length > 0 ? topicIds : null,
       topicKeywords,
       sourceFilter,
       searchQuery,
@@ -405,11 +411,23 @@ export async function GET(request: Request) {
 
   const filtered = [];
   for (const row of scoreRows) {
-    if (
-      topicKeywords !== null &&
-      !passesTopicFilter(row.title, row.summary, topicKeywords, undefined, row.showTitle)
-    ) {
-      continue;
+    if (topicIds.length > 0) {
+      const verdict = matchesTopicIds(row.matchedTopicIds, topicIds);
+      if (verdict === "no-match") continue;
+      // Pre-migration row (matchedTopicIds not yet populated) — fall back
+      // to a live keyword re-check until it's naturally re-ranked.
+      if (
+        verdict === "unknown" &&
+        !passesTopicFilter(
+          row.title,
+          row.summary,
+          topicKeywords ?? [],
+          undefined,
+          row.showTitle,
+        )
+      ) {
+        continue;
+      }
     }
     if (sourceFilter !== null) {
       const types = sourceTypesByArticle.get(row.articleId);

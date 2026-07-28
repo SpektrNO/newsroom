@@ -32,6 +32,7 @@ Architecture: [architecture.md](./architecture.md)
 |----|---------|--------|------|
 | `ingest-hn-substack` | HN + Substack adapters, article upsert | ✅ | `docs/architecture.md` |
 | `hybrid-rank-feed` | Keyword shortlist, Ollama rank, feed API | ✅ | `docs/architecture.md` |
+| `ai-confirmed-topic-membership` | AI narrows keyword-matched topics; feed topic filter uses it | ✅ | `docs/decisions/004-ai-confirmed-topic-membership.md` |
 
 ### B2. Ranking scale (post-MVP)
 

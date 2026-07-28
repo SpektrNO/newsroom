@@ -192,6 +192,9 @@ describe("runRank", () => {
     assert.equal(scores[0]?.aiScore, 0.88);
     assert.ok((scores[0]?.finalRank ?? 0) > 0);
     assert.match(scores[0]?.reason ?? "", /LLM|Postgres|llm|postgres/i);
+    // Mock AI response above has no confirmedTopicIds → falls back to the
+    // full keyword-matched candidate set (this topic).
+    assert.deepEqual(scores[0]?.matchedTopicIds, [topicId]);
 
     const miss = await db
       .select()
@@ -485,5 +488,166 @@ describe("invalidatePreferenceScores", () => {
       .where(eq(userArticleScores.userId, userId));
     assert.equal(rows.length, 1);
     assert.equal(rows[0]?.status, "saved");
+  });
+});
+
+describe("runRank matchedTopicIds narrowing", () => {
+  let db: Database;
+  const userId = `rank-confirm-user-${randomUUID()}`;
+  const subId = `rank-confirm-sub-${randomUUID()}`;
+  const topicAiId = `rank-confirm-topic-ai-${randomUUID()}`;
+  const topicMatterId = `rank-confirm-topic-matter-${randomUUID()}`;
+
+  before(async () => {
+    db = createDb(databaseUrl);
+    const now = new Date();
+    await db.insert(user).values({
+      id: userId,
+      name: "Confirm Test",
+      email: `${userId}@test.local`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(sourceSubscriptions).values({
+      id: subId,
+      userId,
+      sourceType: "hackernews",
+      config: { mode: "top" },
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    // Both topics keyword-hit the same article title so the AI has two
+    // candidates to narrow between.
+    await db.insert(topics).values([
+      {
+        id: topicAiId,
+        userId,
+        name: "AI infra",
+        keywords: ["ai"],
+        weight: 1,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: topicMatterId,
+        userId,
+        name: "Space matter",
+        keywords: ["matter"],
+        weight: 1,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+  });
+
+  after(async () => {
+    await db.delete(userArticleScores).where(eq(userArticleScores.userId, userId));
+    await db
+      .delete(userArticleEvaluations)
+      .where(eq(userArticleEvaluations.userId, userId));
+    await db.delete(topics).where(eq(topics.userId, userId));
+    await db
+      .delete(sourceSubscriptions)
+      .where(eq(sourceSubscriptions.id, subId));
+    await db.delete(user).where(eq(user.id, userId));
+  });
+
+  async function insertArticle(title: string) {
+    const articleId = `rank-confirm-art-${randomUUID()}`;
+    const now = new Date();
+    await db.insert(articles).values({
+      id: articleId,
+      canonicalUrl: `https://fixture.example/p/${articleId}`,
+      title,
+      summary: null,
+      author: "tester",
+      publishedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(articleSources).values({
+      id: randomUUID(),
+      articleId,
+      sourceSubscriptionId: subId,
+      sourceType: "hackernews",
+      externalId: articleId,
+      fetchedAt: now,
+    });
+    return articleId;
+  }
+
+  it("narrows matchedTopicIds to the topic the AI actually confirms", async () => {
+    const articleId = await insertArticle("Does free will matter for AI agents");
+
+    // Resolve the "AI infra" topic's short ref from the prompt itself, so
+    // the test doesn't depend on topic array ordering.
+    const provider: AiProvider = {
+      async complete({ prompt }) {
+        const match = prompt.match(/topics: (\[.*\])\n/);
+        const topicsParsed = match?.[1]
+          ? (JSON.parse(match[1]) as Array<{ id?: string; name: string }>)
+          : [];
+        const aiTopic = topicsParsed.find((t) => t.name === "AI infra");
+        return {
+          model: "fake",
+          text: JSON.stringify([
+            {
+              articleId: "r0",
+              aiScore: 0.7,
+              reason: "Genuinely about AI agents, not physics",
+              confirmedTopicIds: aiTopic?.id ? [aiTopic.id] : [],
+            },
+          ]),
+        };
+      },
+      async health() {
+        return true;
+      },
+    };
+
+    await runRank(db, { userId, provider, batchSize: 20 });
+
+    const [score] = await db
+      .select()
+      .from(userArticleScores)
+      .where(
+        and(
+          eq(userArticleScores.userId, userId),
+          eq(userArticleScores.articleId, articleId),
+        ),
+      );
+    assert.deepEqual(score?.matchedTopicIds, [topicAiId]);
+  });
+
+  it("keeps the full keyword-matched set when the AI batch fails", async () => {
+    const articleId = await insertArticle("Does free will matter for AI agents too");
+
+    const provider: AiProvider = {
+      async complete() {
+        return { model: "fake", text: "not json at all" };
+      },
+      async health() {
+        return true;
+      },
+    };
+
+    await runRank(db, { userId, provider, batchSize: 20 });
+
+    const [score] = await db
+      .select()
+      .from(userArticleScores)
+      .where(
+        and(
+          eq(userArticleScores.userId, userId),
+          eq(userArticleScores.articleId, articleId),
+        ),
+      );
+    assert.equal(score?.aiScore, null);
+    const matched = [...(score?.matchedTopicIds ?? [])].sort();
+    assert.deepEqual(matched, [topicAiId, topicMatterId].sort());
   });
 });

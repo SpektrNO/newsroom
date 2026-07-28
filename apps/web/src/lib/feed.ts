@@ -172,7 +172,7 @@ export function parseFeedTopicIds(url: URL): string[] | "invalid" {
   return out;
 }
 
-/** Re-check keyword overlap for topic= filter (no stored match set). */
+/** Re-check keyword overlap for topic= filter (legacy rows only — see matchesTopicIds). */
 export function passesTopicFilter(
   title: string,
   summary: string | null,
@@ -187,6 +187,23 @@ export function passesTopicFilter(
     inheritedKeywords,
     showTitle,
   );
+}
+
+/**
+ * Topic-filter verdict from the stored, AI-narrowed `matchedTopicIds` set.
+ * `"unknown"` means the row predates this column (NULL) — caller should fall
+ * back to `passesTopicFilter` for that row only.
+ */
+export function matchesTopicIds(
+  rowMatchedTopicIds: string[] | null | undefined,
+  selectedTopicIds: string[],
+): "match" | "no-match" | "unknown" {
+  if (rowMatchedTopicIds === null || rowMatchedTopicIds === undefined) {
+    return "unknown";
+  }
+  return rowMatchedTopicIds.some((id) => selectedTopicIds.includes(id))
+    ? "match"
+    : "no-match";
 }
 
 const MAX_FEED_SEARCH_LEN = 200;
@@ -240,8 +257,10 @@ export function countMatchingFeedRows(
     summary: string | null;
     reason?: string | null;
     showTitle?: string | null;
+    matchedTopicIds?: string[] | null;
   }>,
   opts: {
+    topicIds: string[] | null;
     topicKeywords: string[] | null;
     sourceFilter: string | null;
     searchQuery: string | null;
@@ -250,17 +269,21 @@ export function countMatchingFeedRows(
 ): number {
   let n = 0;
   for (const row of rows) {
-    if (
-      opts.topicKeywords !== null &&
-      !passesTopicFilter(
-        row.title,
-        row.summary,
-        opts.topicKeywords,
-        undefined,
-        row.showTitle,
-      )
-    ) {
-      continue;
+    if (opts.topicIds !== null) {
+      const verdict = matchesTopicIds(row.matchedTopicIds, opts.topicIds);
+      if (verdict === "no-match") continue;
+      if (
+        verdict === "unknown" &&
+        !passesTopicFilter(
+          row.title,
+          row.summary,
+          opts.topicKeywords ?? [],
+          undefined,
+          row.showTitle,
+        )
+      ) {
+        continue;
+      }
     }
     if (opts.sourceFilter !== null) {
       const types = opts.sourceTypesByArticle.get(row.articleId);

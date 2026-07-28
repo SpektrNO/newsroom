@@ -28,6 +28,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-27 | `source-podcast` | Podcast RSS adapter + episode cards in feed | #100 | Podcast RSS adapter + episode cards; mobile deferred to mobile-feed-topics |
 | 2026-07-27 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | #143 | Wipe rankings button; keep saved/dismissed; no auto re-rank |
 | 2026-07-28 | `web-elegant-refresh` | Elegant visual/UX polish across web client | #150 | Completed via spec→implement pipeline |
+| 2026-07-28 | `ai-confirmed-topic-membership` | AI narrows keyword-matched topics; feed topic filter uses it | — | Lean in-chat implement; fixes "space" matching "workspace"-style false positives in topic filter |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -42,6 +43,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 |----|---------|-----------|------|-------|
 | `ingest-hn-substack` | HN + Substack adapters, article upsert | 2026-07-24 | `docs/architecture.md` | Completed via spec→implement pipeline |
 | `hybrid-rank-feed` | Keyword shortlist, Ollama rank, feed API | 2026-07-24 | `docs/architecture.md` | topics/feed APIs + worker rank; no UI polish |
+| `ai-confirmed-topic-membership` | AI narrows keyword-matched topics; feed topic filter uses it | 2026-07-28 | `docs/decisions/004-ai-confirmed-topic-membership.md` | Lean in-chat implement |
 
 ## C. Web client
 

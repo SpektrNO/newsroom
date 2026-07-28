@@ -1,6 +1,8 @@
 import type { AiProvider, AiTokenUsage } from "./types.js";
 
 export type RankTopicInput = {
+  /** Topic id — needed to map `confirmedTopicIds` back from short model refs. */
+  id?: string;
   name: string;
   keywords: string[];
   weight: number;
@@ -12,6 +14,8 @@ export type RankArticleInput = {
   summary: string | null;
   /** Podcast show title — scored with title/summary; not shown as summary. */
   showTitle?: string | null;
+  /** Topic ids this article already keyword-matched (the AI narrows, never adds to this set). */
+  candidateTopicIds?: string[];
 };
 
 export type RankedItem = {
@@ -19,6 +23,8 @@ export type RankedItem = {
   aiScore: number;
   reason: string;
   nearDuplicateOfArticleId?: string | null;
+  /** Subset of the article's `candidateTopicIds` the AI confirms it's genuinely about. */
+  confirmedTopicIds: string[];
 };
 
 export type RankArticleBatchInput = {
@@ -60,8 +66,9 @@ function buildPrompt(
     "Rank each article for relevance to the user topics.",
     "User topics is guide only, synonyms or otherwise related words are to be interpreted as in-scope.",
     "The top-level JSON value MUST be an array (not a single object).",
-    'Each element: {"articleId":"r0","aiScore":0.0,"reason":"one line","nearDuplicateOfArticleId":null}',
+    'Each element: {"articleId":"r0","aiScore":0.0,"reason":"one line","confirmedTopicIds":["t0"],"nearDuplicateOfArticleId":null}',
     "aiScore is a number from 0 to 1. Use the exact articleId values from the input (r0, r1, …).",
+    "Each article includes candidateTopics: topic ids it keyword-matched. confirmedTopicIds must be the subset of that article's OWN candidateTopics it is genuinely about, not just superficial word overlap (e.g. the word \"space\" appearing inside \"workspace\" does not count as the Space topic). Return an empty array if none genuinely fit. Never invent ids outside that article's candidateTopics.",
     "nearDuplicateOfArticleId must be another articleId in this list, or null.",
     `Include exactly ${articleCount} objects — every input articleId once.`,
     "",
@@ -134,7 +141,8 @@ export function extractJsonArray(text: string): unknown {
 function parseRankedItem(
   raw: unknown,
   knownShortIds: Set<string>,
-): RankedItem | null {
+  candidateTopicShortIdsByArticle: Map<string, string[]>,
+): (RankedItem & { articleId: string }) | null {
   if (!raw || typeof raw !== "object") return null;
   const rec = raw as Record<string, unknown>;
   const articleId = rec.articleId ?? rec.article_id;
@@ -165,7 +173,21 @@ function parseRankedItem(
     nearDuplicateOfArticleId = null;
   }
 
-  return { articleId, aiScore, reason, nearDuplicateOfArticleId };
+  const candidates = candidateTopicShortIdsByArticle.get(articleId) ?? [];
+  const confirmedRaw = rec.confirmedTopicIds ?? rec.confirmed_topic_ids;
+  let confirmedTopicIds: string[];
+  if (Array.isArray(confirmedRaw)) {
+    const candidateSet = new Set(candidates);
+    confirmedTopicIds = confirmedRaw.filter(
+      (v): v is string => typeof v === "string" && candidateSet.has(v),
+    );
+  } else {
+    // Model omitted the field — keep the full keyword-matched candidate set
+    // rather than silently unfollowing the article from all its topics.
+    confirmedTopicIds = candidates;
+  }
+
+  return { articleId, aiScore, reason, nearDuplicateOfArticleId, confirmedTopicIds };
 }
 
 /**
@@ -181,21 +203,39 @@ export async function rankArticleBatch(
   const summaryMax = input.summaryMaxChars ?? DEFAULT_SUMMARY_MAX;
   const shortToReal = new Map<string, string>();
   const realToShort = new Map<string, string>();
+
+  /** Short opaque topic refs (t0, t1, …) so confirmedTopicIds stay small/stable. */
+  const topicShortToReal = new Map<string, string>();
+  const topicRealToShort = new Map<string, string>();
+  input.topics.forEach((t, i) => {
+    if (!t.id) return;
+    const shortId = `t${i}`;
+    topicShortToReal.set(shortId, t.id);
+    topicRealToShort.set(t.id, shortId);
+  });
+
+  const candidateTopicShortIdsByArticle = new Map<string, string[]>();
   const shortArticles = input.articles.map((a, i) => {
     const shortId = toShortId(i);
     shortToReal.set(shortId, a.articleId);
     realToShort.set(a.articleId, shortId);
+    const candidateTopics = (a.candidateTopicIds ?? [])
+      .map((id) => topicRealToShort.get(id))
+      .filter((v): v is string => v !== undefined);
+    candidateTopicShortIdsByArticle.set(shortId, candidateTopics);
     return {
       articleId: shortId,
       title: a.title,
       summary: truncate(a.summary, summaryMax),
       ...(a.showTitle ? { showTitle: truncate(a.showTitle, summaryMax) } : {}),
+      ...(candidateTopics.length > 0 ? { candidateTopics } : {}),
     };
   });
   const knownShortIds = new Set(shortToReal.keys());
 
   const topicsJson = JSON.stringify(
-    input.topics.map((t) => ({
+    input.topics.map((t, i) => ({
+      ...(topicShortToReal.has(`t${i}`) ? { id: `t${i}` } : {}),
       name: t.name,
       keywords: t.keywords,
       weight: t.weight,
@@ -230,7 +270,11 @@ export async function rankArticleBatch(
   const seen = new Set<string>();
   for (const item of parsed) {
     try {
-      const ranked = parseRankedItem(item, knownShortIds);
+      const ranked = parseRankedItem(
+        item,
+        knownShortIds,
+        candidateTopicShortIdsByArticle,
+      );
       if (!ranked || seen.has(ranked.articleId)) continue;
       seen.add(ranked.articleId);
 
@@ -242,11 +286,16 @@ export async function rankArticleBatch(
         nearDup = shortToReal.get(ranked.nearDuplicateOfArticleId) ?? null;
       }
 
+      const confirmedTopicIds = ranked.confirmedTopicIds
+        .map((shortTopicId) => topicShortToReal.get(shortTopicId))
+        .filter((v): v is string => v !== undefined);
+
       out.push({
         articleId: realId,
         aiScore: ranked.aiScore,
         reason: ranked.reason,
         nearDuplicateOfArticleId: nearDup,
+        confirmedTopicIds,
       });
     } catch {
       // continue on malformed item

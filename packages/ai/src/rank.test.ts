@@ -93,6 +93,106 @@ describe("rankArticleBatch", () => {
     assert.equal(ranked.items[0]?.nearDuplicateOfArticleId, null);
   });
 
+  it("maps confirmedTopicIds from short topic refs back to real topic ids", async () => {
+    const topicsWithIds = [
+      { id: "topic-space", name: "Space & matter", keywords: ["space"], weight: 1 },
+      { id: "topic-ai", name: "AI & agents", keywords: ["ai", "agents"], weight: 1 },
+    ];
+    const articlesWithCandidates = [
+      {
+        articleId: "uuid-1111",
+        title: "Wmux - a workspace multiplexer for AI agents",
+        summary: null,
+        candidateTopicIds: ["topic-space", "topic-ai"],
+      },
+    ];
+    const provider = fakeProvider(
+      JSON.stringify([
+        {
+          articleId: "r0",
+          aiScore: 0.6,
+          reason: "About AI agents tooling, not astronomy",
+          confirmedTopicIds: ["t1"],
+        },
+      ]),
+    );
+
+    const ranked = await rankArticleBatch(provider, {
+      topics: topicsWithIds,
+      articles: articlesWithCandidates,
+    });
+    assert.equal(ranked.items.length, 1);
+    assert.deepEqual(ranked.items[0]?.confirmedTopicIds, ["topic-ai"]);
+  });
+
+  it("drops hallucinated confirmedTopicIds outside the article's own candidates", async () => {
+    const topicsWithIds = [
+      { id: "topic-space", name: "Space & matter", keywords: ["space"], weight: 1 },
+      { id: "topic-ai", name: "AI & agents", keywords: ["ai"], weight: 1 },
+    ];
+    const articlesWithCandidates = [
+      {
+        articleId: "uuid-1111",
+        title: "Deep space rover mission",
+        summary: null,
+        candidateTopicIds: ["topic-space"],
+      },
+    ];
+    const provider = fakeProvider(
+      JSON.stringify([
+        {
+          articleId: "r0",
+          aiScore: 0.8,
+          reason: "About space",
+          // t1 (topic-ai) was never a candidate for this article — must be ignored.
+          confirmedTopicIds: ["t0", "t1"],
+        },
+      ]),
+    );
+
+    const ranked = await rankArticleBatch(provider, {
+      topics: topicsWithIds,
+      articles: articlesWithCandidates,
+    });
+    assert.deepEqual(ranked.items[0]?.confirmedTopicIds, ["topic-space"]);
+  });
+
+  it("falls back to the full candidate set when the model omits confirmedTopicIds", async () => {
+    const topicsWithIds = [
+      { id: "topic-space", name: "Space & matter", keywords: ["space"], weight: 1 },
+    ];
+    const articlesWithCandidates = [
+      {
+        articleId: "uuid-1111",
+        title: "Deep space rover mission",
+        summary: null,
+        candidateTopicIds: ["topic-space"],
+      },
+    ];
+    const provider = fakeProvider(
+      JSON.stringify([
+        { articleId: "r0", aiScore: 0.8, reason: "About space" },
+      ]),
+    );
+
+    const ranked = await rankArticleBatch(provider, {
+      topics: topicsWithIds,
+      articles: articlesWithCandidates,
+    });
+    assert.deepEqual(ranked.items[0]?.confirmedTopicIds, ["topic-space"]);
+  });
+
+  it("returns an empty confirmedTopicIds array when the article had no candidates", async () => {
+    const provider = fakeProvider(
+      JSON.stringify([
+        { articleId: "r0", aiScore: 0.9, reason: "Strong LLM match" },
+        { articleId: "r1", aiScore: 0.2, reason: "Weak" },
+      ]),
+    );
+    const ranked = await rankArticleBatch(provider, { topics, articles });
+    assert.deepEqual(ranked.items[0]?.confirmedTopicIds, []);
+  });
+
   it("extractJsonArray unwraps { results: [...] } objects", () => {
     const parsed = extractJsonArray(
       JSON.stringify({ results: [{ articleId: "r0", aiScore: 1 }] }),

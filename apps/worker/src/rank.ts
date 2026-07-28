@@ -259,6 +259,7 @@ async function loadCandidateArticles(db: Database, userId: string) {
       scoredAt: userArticleScores.scoredAt,
       status: userArticleScores.status,
       keywordScore: userArticleScores.keywordScore,
+      matchedTopicIds: userArticleScores.matchedTopicIds,
       evaluationId: userArticleEvaluations.id,
       evaluationHit: userArticleEvaluations.hit,
       evaluatedAt: userArticleEvaluations.evaluatedAt,
@@ -335,6 +336,7 @@ async function upsertKeywordScore(
     articleId: string;
     keywordScore: number;
     reason: string | null;
+    matchedTopicIds: string[];
     existingStatus: string | null;
     existingId: string | null;
   },
@@ -349,6 +351,7 @@ async function upsertKeywordScore(
         keywordScore: args.keywordScore,
         finalRank,
         reason: args.reason,
+        matchedTopicIds: args.matchedTopicIds,
         aiScore: null,
         scoredAt: now,
         updatedAt: now,
@@ -368,6 +371,7 @@ async function upsertKeywordScore(
       aiScore: null,
       finalRank,
       reason: args.reason,
+      matchedTopicIds: args.matchedTopicIds,
       nearDuplicateOfArticleId: null,
       status: "new",
       scoredAt: now,
@@ -380,6 +384,7 @@ async function upsertKeywordScore(
         keywordScore: args.keywordScore,
         finalRank,
         reason: args.reason,
+        matchedTopicIds: args.matchedTopicIds,
         aiScore: null,
         scoredAt: now,
         updatedAt: now,
@@ -399,6 +404,7 @@ async function applyAiScores(
     aiScore: number;
     reason: string;
     nearDuplicateOfArticleId?: string | null;
+    confirmedTopicIds: string[];
   }>,
 ): Promise<number> {
   const byId = new Map(ranked.map((r) => [r.articleId, r]));
@@ -425,6 +431,7 @@ async function applyAiScores(
           aiScore: ai.aiScore,
           reason: ai.reason,
           nearDuplicateOfArticleId: nearDup,
+          matchedTopicIds: ai.confirmedTopicIds,
           finalRank,
           scoredAt: now,
           updatedAt: now,
@@ -444,6 +451,7 @@ async function applyAiScores(
           aiScore: ai.aiScore,
           reason: ai.reason,
           nearDuplicateOfArticleId: null,
+          matchedTopicIds: ai.confirmedTopicIds,
           finalRank,
           scoredAt: now,
           updatedAt: now,
@@ -516,6 +524,7 @@ export async function runRank(
         summary: string | null;
         showTitle: string | null;
         keywordScore: number;
+        matchedTopicIds: string[];
       }> = [];
 
       for (const cand of candidates) {
@@ -532,6 +541,7 @@ export async function runRank(
             summary: cand.summary,
             showTitle: cand.showTitle,
             keywordScore: cand.keywordScore ?? 0,
+            matchedTopicIds: cand.matchedTopicIds ?? [],
           });
           continue;
         }
@@ -555,6 +565,7 @@ export async function runRank(
           articleId: cand.id,
           keywordScore: match.keywordScore,
           reason: match.reason,
+          matchedTopicIds: match.matchedTopicIds,
           existingStatus: cand.status,
           existingId: cand.scoreId,
         });
@@ -565,6 +576,7 @@ export async function runRank(
           summary: cand.summary,
           showTitle: cand.showTitle,
           keywordScore: match.keywordScore,
+          matchedTopicIds: match.matchedTopicIds,
         });
       }
 
@@ -602,6 +614,7 @@ export async function runRank(
         try {
           const ranked = await rankArticleBatch(provider, {
             topics: keywordTopics.map((t) => ({
+              id: t.id,
               name: t.name ?? "",
               keywords: t.keywords,
               weight: t.weight,
@@ -611,6 +624,7 @@ export async function runRank(
               title: c.title,
               summary: c.summary,
               showTitle: c.showTitle,
+              candidateTopicIds: c.matchedTopicIds,
             })),
           });
           if (ranked.usage) {
