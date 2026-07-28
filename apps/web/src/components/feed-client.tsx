@@ -619,7 +619,12 @@ export function FeedClient(): ReactNode {
                 : null}
             </p>
           ) : topics.length > 0 ? (
-            <p className="topic-filter-hint">All topics</p>
+            <p className="topic-filter-hint">
+              All topics
+              {matchedCount != null
+                ? ` · ${matchedCount} article${matchedCount === 1 ? "" : "s"}`
+                : null}
+            </p>
           ) : null}
         </div>
 
