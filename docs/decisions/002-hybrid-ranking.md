@@ -21,6 +21,8 @@ Feed ranking needs a deterministic keyword shortlist (no Ollama) plus a batch AI
 
 6. **Topic membership** — keyword match decides which topics an article *candidates* for (shortlist gate, unchanged); the AI then confirms which of those candidates it's genuinely about. The feed's `topic=` filter reads that AI-narrowed set rather than re-deriving membership from raw keywords. See `004-ai-confirmed-topic-membership.md`.
 
+7. **Reason quality** — the small local model sometimes returns a `reason` that just restates the prompt's own instructions instead of describing the article (e.g. "Candidate topics fully match confirmed topic ids…", "superficial word overlap, not a genuine match" copied verbatim). `parseRankedItem` (`packages/ai/src/rank.ts`) detects these boilerplate phrases and falls back to the keyword-match reason (`"Matched keywords: …"`, already computed by `scoreKeywordMatch`) instead of showing the model's meta text; the generic `"Relevant to your topics."` string is now a last-resort default only when no keyword reason exists either. Fixed 2026-07-28 — the underlying classification (`confirmedTopicIds`) is unaffected; this only improves the displayed explanation.
+
 ## Consequences
 
 - CI uses mocked `AiProvider`; live Ollama remains optional (`pnpm ai:smoke`).

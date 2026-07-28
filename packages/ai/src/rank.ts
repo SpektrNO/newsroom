@@ -16,6 +16,12 @@ export type RankArticleInput = {
   showTitle?: string | null;
   /** Topic ids this article already keyword-matched (the AI narrows, never adds to this set). */
   candidateTopicIds?: string[];
+  /**
+   * Keyword-match reason (e.g. "Matched keywords: llm, agent") used as the
+   * displayed reason when the model omits one or returns boilerplate that
+   * just restates these instructions instead of describing the article.
+   */
+  keywordReason?: string | null;
 };
 
 export type RankedItem = {
@@ -68,13 +74,30 @@ function buildPrompt(
     "The top-level JSON value MUST be an array (not a single object).",
     'Each element: {"articleId":"r0","aiScore":0.0,"reason":"one line","confirmedTopicIds":["t0"],"nearDuplicateOfArticleId":null}',
     "aiScore is a number from 0 to 1. Use the exact articleId values from the input (r0, r1, …).",
-    "Each article includes candidateTopics: topic ids it keyword-matched. confirmedTopicIds must be the subset of that article's OWN candidateTopics it is genuinely about, not just superficial word overlap (e.g. the word \"space\" appearing inside \"workspace\" does not count as the Space topic). Return an empty array if none genuinely fit. Never invent ids outside that article's candidateTopics.",
+    "reason: state what the article is actually about, in your own words, in under 20 words (e.g. \"Benchmarks a new open-source LLM inference engine\"). Never describe these instructions, the matching process, or mention the words candidateTopics/confirmedTopicIds.",
+    "Each article includes candidateTopics: topic ids it keyword-matched, listed only as a hint. confirmedTopicIds must be the subset of that article's OWN candidateTopics it is genuinely about — judge from the article's actual subject, not from whether a keyword string happens to appear (e.g. the word \"space\" inside \"workspace\" is not the Space topic). Return an empty array if none genuinely fit. Never invent ids outside that article's candidateTopics.",
     "nearDuplicateOfArticleId must be another articleId in this list, or null.",
     `Include exactly ${articleCount} objects — every input articleId once.`,
     "",
     `topics: ${topicsJson}`,
     `articles: ${articlesJson}`,
   ].join("\n");
+}
+
+/**
+ * Small local models sometimes echo the prompt's own instructions instead of
+ * describing the article (e.g. "Candidate topics fully match confirmed
+ * topic ids…"). Treat that as no reason and fall back to the keyword match.
+ */
+const BOILERPLATE_REASON_PATTERNS = [
+  "candidate topic",
+  "confirmed topic",
+  "superficial word overlap",
+];
+
+function isBoilerplateReason(reason: string): boolean {
+  const lower = reason.toLowerCase();
+  return BOILERPLATE_REASON_PATTERNS.some((p) => lower.includes(p));
 }
 
 function looksLikeRankItem(value: unknown): boolean {
@@ -142,6 +165,7 @@ function parseRankedItem(
   raw: unknown,
   knownShortIds: Set<string>,
   candidateTopicShortIdsByArticle: Map<string, string[]>,
+  fallbackReasonByArticle: Map<string, string>,
 ): (RankedItem & { articleId: string }) | null {
   if (!raw || typeof raw !== "object") return null;
   const rec = raw as Record<string, unknown>;
@@ -159,10 +183,14 @@ function parseRankedItem(
   if (aiScore === null) return null;
 
   const reasonRaw = rec.reason;
+  const fallbackReason =
+    fallbackReasonByArticle.get(articleId) ?? "Relevant to your topics.";
   const reason =
-    typeof reasonRaw === "string" && reasonRaw.trim()
+    typeof reasonRaw === "string" &&
+    reasonRaw.trim() &&
+    !isBoilerplateReason(reasonRaw)
       ? reasonRaw.trim().slice(0, 500)
-      : "Relevant to your topics.";
+      : fallbackReason;
 
   let nearDuplicateOfArticleId: string | null = null;
   const dupRaw =
@@ -215,6 +243,7 @@ export async function rankArticleBatch(
   });
 
   const candidateTopicShortIdsByArticle = new Map<string, string[]>();
+  const fallbackReasonByArticle = new Map<string, string>();
   const shortArticles = input.articles.map((a, i) => {
     const shortId = toShortId(i);
     shortToReal.set(shortId, a.articleId);
@@ -223,6 +252,9 @@ export async function rankArticleBatch(
       .map((id) => topicRealToShort.get(id))
       .filter((v): v is string => v !== undefined);
     candidateTopicShortIdsByArticle.set(shortId, candidateTopics);
+    if (a.keywordReason?.trim()) {
+      fallbackReasonByArticle.set(shortId, a.keywordReason.trim());
+    }
     return {
       articleId: shortId,
       title: a.title,
@@ -274,6 +306,7 @@ export async function rankArticleBatch(
         item,
         knownShortIds,
         candidateTopicShortIdsByArticle,
+        fallbackReasonByArticle,
       );
       if (!ranked || seen.has(ranked.articleId)) continue;
       seen.add(ranked.articleId);

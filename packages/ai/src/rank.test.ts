@@ -193,6 +193,87 @@ describe("rankArticleBatch", () => {
     assert.deepEqual(ranked.items[0]?.confirmedTopicIds, []);
   });
 
+  it("falls back to the keyword reason when the model returns none", async () => {
+    const provider = fakeProvider(
+      JSON.stringify([{ articleId: "r0", aiScore: 0.5 }]),
+    );
+    const articlesWithKeywordReason = [
+      {
+        articleId: "uuid-1111",
+        title: "LLM news",
+        summary: "About models",
+        keywordReason: "Matched keywords: llm, agent",
+      },
+    ];
+    const ranked = await rankArticleBatch(provider, {
+      topics,
+      articles: articlesWithKeywordReason,
+    });
+    assert.equal(ranked.items[0]?.reason, "Matched keywords: llm, agent");
+  });
+
+  it("falls back to the keyword reason when the model's reason just restates the prompt", async () => {
+    const provider = fakeProvider(
+      JSON.stringify([
+        {
+          articleId: "r0",
+          aiScore: 0.5,
+          reason:
+            "Candidate topics fully match confirmed topic ids for AI topic",
+        },
+      ]),
+    );
+    const articlesWithKeywordReason = [
+      {
+        articleId: "uuid-1111",
+        title: "LLM news",
+        summary: "About models",
+        keywordReason: "Matched keywords: llm",
+      },
+    ];
+    const ranked = await rankArticleBatch(provider, {
+      topics,
+      articles: articlesWithKeywordReason,
+    });
+    assert.equal(ranked.items[0]?.reason, "Matched keywords: llm");
+  });
+
+  it("uses the generic default when neither the model nor keyword reason is available", async () => {
+    const provider = fakeProvider(
+      JSON.stringify([{ articleId: "r0", aiScore: 0.5 }]),
+    );
+    const ranked = await rankArticleBatch(provider, { topics, articles });
+    assert.equal(ranked.items[0]?.reason, "Relevant to your topics.");
+  });
+
+  it("keeps a genuine model reason that doesn't echo the prompt", async () => {
+    const provider = fakeProvider(
+      JSON.stringify([
+        {
+          articleId: "r0",
+          aiScore: 0.9,
+          reason: "Benchmarks a new open-source LLM inference engine",
+        },
+      ]),
+    );
+    const articlesWithKeywordReason = [
+      {
+        articleId: "uuid-1111",
+        title: "LLM news",
+        summary: "About models",
+        keywordReason: "Matched keywords: llm",
+      },
+    ];
+    const ranked = await rankArticleBatch(provider, {
+      topics,
+      articles: articlesWithKeywordReason,
+    });
+    assert.equal(
+      ranked.items[0]?.reason,
+      "Benchmarks a new open-source LLM inference engine",
+    );
+  });
+
   it("extractJsonArray unwraps { results: [...] } objects", () => {
     const parsed = extractJsonArray(
       JSON.stringify({ results: [{ articleId: "r0", aiScore: 1 }] }),

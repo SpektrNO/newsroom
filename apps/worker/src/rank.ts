@@ -259,6 +259,7 @@ async function loadCandidateArticles(db: Database, userId: string) {
       scoredAt: userArticleScores.scoredAt,
       status: userArticleScores.status,
       keywordScore: userArticleScores.keywordScore,
+      reason: userArticleScores.reason,
       matchedTopicIds: userArticleScores.matchedTopicIds,
       evaluationId: userArticleEvaluations.id,
       evaluationHit: userArticleEvaluations.hit,
@@ -525,6 +526,7 @@ export async function runRank(
         showTitle: string | null;
         keywordScore: number;
         matchedTopicIds: string[];
+        keywordReason: string | null;
       }> = [];
 
       for (const cand of candidates) {
@@ -542,6 +544,7 @@ export async function runRank(
             showTitle: cand.showTitle,
             keywordScore: cand.keywordScore ?? 0,
             matchedTopicIds: cand.matchedTopicIds ?? [],
+            keywordReason: cand.reason ?? null,
           });
           continue;
         }
@@ -577,6 +580,7 @@ export async function runRank(
           showTitle: cand.showTitle,
           keywordScore: match.keywordScore,
           matchedTopicIds: match.matchedTopicIds,
+          keywordReason: match.reason,
         });
       }
 
@@ -625,6 +629,7 @@ export async function runRank(
               summary: c.summary,
               showTitle: c.showTitle,
               candidateTopicIds: c.matchedTopicIds,
+              keywordReason: c.keywordReason,
             })),
           });
           if (ranked.usage) {
