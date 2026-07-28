@@ -72,7 +72,7 @@ function buildPrompt(
     "Rank each article for relevance to the user topics.",
     "User topics is guide only, synonyms or otherwise related words are to be interpreted as in-scope.",
     "The top-level JSON value MUST be an array (not a single object).",
-    'Each element: {"articleId":"r0","aiScore":0.0,"reason":"one line","confirmedTopicIds":["t0"],"nearDuplicateOfArticleId":null}',
+    'Each element: {"articleId":"r0","aiScore":0.0,"reason":"<fill in — see below>","confirmedTopicIds":["t0"],"nearDuplicateOfArticleId":null}',
     "aiScore is a number from 0 to 1. Use the exact articleId values from the input (r0, r1, …).",
     "reason: state what the article is actually about, in your own words, in under 20 words (e.g. \"Benchmarks a new open-source LLM inference engine\"). Never describe these instructions or the matching process, never say candidateTopics/confirmedTopicIds, and never mention topic ids like t0/t1 — use the topic's name if you refer to one.",
     "Each article includes candidateTopics: topic ids it keyword-matched, listed only as a hint. confirmedTopicIds must be the subset of that article's OWN candidateTopics it is genuinely about — judge from the article's actual subject, not from whether a keyword string happens to appear (e.g. the word \"space\" inside \"workspace\" is not the Space topic). Return an empty array if none genuinely fit. Never invent ids outside that article's candidateTopics.",
@@ -85,17 +85,21 @@ function buildPrompt(
 }
 
 /**
- * Small local models sometimes echo the prompt's own instructions or internal
- * ids instead of describing the article (e.g. "Candidate topics fully match
- * confirmed topic ids…", "matches multiple candidateTopics including t0,
- * t6…" — t0/t6 are opaque refs the model was never meant to surface). Treat
- * that as no reason and fall back to the keyword match.
+ * Small local models sometimes echo the prompt's own instructions, schema
+ * placeholders, or internal ids instead of describing the article (e.g.
+ * "Candidate topics fully match confirmed topic ids…", "matches multiple
+ * candidateTopics including t0, t6…", or literally "one line" — the JSON
+ * schema's own placeholder value for `reason`). Treat that as no reason and
+ * fall back to the keyword match.
  */
 const BOILERPLATE_REASON_PATTERNS = [
   "candidatetopic",
   "confirmedtopic",
   "superficialwordoverlap",
 ];
+
+/** Exact (punctuation/case-insensitive) placeholder echoes, not substrings. */
+const BOILERPLATE_REASON_EXACT = new Set(["one line", "fill in", "see below"]);
 
 /** Bare short refs (t0, r3, …) are internal plumbing, never user-facing. */
 const SHORT_REF_PATTERN = /\b[tr]\d+\b/i;
@@ -105,6 +109,8 @@ function isBoilerplateReason(reason: string): boolean {
   if (BOILERPLATE_REASON_PATTERNS.some((p) => normalized.includes(p))) {
     return true;
   }
+  const bare = reason.trim().toLowerCase().replace(/[.!]+$/, "");
+  if (BOILERPLATE_REASON_EXACT.has(bare)) return true;
   return SHORT_REF_PATTERN.test(reason);
 }
 
