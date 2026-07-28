@@ -113,6 +113,7 @@ async function loadFeedCounts(args: {
   statusFilter: UserArticleScoreStatus | null;
   topicIds: string[] | null;
   topicKeywords: string[] | null;
+  topicInheritedKeywords: string[] | null;
   sourceFilter: string | null;
   searchQuery: string | null;
 }): Promise<{
@@ -203,6 +204,7 @@ async function loadFeedCounts(args: {
   const matchedCount = countMatchingFeedRows(scanRows, {
     topicIds: args.topicIds,
     topicKeywords: args.topicKeywords,
+    topicInheritedKeywords: args.topicInheritedKeywords,
     sourceFilter: args.sourceFilter,
     // Search already applied in SQL.
     searchQuery: null,
@@ -263,7 +265,11 @@ export async function GET(request: Request) {
     }
   }
 
+  // Kept separate (not flattened) — inherited/ancestor keywords must never
+  // count as a primary match on their own, only as a weak boost once a
+  // topic's own keyword has already matched. See scoreKeywordMatch.
   let topicKeywords: string[] | null = null;
+  let topicInheritedKeywords: string[] | null = null;
   if (topicIds.length > 0) {
     const topicRows = await getDb()
       .select()
@@ -278,17 +284,25 @@ export async function GET(request: Request) {
       return Response.json({ error: "invalid_filter" }, { status: 400 });
     }
     const keywords: string[] = [];
+    const inheritedKeywords: string[] = [];
     const seenKw = new Set<string>();
+    const seenInherited = new Set<string>();
     for (const topic of topicRows) {
-      const inherited = inheritedKeywordsForTopicName(topic.name);
-      for (const kw of [...(topic.keywords ?? []), ...inherited]) {
+      for (const kw of topic.keywords ?? []) {
         const key = kw.trim().toLowerCase();
         if (!key || seenKw.has(key)) continue;
         seenKw.add(key);
         keywords.push(kw.trim());
       }
+      for (const kw of inheritedKeywordsForTopicName(topic.name)) {
+        const key = kw.trim().toLowerCase();
+        if (!key || seenInherited.has(key)) continue;
+        seenInherited.add(key);
+        inheritedKeywords.push(kw.trim());
+      }
     }
     topicKeywords = keywords;
+    topicInheritedKeywords = inheritedKeywords;
   }
 
   const conditions = [
@@ -350,6 +364,7 @@ export async function GET(request: Request) {
       statusFilter,
       topicIds: topicIds.length > 0 ? topicIds : null,
       topicKeywords,
+      topicInheritedKeywords,
       sourceFilter,
       searchQuery,
     }),
@@ -422,7 +437,7 @@ export async function GET(request: Request) {
           row.title,
           row.summary,
           topicKeywords ?? [],
-          undefined,
+          topicInheritedKeywords ?? undefined,
           row.showTitle,
         )
       ) {

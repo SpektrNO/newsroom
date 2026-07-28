@@ -5,6 +5,10 @@
  * `showTitle` + `summary` (word-boundary, not raw substring — "space" won't
  * fire inside "workspace").
  * Score: min(1, sum of primary hits × weight × 0.25 + inherited hits × weight × 0.1).
+ * Inherited (ancestor) keywords never hit a topic on their own — e.g. an
+ * article mentioning "culture" shouldn't match the "Design & media" leaf
+ * just because "Culture & Society" is its ancestor. They only add a weak
+ * score boost once a primary (leaf) keyword has already matched.
  */
 
 import { inheritedKeywordsForTopicName } from "./topic-keywords.js";
@@ -80,31 +84,38 @@ export function scoreKeywordMatch(
 
   for (const topic of topics) {
     const weight = Number.isFinite(topic.weight) ? topic.weight : 1;
-    let topicHit = false;
+    let primaryHit = false;
     const primaryKeys = new Set(
       topic.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean),
     );
+    const topicMatchedKeywords: string[] = [];
     for (const raw of topic.keywords) {
       const kw = raw.trim().toLowerCase();
       if (!kw) continue;
       if (matchesKeyword(text, kw)) {
         sum += weight * 0.25;
-        topicHit = true;
-        if (!matchedKeywords.includes(kw)) matchedKeywords.push(kw);
+        primaryHit = true;
+        topicMatchedKeywords.push(kw);
       }
     }
-    for (const raw of topic.inheritedKeywords ?? []) {
-      const kw = raw.trim().toLowerCase();
-      if (!kw || primaryKeys.has(kw)) continue;
-      if (matchesKeyword(text, kw)) {
-        sum += weight * INHERITED_KEYWORD_WEIGHT_FACTOR;
-        topicHit = true;
-        if (!matchedKeywords.includes(kw)) matchedKeywords.push(kw);
+    // Inherited (ancestor) keywords only add a weak boost once the topic's
+    // own keywords have matched — they must never trigger a hit alone.
+    if (primaryHit) {
+      for (const raw of topic.inheritedKeywords ?? []) {
+        const kw = raw.trim().toLowerCase();
+        if (!kw || primaryKeys.has(kw)) continue;
+        if (matchesKeyword(text, kw)) {
+          sum += weight * INHERITED_KEYWORD_WEIGHT_FACTOR;
+          topicMatchedKeywords.push(kw);
+        }
       }
     }
-    if (topicHit) {
+    if (primaryHit) {
       maxMatchedWeight = Math.max(maxMatchedWeight, weight);
       if (topic.id) matchedTopicIds.push(topic.id);
+      for (const kw of topicMatchedKeywords) {
+        if (!matchedKeywords.includes(kw)) matchedKeywords.push(kw);
+      }
     }
   }
 

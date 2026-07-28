@@ -262,6 +262,7 @@ export function countMatchingFeedRows(
   opts: {
     topicIds: string[] | null;
     topicKeywords: string[] | null;
+    topicInheritedKeywords?: string[] | null;
     sourceFilter: string | null;
     searchQuery: string | null;
     sourceTypesByArticle: Map<string, Set<string>>;
@@ -278,7 +279,7 @@ export function countMatchingFeedRows(
           row.title,
           row.summary,
           opts.topicKeywords ?? [],
-          undefined,
+          opts.topicInheritedKeywords ?? undefined,
           row.showTitle,
         )
       ) {

@@ -76,7 +76,28 @@ describe("scoreKeywordMatch", () => {
     // 5 × 2 × 0.25 = 2.5 → min(1, 2.5) = 1
     assert.equal(result.keywordScore, 1);
   });
-  it("scores inherited ancestor keywords more weakly", () => {
+  it("scores inherited ancestor keywords more weakly, on top of a primary hit", () => {
+    const result = scoreKeywordMatch(
+      "New evals for Technology breakthrough",
+      null,
+      [
+        {
+          id: "evals",
+          name: "Evals & safety",
+          keywords: ["evals", "safety"],
+          inheritedKeywords: ["Technology", "AI", "Machine", "Learning"],
+          weight: 1,
+        },
+      ],
+    );
+    assert.equal(result.hit, true);
+    // 1 primary (evals) × 1 × 0.25 + 1 inherited (Technology) × 1 × 0.1 = 0.35
+    assert.equal(result.keywordScore, 0.35);
+  });
+
+  it("does not hit on an inherited ancestor keyword alone", () => {
+    // Regression: an article merely mentioning "culture" must not match the
+    // "Design & media" leaf just because "Culture & Society" is its ancestor.
     const result = scoreKeywordMatch(
       "New Technology breakthrough",
       null,
@@ -90,8 +111,9 @@ describe("scoreKeywordMatch", () => {
         },
       ],
     );
-    assert.equal(result.hit, true);
-    assert.equal(result.keywordScore, 0.1);
+    assert.equal(result.hit, false);
+    assert.equal(result.keywordScore, 0);
+    assert.deepEqual(result.matchedTopicIds, []);
   });
 
   it("does not double-count inherited tokens already in primary keywords", () => {
