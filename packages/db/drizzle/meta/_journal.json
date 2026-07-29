@@ -78,6 +78,13 @@
       "when": 1785310040753,
       "tag": "0010_woozy_prima",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785329377467,
+      "tag": "0011_loose_the_enforcers",
+      "breakpoints": true
     }
   ]
 }

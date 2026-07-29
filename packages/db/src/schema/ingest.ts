@@ -15,6 +15,10 @@ import { user } from "./auth.js";
 export type SourceSubscriptionConfig = {
   mode?: "top" | "new";
   rssUrl?: string;
+  /** Bluesky handle or DID (normalized in app before insert). */
+  handle?: string;
+  /** Resolved Bluesky DID when known (optional). */
+  did?: string;
   [key: string]: unknown;
 };
 
@@ -54,6 +58,10 @@ export const sourceSubscriptions = pgTable(
     uniqueIndex("source_subscriptions_user_podcast_rss_uidx")
       .on(table.userId, sql`(${table.config}->>'rssUrl')`)
       .where(sql`${table.sourceType} = 'podcast'`),
+    /** One Bluesky handle per user (handle normalized in app before insert). */
+    uniqueIndex("source_subscriptions_user_bluesky_handle_uidx")
+      .on(table.userId, sql`(${table.config}->>'handle')`)
+      .where(sql`${table.sourceType} = 'bluesky'`),
   ],
 );
 

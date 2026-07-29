@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "source_subscriptions_user_bluesky_handle_uidx" ON "source_subscriptions" USING btree ("user_id",("config"->>'handle')) WHERE "source_subscriptions"."source_type" = 'bluesky';
