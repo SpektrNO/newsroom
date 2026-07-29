@@ -28,6 +28,16 @@ function configSummary(source: Source): string {
       ? source.config.rssUrl
       : "RSS feed";
   }
+  if (source.sourceType === "bluesky") {
+    const handle =
+      typeof source.config.handle === "string" ? source.config.handle : "";
+    const did =
+      typeof source.config.did === "string" ? source.config.did : "";
+    if (handle && did) return `${handle} · ${did}`;
+    if (handle) return handle;
+    if (did) return did;
+    return "Bluesky account";
+  }
   return "";
 }
 
@@ -35,6 +45,7 @@ function sourceTypeLabel(sourceType: string): string {
   if (sourceType === "hackernews") return "Hacker News";
   if (sourceType === "podcast") return "Podcast";
   if (sourceType === "substack") return "Feed";
+  if (sourceType === "bluesky") return "Bluesky";
   return sourceType;
 }
 
@@ -49,8 +60,10 @@ export function SourcesClient(): ReactNode {
   const [catalogNote, setCatalogNote] = useState<string | null>(null);
   const [rssUrl, setRssUrl] = useState("");
   const [podcastRssUrl, setPodcastRssUrl] = useState("");
+  const [blueskyHandle, setBlueskyHandle] = useState("");
   const [pending, setPending] = useState(false);
   const [podcastPending, setPodcastPending] = useState(false);
+  const [blueskyPending, setBlueskyPending] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState("");
 
@@ -140,6 +153,24 @@ export function SourcesClient(): ReactNode {
     }
   }
 
+  async function addBluesky(event: FormEvent) {
+    event.preventDefault();
+    setFormError(null);
+    setBlueskyPending(true);
+    try {
+      await api.createSource({
+        sourceType: "bluesky",
+        config: { handle: blueskyHandle.trim() },
+      });
+      setBlueskyHandle("");
+      await refresh();
+    } catch (err) {
+      mapSourceError(err, setFormError, "Check the Bluesky handle.");
+    } finally {
+      setBlueskyPending(false);
+    }
+  }
+
   async function addCatalogFeed(feed: FeedCatalogEntry) {
     if (!window.confirm(`Add “${feed.label}” to your sources?`)) return;
     setCatalogNote(null);
@@ -188,8 +219,9 @@ export function SourcesClient(): ReactNode {
       <header className="page-header">
         <h1 className="page-title">Sources</h1>
         <p className="page-lede">
-          Connect Hacker News, newsletters, and podcasts that fill your ranked
-          list. Browse the catalog if you don’t already know a newsletter URL.
+          Connect Hacker News, newsletters, podcasts, and Bluesky accounts that
+          fill your ranked list. Browse the catalog if you don’t already know a
+          newsletter URL.
         </p>
       </header>
 
@@ -208,13 +240,13 @@ export function SourcesClient(): ReactNode {
           </label>
           {formError ? <p className="error">{formError}</p> : null}
           <div className="form-actions">
-            <button type="submit" disabled={pending || podcastPending}>
+            <button type="submit" disabled={pending || podcastPending || blueskyPending}>
               {pending ? "Adding…" : "Add feed"}
             </button>
             <button
               type="button"
               className="ghost"
-              disabled={pending || podcastPending || hasHn}
+              disabled={pending || podcastPending || blueskyPending || hasHn}
               onClick={() => void addHackerNews()}
             >
               Add Hacker News
@@ -240,8 +272,35 @@ export function SourcesClient(): ReactNode {
             />
           </label>
           <div className="form-actions">
-            <button type="submit" disabled={pending || podcastPending}>
+            <button type="submit" disabled={pending || podcastPending || blueskyPending}>
               {podcastPending ? "Adding…" : "Add podcast"}
+            </button>
+          </div>
+          {formError ? <p className="error">{formError}</p> : null}
+        </form>
+      </div>
+
+      <div className="manage-form panel-soft">
+        <h2 className="form-heading">Add Bluesky</h2>
+        <form className="form" onSubmit={(e) => void addBluesky(e)}>
+          <label>
+            Handle
+            <input
+              type="text"
+              value={blueskyHandle}
+              onChange={(e) => setBlueskyHandle(e.target.value)}
+              placeholder="jay.bsky.social"
+              required
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+          <div className="form-actions">
+            <button
+              type="submit"
+              disabled={pending || podcastPending || blueskyPending}
+            >
+              {blueskyPending ? "Adding…" : "Add Bluesky"}
             </button>
           </div>
           {formError ? <p className="error">{formError}</p> : null}
@@ -259,7 +318,7 @@ export function SourcesClient(): ReactNode {
             {sources.length === 0 ? (
               <p className="empty-copy">
                 No sources yet. Add Hacker News, paste a newsletter or podcast
-                RSS URL, or pick from the catalog below.
+                RSS URL, add a Bluesky handle, or pick from the catalog below.
               </p>
             ) : (
               <ul className="manage-list">
@@ -364,6 +423,7 @@ export function SourcesClient(): ReactNode {
 function mapSourceError(
   err: unknown,
   setFormError: (msg: string) => void,
+  invalidConfigMessage = "Check the RSS URL.",
 ): void {
   if (err instanceof ApiError) {
     if (err.code === "duplicate" || err.status === 409) {
@@ -375,7 +435,7 @@ function mapSourceError(
       return;
     }
     if (err.code === "invalid_config" || err.status === 400) {
-      setFormError("Check the RSS URL.");
+      setFormError(invalidConfigMessage);
       return;
     }
   }
