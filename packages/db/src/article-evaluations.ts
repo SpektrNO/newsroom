@@ -38,14 +38,21 @@ export async function upsertArticleEvaluation(
     });
 }
 
-/** Drop evaluation markers so preference changes re-check keywords. */
+/** Drop keyword-miss markers so preference changes re-check those articles.
+ * Hit evaluations (and their score rows) stay — only earlier misses are reset.
+ */
 export async function invalidatePreferenceEvaluations(
   db: Database,
   userId: string,
 ): Promise<number> {
   const deleted = await db
     .delete(userArticleEvaluations)
-    .where(eq(userArticleEvaluations.userId, userId))
+    .where(
+      and(
+        eq(userArticleEvaluations.userId, userId),
+        eq(userArticleEvaluations.hit, false),
+      ),
+    )
     .returning({ id: userArticleEvaluations.id });
   return deleted.length;
 }

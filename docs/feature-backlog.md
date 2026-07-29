@@ -50,7 +50,7 @@ Personal scores and shared articles stay. Replace “one rank pass walks every u
 | Event | Effect |
 |-------|--------|
 | Ingest upserts articles for a user’s enabled subscriptions | Mark user **dirty** (affected users only). |
-| Topic/source preference change (create/patch/delete/enable, keywords, weight) | Mark user **dirty**; invalidate/stale scores as specified in `rank-dirty-incremental`. |
+| Topic/source preference change (create/patch/delete/enable, keywords, weight) | Mark user **dirty**; clear **keyword-miss** evaluations only (keep scored hits). |
 | Scheduled ingest (~10–15 min, same as today) | After ingest, **enqueue AI rank only for users who are dirty and active**. |
 | User opens feed / hits feed API while dirty | **Catch-up rank** (login or return from idle). |
 | Dirty but idle (no recent feed activity) | Stay dirty; **do not** spend AI until they become active. |
@@ -64,7 +64,7 @@ Notes for `rank-dirty-incremental` (do first):
 
 - **Problem:** Topic/keyword/weight/follow changes and new ingest do not correctly refresh feeds; `worker:rank` still targets “all users with enabled topics,” and already-scored articles are skipped unless the *article* updated.
 - **Dirty users:** Mark a user dirty when (a) their topics change (create/patch/delete/enable), (b) their sources change in a way that affects candidates, or (c) ingest upserts articles linked to their enabled subscriptions.
-- **Invalidation:** On preference dirty, force rescore for that user (e.g. clear or stale-mark their `user_article_scores` except maybe `saved`/`dismissed` status preservation — decide in spec). Rank must re-run keyword pass with current topics.
+- **Invalidation:** On preference dirty, clear **miss** evaluations only so previously skipped articles can match new keywords; **keep** scored hits (`user_article_scores` for `new`/`seen`/`saved`/`dismissed`) and hit evaluations. Explicit **Wipe rankings** still deletes `new`/`seen` scores.
 - **Fanout:** Successful ingest marks **affected users dirty**; enqueue rank per **Cadence policy** (dirty ∩ active), not a global “everyone” pass.
 - **Catch-up:** Feed (or rank-status) path may enqueue/wait for rank when the session user is dirty so returning users get a fresh feed without waiting for the next ingest.
 - **Activity signal:** Record last feed activity (timestamp on user or side table) from authenticated feed reads; used to define **active** for post-ingest enqueue.

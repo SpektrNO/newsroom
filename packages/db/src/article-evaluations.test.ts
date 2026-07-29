@@ -138,16 +138,57 @@ describe("user_article_evaluations", () => {
     assert.equal(missRow?.hit, true);
   });
 
-  it("clears evaluations on preference dirty", async () => {
+  it("clears only miss evaluations on preference dirty; keeps hits and scores", async () => {
+    const now = new Date();
+    await db
+      .delete(userArticleEvaluations)
+      .where(eq(userArticleEvaluations.userId, userId));
+    await db
+      .delete(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+
     await upsertArticleEvaluation(db, {
       userId,
       articleId: hitId,
       hit: true,
     });
-    assert.ok((await countUserEvaluatedArticles(db, userId)) >= 1);
+    await upsertArticleEvaluation(db, {
+      userId,
+      articleId: missId,
+      hit: false,
+    });
+    await db.insert(userArticleScores).values({
+      id: randomUUID(),
+      userId,
+      articleId: hitId,
+      keywordScore: 0.5,
+      aiScore: 0.6,
+      finalRank: 0.55,
+      status: "new",
+      scoredAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
 
     await markUserPreferenceDirty(db, userId);
-    assert.equal(await countUserEvaluatedArticles(db, userId), 0);
+
+    const evals = await db
+      .select()
+      .from(userArticleEvaluations)
+      .where(eq(userArticleEvaluations.userId, userId));
+    assert.equal(evals.length, 1);
+    assert.equal(evals[0]?.articleId, hitId);
+    assert.equal(evals[0]?.hit, true);
+
+    const scores = await db
+      .select()
+      .from(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+    assert.equal(scores.length, 1);
+    assert.equal(scores[0]?.articleId, hitId);
+    assert.equal(scores[0]?.finalRank, 0.55);
+
+    // No remaining misses to clear.
     assert.equal(await invalidatePreferenceEvaluations(db, userId), 0);
   });
 });

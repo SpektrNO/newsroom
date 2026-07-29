@@ -50,8 +50,9 @@ export async function touchFeedActivity(
 }
 
 /**
- * Drop keyword/AI shortlist rows so preference changes re-score.
+ * Drop keyword/AI shortlist rows (new/seen).
  * Preserve saved / dismissed status rows.
+ * Used by explicit wipe — not by topic preference changes.
  */
 export async function invalidatePreferenceScores(
   db: Database,
@@ -69,12 +70,15 @@ export async function invalidatePreferenceScores(
   return deleted.length;
 }
 
-/** Mark dirty and invalidate new/seen scores + evaluations (topic preference path). */
+/**
+ * Mark dirty and clear keyword-miss evaluations only.
+ * Keeps scored hits (and hit evaluations) so the feed is not wiped when
+ * topics/keywords change — earlier misses can still become hits under new prefs.
+ */
 export async function markUserPreferenceDirty(
   db: Database,
   userId: string,
 ): Promise<void> {
-  await invalidatePreferenceScores(db, userId);
   await invalidatePreferenceEvaluations(db, userId);
   await markUserDirty(db, userId);
 }
