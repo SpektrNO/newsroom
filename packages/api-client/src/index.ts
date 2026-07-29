@@ -9,11 +9,13 @@ export type HealthResponse = {
   timestamp: string;
 };
 
-export type SourceTypeV1 = "hackernews" | "substack" | "podcast";
+export type SourceTypeV1 = "hackernews" | "substack" | "podcast" | "bluesky";
 
 export type SourceConfig = {
   mode?: "top" | "new";
   rssUrl?: string;
+  handle?: string;
+  did?: string;
   [key: string]: unknown;
 };
 
@@ -30,7 +32,7 @@ export type SourcesListResponse = { sources: Source[] };
 export type SourceResponse = { source: Source };
 
 export type CreateSourceInput = {
-  sourceType: SourceTypeV1 | "bluesky" | string;
+  sourceType: SourceTypeV1 | string;
   config?: SourceConfig;
   enabled?: boolean;
 };

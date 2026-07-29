@@ -62,9 +62,14 @@ export function parseFeedLimit(raw: string | null): number {
 
 export function parseFeedSourceFilter(
   raw: string | null,
-): "hackernews" | "substack" | "podcast" | null | "invalid" {
+): "hackernews" | "substack" | "podcast" | "bluesky" | null | "invalid" {
   if (raw === null || raw === "") return null;
-  if (raw === "hackernews" || raw === "substack" || raw === "podcast") {
+  if (
+    raw === "hackernews" ||
+    raw === "substack" ||
+    raw === "podcast" ||
+    raw === "bluesky"
+  ) {
     return raw;
   }
   return "invalid";

@@ -5,6 +5,7 @@ export type {
 } from "./types.js";
 export { StubSourceAdapter } from "./stub.js";
 export { normalizeCanonicalUrl } from "./url.js";
+export { normalizeBlueskyHandle } from "./bluesky-handle.js";
 export { hashArticleContent } from "./hash.js";
 export {
   HackerNewsAdapter,
@@ -22,6 +23,13 @@ export {
   type PodcastConfig,
   type PodcastAdapterOptions,
 } from "./podcast.js";
+export {
+  BlueskyAdapter,
+  DEFAULT_BLUESKY_APPVIEW_URL,
+  BLUESKY_FETCH_LIMIT,
+  type BlueskyConfig,
+  type BlueskyAdapterOptions,
+} from "./bluesky.js";
 export {
   fetchAndParseRss,
   parseDurationSeconds,

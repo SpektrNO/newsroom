@@ -63,7 +63,7 @@ pnpm --filter @newsroom/worker start
 | `apps/worker` | Postgres job poller + one-shot ingest/rank CLI |
 | `packages/db` | Drizzle schema + migrations (auth, ingest, topics, scores) |
 | `packages/ai` | `AiProvider` + keyword/`rankArticleBatch` helpers |
-| `packages/sources` | HN + Substack adapters (`SourceAdapter`) |
+| `packages/sources` | HN + Substack + podcast + Bluesky adapters (`SourceAdapter`) |
 | `packages/api-client` | Typed client (health, sources, topics, topic-tree, feed) |
 
 ## Commands
@@ -95,7 +95,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` (per-user ranking tiers — see [docs/ops-local.md#ranking-model-tiers](docs/ops-local.md#ranking-model-tiers); Fast falls back to `OLLAMA_MODEL`/`llama3.2`, Standard defaults to `llama3.1:8b`), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard), `RANK_AI_MAX_PER_RUN` (default 60), `RANK_AI_MAX_PER_DAY` (default 0 = unlimited; prefer token cap), `RANK_AI_MAX_GLOBAL_PER_DAY` (default 0 = unlimited), `RANK_SCORE_TTL_DAYS` (default 30), `RANK_SCORE_KEEP_TOP_N` (default 500), `ARTICLE_TTL_DAYS` (default 90; keeps saved bookmarks).
+Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` (per-user ranking tiers — see [docs/ops-local.md#ranking-model-tiers](docs/ops-local.md#ranking-model-tiers); Fast falls back to `OLLAMA_MODEL`/`llama3.2`, Standard defaults to `llama3.1:8b`), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard), `RANK_AI_MAX_PER_RUN` (default 60), `RANK_AI_MAX_PER_DAY` (default 0 = unlimited; prefer token cap), `RANK_AI_MAX_GLOBAL_PER_DAY` (default 0 = unlimited), `RANK_SCORE_TTL_DAYS` (default 30), `RANK_SCORE_KEEP_TOP_N` (default 500), `ARTICLE_TTL_DAYS` (default 90; keeps saved bookmarks), `BLUESKY_APPVIEW_URL` (default `https://public.api.bsky.app`; Bluesky ingest AppView base, no trailing slash).
 
 ### Settings API (session cookie)
 
@@ -151,4 +151,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, `web-ai-advisor-chat`, and `web-source-discovery` are implemented (auth, sources, ingest, topics/feed APIs, curated Topics + feed catalog, Advisor chat via BFF → Ollama, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, `web-ai-advisor-chat`, `web-source-discovery`, `source-podcast`, and `source-bluesky` are implemented (auth, sources including Bluesky AppView, ingest, topics/feed APIs, curated Topics + feed catalog, Advisor chat via BFF → Ollama, worker rank, editorial web UI). Expo feed UI is next per the backlog.

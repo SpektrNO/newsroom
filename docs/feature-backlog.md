@@ -196,7 +196,7 @@ Notes for `web-source-discovery` (shipped — catalog v1):
 |----|---------|--------|------|
 | `multiuser-harden` | Registration, isolation, rate limits, host AI swap | ⬜ | `docs/architecture.md` |
 | `security-harden` | Auth hardening, API keys, abuse/misuse controls | ⬜ | `docs/architecture.md` |
-| `source-bluesky` | Bluesky adapter | ⬜ | `docs/architecture.md` |
+| `source-bluesky` | Bluesky adapter | ✅ | `docs/architecture.md` |
 | `source-podcast` | Podcast RSS adapter + episode cards in feed | ✅ | `docs/architecture.md` |
 
 Notes for `security-harden`:
@@ -219,3 +219,10 @@ Notes for `source-podcast`:
 - **Reuse:** Prefer extending `packages/sources` RSS parsing rather than a greenfield fetcher; keep paywall/scrape out of scope (enclosure URL only).
 - **Out of scope v1:** Built-in player, offline download, chapter markers, full-text transcript ranking, auto-follow “similar shows.”
 - **Depends on:** Existing ingest + feed UI; stronger with catalog discovery. Independent of Bluesky.
+
+Notes for `source-bluesky` (shipped):
+
+- **Subscribe:** `source_type: bluesky`, config `{ handle }` (normalized; optional `did` later). Public AppView only — no Bluesky OAuth/app passwords.
+- **Ingest:** `getAuthorFeed` with `filter=posts_no_replies`; skip pure reposts and empty text; upsert on bsky.app post URL.
+- **Mobile:** Expo UI deferred to `mobile-feed-topics`.
+- **Out of scope v1:** personal timeline, firehose, catalog discovery, embeds/media gallery.

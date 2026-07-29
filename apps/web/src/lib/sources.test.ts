@@ -22,12 +22,31 @@ describe("parseCreateBody", () => {
     assert.deepEqual(parsed, { ok: false, error: "invalid_config" });
   });
 
-  it("still rejects bluesky", () => {
+  it("accepts bluesky with handle and normalizes", () => {
+    const parsed = parseCreateBody({
+      sourceType: "bluesky",
+      config: { handle: "@Jay.Bsky.Social" },
+    });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.sourceType, "bluesky");
+    assert.equal(parsed.config.handle, "jay.bsky.social");
+  });
+
+  it("rejects bluesky without handle", () => {
     const parsed = parseCreateBody({
       sourceType: "bluesky",
       config: {},
     });
-    assert.deepEqual(parsed, { ok: false, error: "unsupported_source_type" });
+    assert.deepEqual(parsed, { ok: false, error: "invalid_config" });
+  });
+
+  it("rejects bluesky with invalid handle", () => {
+    const parsed = parseCreateBody({
+      sourceType: "bluesky",
+      config: { handle: "noperiod" },
+    });
+    assert.deepEqual(parsed, { ok: false, error: "invalid_config" });
   });
 });
 
@@ -40,5 +59,15 @@ describe("parsePatchBody", () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     assert.equal(parsed.config?.rssUrl, "https://example.com/show.xml");
+  });
+
+  it("accepts bluesky handle updates", () => {
+    const parsed = parsePatchBody(
+      { config: { handle: "@Alice.Bsky.Social" } },
+      "bluesky",
+    );
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.config?.handle, "alice.bsky.social");
   });
 });

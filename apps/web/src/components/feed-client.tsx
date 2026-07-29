@@ -71,6 +71,7 @@ function sourceLabel(type: string): string {
   if (type === "hackernews") return "Hacker News";
   if (type === "substack") return "Feed";
   if (type === "podcast") return "Podcast";
+  if (type === "bluesky") return "Bluesky";
   return type;
 }
 
@@ -680,6 +681,7 @@ export function FeedClient(): ReactNode {
             <option value="hackernews">Hacker News</option>
             <option value="substack">Feed</option>
             <option value="podcast">Podcast</option>
+            <option value="bluesky">Bluesky</option>
           </select>
         </label>
         <label className="filter-field">

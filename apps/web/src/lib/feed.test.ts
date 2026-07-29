@@ -40,6 +40,7 @@ describe("feed query parsers", () => {
   it("validates source filter", () => {
     assert.equal(parseFeedSourceFilter("hackernews"), "hackernews");
     assert.equal(parseFeedSourceFilter("podcast"), "podcast");
+    assert.equal(parseFeedSourceFilter("bluesky"), "bluesky");
     assert.equal(parseFeedSourceFilter("nope"), "invalid");
     assert.equal(parseFeedSourceFilter(null), null);
   });
