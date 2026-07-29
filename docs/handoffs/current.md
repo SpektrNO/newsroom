@@ -1,9 +1,9 @@
 # Handoff: Bluesky AT Proto adapter + account posts in feed
 
-**Status:** spec  
+**Status:** done  
 **Created:** 2026-07-29  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,9 +11,10 @@
 |-------|-------|
 | Feature id | `source-bluesky` |
 | Parent issue | #47 — https://github.com/SpektrNO/newsroom/issues/47 |
-| Open tasks | `db` (#49), `api` (#50), `worker` (#51), `web` (#52), `mobile` (#53), `verify` (#54), `docs` (#55) |
+| Open tasks | *(none — all closed; parent #47 stays open for PR)* |
+| Closed tasks | `spec` (#48), `db` (#49), `api` (#50), `worker` (#51), `web` (#52), `mobile` (#53 deferred), `verify` (#54), `docs` (#55) |
 | Phase-1 closed | `spec` (#48) |
-| Backlog | `docs/feature-backlog.md` § E — `source-bluesky` (thin: “Bluesky adapter”); this handoff is the product contract |
+| Backlog | `docs/feature-backlog.md` § E — `source-bluesky` ✅ |
 | Pattern ref | Shipped sibling `source-podcast` — `docs/handoffs/archive/2026-07-27-source-podcast.md` |
 
 Task order: `spec` → `db` → `api` → `worker` → `web` → ~~`mobile`~~ (defer) → `verify` → `docs`
@@ -159,26 +160,32 @@ None product-blocking. Implementer may choose whether to persist resolved `did` 
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- **db:** `SourceSubscriptionConfig.handle` / `did`; migration `0011` partial unique `source_subscriptions_user_bluesky_handle_uidx`
+- **api:** `SourceTypeV1` includes `bluesky`; create/patch parse + normalize handle; `parseFeedSourceFilter` allows `bluesky`; `packages/api-client` types; `normalizeBlueskyHandle` in `@newsroom/sources`
+- **worker:** `BlueskyAdapter` (public AppView `getAuthorFeed`, skip reposts/empty); wired in `createSourceAdapter` (ingest unchanged)
+- **web:** Sources **Add Bluesky** form; list labels; feed filter option **Bluesky**
+- **mobile:** Deferred (`#53` closed → `mobile-feed-topics`)
+- **docs:** architecture Bluesky → v1; backlog ✅; README / `.env.example` `BLUESKY_APPVIEW_URL`
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] `pnpm --filter @newsroom/sources test` (BlueskyAdapter fixtures + handle normalize)
+- [x] `apps/web` `sources.test.ts` + `feed.test.ts` unit tests
+- [x] typecheck: sources, web, api-client, db
+- [ ] Worker/web DB integration tests + live ingest — need local Postgres / migrate `0011` (manual)
 
 ### Deviations from spec
 
-- None / list with rationale
+- Resolved `did` is accepted on adapter config and preferred as AppView `actor` when present, but ingest does **not** write `did` back onto `source_subscriptions.config` after fetch (handle-only storage in v1).
 
 ### Follow-ups
 
 - Bluesky account catalog / discovery polish
 - Optional: promote external link embeds to optional “open linked URL” affordance
 - Mobile Sources/Feed parity under `mobile-feed-topics`
+- Persist resolved DID on subscription after first successful fetch
 - Authenticated AppView features (search) only if product later requires them — would need credential story
 
 ---

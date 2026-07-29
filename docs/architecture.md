@@ -1,6 +1,6 @@
 # Newsroom architecture
 
-Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, and podcasts; Bluesky later; X deferred.
+Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, podcasts, and Bluesky; X deferred.
 
 ## Goals
 
@@ -59,7 +59,7 @@ flowchart LR
 | `packages/db` | Drizzle schema + migrations |
 | `packages/api-client` | Shared typed fetch client for web + mobile |
 | `packages/ai` | `AiProvider` interface; `OllamaProvider` default |
-| `packages/sources` | Source adapters (HN, Substack, podcasts; later Bluesky/X) |
+| `packages/sources` | Source adapters (HN, Substack, podcasts, Bluesky; later X) |
 
 ## Defaults
 
@@ -102,7 +102,7 @@ Never call Ollama from UI code.
 | Hacker News | Firebase API + Algolia HN Search | v1 |
 | Substack | User-added RSS URLs + curated catalog (`web-source-discovery`) | v1 |
 | Podcasts | Podcast RSS/Atom (`source_type: podcast`, `{ rssUrl }`); episodes as feed items with show/duration/enclosure | v1 (`source-podcast`) |
-| Bluesky | AT Proto public endpoints | later (`source-bluesky`) |
+| Bluesky | Public AppView `getAuthorFeed` (`source_type: bluesky`, `{ handle }`); posts as feed items (no Bluesky auth) | v1 (`source-bluesky`) |
 | X | Paid API | deferred |
 
 Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`.
@@ -125,7 +125,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Clients
 
-**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Sources** (`web-source-discovery` + `source-podcast`): curated newsletter catalog (`GET /api/feed-catalog`) with one-click Add feed alongside manual RSS URL entry; distinct **Add podcast** for `source_type: podcast` RSS/Atom (catalog podcast entries are a follow-up). HN remains the shared firehose. Podcast episodes appear in the ranked feed with show/duration meta and external Play audio (no in-app player). Feed toolbar **Wipe rankings** (`wipe-rankings`) clears `new`/`seen` scores (keeps Saved/Dismissed; no auto re-rank). **Settings** shows today’s AI token usage vs daily limit (`ai-token-metering`).
+**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Sources** (`web-source-discovery` + `source-podcast` + `source-bluesky`): curated newsletter catalog (`GET /api/feed-catalog`) with one-click Add feed alongside manual RSS URL entry; distinct **Add podcast** for `source_type: podcast` RSS/Atom (catalog podcast entries are a follow-up); **Add Bluesky** by handle/DID for `source_type: bluesky` (public AppView author feed; no Bluesky credentials). HN remains the shared firehose. Podcast episodes appear in the ranked feed with show/duration meta and external Play audio (no in-app player). Bluesky posts appear with author meta and open on bsky.app. Feed toolbar **Wipe rankings** (`wipe-rankings`) clears `new`/`seen` scores (keeps Saved/Dismissed; no auto re-rank). **Settings** shows today’s AI token usage vs daily limit (`ai-token-metering`).
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 
