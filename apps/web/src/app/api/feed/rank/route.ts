@@ -1,5 +1,5 @@
-import { OllamaProvider } from "@newsroom/ai";
-import { getDb, topics } from "@newsroom/db";
+import { OllamaProvider, resolveModelForTier } from "@newsroom/ai";
+import { getDb, getUserRankModelTier, topics } from "@newsroom/db";
 import { and, eq } from "drizzle-orm";
 import { runRank } from "@newsroom/worker/rank";
 import { requireSessionUserId } from "@/lib/session";
@@ -41,17 +41,18 @@ export async function POST() {
     return Response.json({ error: "no_topics" }, { status: 400 });
   }
 
-  const provider = new OllamaProvider();
   try {
-    const healthy = await provider.health();
-    if (!healthy) {
-      return Response.json({ error: "ai_unavailable" }, { status: 503 });
+    const tier = await getUserRankModelTier(db, authResult.userId);
+    if (tier !== "none") {
+      const provider = new OllamaProvider({ model: resolveModelForTier(tier) });
+      const healthy = await provider.health();
+      if (!healthy) {
+        return Response.json({ error: "ai_unavailable" }, { status: 503 });
+      }
     }
 
-    const result = await runRank(db, {
-      userId: authResult.userId,
-      provider,
-    });
+    // No explicit provider — runRank resolves this user's tier/model itself.
+    const result = await runRank(db, { userId: authResult.userId });
     // runRank prunes this user's score rows after a successful pass.
 
     const allAiFailed =

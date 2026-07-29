@@ -23,6 +23,11 @@ export const user = pgTable("user", {
   dirtyAt: timestamp("dirty_at", { withTimezone: true }),
   /** Last authenticated feed read — used for dirty ∩ active cadence. */
   lastFeedAt: timestamp("last_feed_at", { withTimezone: true }),
+  /** AI model tier for ranking: "none" skips AI entirely (keyword-only). */
+  rankModelTier: text("rank_model_tier")
+    .notNull()
+    .default("fast")
+    .$type<"none" | "fast" | "standard">(),
 });
 
 export const session = pgTable(

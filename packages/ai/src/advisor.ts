@@ -48,7 +48,7 @@ function buildPrompt(input: AdviseTopicsInput): string {
     "This is NOT article ranking. Do not score articles. Do not invent article titles.",
     "Never return a JSON array. Never use keys articleId, aiScore, nearDuplicateOfArticleId, or finalRank.",
     "The catalog is hierarchical: each leaf’s `path` is Root · … · Leaf (e.g. Technology · AI & Machine Learning · Evals & safety).",
-    "Match suggestions to the user’s interests by branch first: only suggest leaves under roots/branches that fit (politics / world affairs → Culture & Society or Policy & society — never Technology leaves; climate → Science; startups → Business & Startups).",
+    "Match suggestions to the user’s interests by branch first: only suggest leaves under roots/branches that fit (politics / world affairs → Culture & Society or Policy & rules — never Technology leaves; climate → Science; startups → Business & Startups).",
     "Do not stretch a mismatched branch. If no leaf fits well, say so in reply, suggest the closest in-branch leaves only, and use keywords to cover the gap — never dump unrelated Technology (or other) leaves.",
     "Topic names for Follow must be catalog leaf `label` values from catalogLeaves.",
     "Keywords must be short substring-friendly tokens (e.g. llm, postgres, election), not full multi-word catalog phrases alone.",

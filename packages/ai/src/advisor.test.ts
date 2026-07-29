@@ -11,10 +11,10 @@ import type { AiProvider } from "./types.js";
 describe("buildAdvisorPrompt", () => {
   it("includes hierarchical paths and branch-matching rules", () => {
     const prompt = buildAdvisorPrompt({
-      catalogLabels: ["Evals & safety", "Policy & society"],
+      catalogLabels: ["Evals & safety", "Policy & rules"],
       catalogCrumbs: [
         "Technology · AI & Machine Learning · Evals & safety",
-        "Culture & Society · Policy & society",
+        "Culture & Society · Policy & rules",
       ],
       following: [],
       messages: [{ role: "user", content: "I care about world affairs" }],
@@ -26,7 +26,7 @@ describe("buildAdvisorPrompt", () => {
       prompt,
       /Technology · AI & Machine Learning · Evals & safety/,
     );
-    assert.match(prompt, /Culture & Society · Policy & society/);
+    assert.match(prompt, /Culture & Society · Policy & rules/);
     assert.match(prompt, /weakly matches ancestor path tokens/);
   });
 });

@@ -3,7 +3,12 @@ export {
   estimateTokenUsage,
   mergeTokenUsage,
 } from "./types.js";
-export { OllamaProvider, ollamaJsonFormat, type OllamaProviderOptions } from "./ollama.js";
+export {
+  OllamaProvider,
+  ollamaJsonFormat,
+  resolveModelForTier,
+  type OllamaProviderOptions,
+} from "./ollama.js";
 export {
   scoreKeywordMatch,
   articleMatchesTopicKeywords,

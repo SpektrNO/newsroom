@@ -12,6 +12,7 @@ import {
   articles,
   createDb,
   jobs,
+  setUserRankModelTier,
   sourceSubscriptions,
   topics,
   user,
@@ -649,5 +650,147 @@ describe("runRank matchedTopicIds narrowing", () => {
     assert.equal(score?.aiScore, null);
     const matched = [...(score?.matchedTopicIds ?? [])].sort();
     assert.deepEqual(matched, [topicAiId, topicMatterId].sort());
+  });
+});
+
+describe("runRank rank model tier", () => {
+  let db: Database;
+  const userId = `rank-tier-user-${randomUUID()}`;
+  const subId = `rank-tier-sub-${randomUUID()}`;
+  const topicId = `rank-tier-topic-${randomUUID()}`;
+  const articleId = `rank-tier-art-${randomUUID()}`;
+
+  before(async () => {
+    db = createDb(databaseUrl);
+    const now = new Date();
+    await db.insert(user).values({
+      id: userId,
+      name: "Tier Test",
+      email: `${userId}@test.local`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(sourceSubscriptions).values({
+      id: subId,
+      userId,
+      sourceType: "hackernews",
+      config: { mode: "top" },
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(topics).values({
+      id: topicId,
+      userId,
+      name: "AI infra",
+      keywords: ["llm"],
+      weight: 1,
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(articles).values({
+      id: articleId,
+      canonicalUrl: `https://fixture.example/p/${articleId}`,
+      title: "Running an LLM locally",
+      summary: null,
+      author: "tester",
+      publishedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(articleSources).values({
+      id: randomUUID(),
+      articleId,
+      sourceSubscriptionId: subId,
+      sourceType: "hackernews",
+      externalId: articleId,
+      fetchedAt: now,
+    });
+  });
+
+  after(async () => {
+    await db.delete(userArticleScores).where(eq(userArticleScores.userId, userId));
+    await db
+      .delete(userArticleEvaluations)
+      .where(eq(userArticleEvaluations.userId, userId));
+    await db.delete(articleSources).where(eq(articleSources.articleId, articleId));
+    await db.delete(articles).where(eq(articles.id, articleId));
+    await db.delete(topics).where(eq(topics.id, topicId));
+    await db.delete(sourceSubscriptions).where(eq(sourceSubscriptions.id, subId));
+    await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it('tier "none" never calls the provider and leaves the hit keyword-only', async () => {
+    await setUserRankModelTier(db, userId, "none");
+
+    let calls = 0;
+    const provider: AiProvider = {
+      async complete() {
+        calls += 1;
+        throw new Error("AI provider should not be called for tier=none");
+      },
+      async health() {
+        return true;
+      },
+    };
+
+    const result = await runRank(db, { userId, provider, batchSize: 20 });
+
+    assert.equal(calls, 0);
+    assert.equal(result.aiBatches, 0);
+    assert.ok(result.aiSkipped >= 1);
+    assert.ok(result.errors.some((e) => e.includes("rank_model_tier_none")));
+
+    const [score] = await db
+      .select()
+      .from(userArticleScores)
+      .where(
+        and(
+          eq(userArticleScores.userId, userId),
+          eq(userArticleScores.articleId, articleId),
+        ),
+      );
+    assert.ok(score);
+    assert.equal(score?.aiScore, null);
+    assert.ok((score?.keywordScore ?? 0) > 0);
+  });
+
+  it('tier "fast" (default) still runs the AI pass with an injected provider', async () => {
+    await setUserRankModelTier(db, userId, "fast");
+
+    const provider: AiProvider = {
+      async complete() {
+        return {
+          model: "fake",
+          text: JSON.stringify([
+            {
+              articleId: "r0",
+              aiScore: 0.9,
+              reason: "Genuinely about running an LLM",
+              confirmedTopicIds: [],
+            },
+          ]),
+        };
+      },
+      async health() {
+        return true;
+      },
+    };
+
+    const result = await runRank(db, { userId, provider, batchSize: 20 });
+
+    assert.ok(result.aiBatches >= 1);
+    const [score] = await db
+      .select()
+      .from(userArticleScores)
+      .where(
+        and(
+          eq(userArticleScores.userId, userId),
+          eq(userArticleScores.articleId, articleId),
+        ),
+      );
+    assert.equal(score?.aiScore, 0.9);
   });
 });

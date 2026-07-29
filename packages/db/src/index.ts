@@ -84,3 +84,9 @@ export {
   type UpsertEvaluationInput,
   type PruneEvaluationsResult,
 } from "./article-evaluations.js";
+export {
+  RANK_MODEL_TIERS,
+  getUserRankModelTier,
+  setUserRankModelTier,
+  type RankModelTier,
+} from "./rank-model-tier.js";

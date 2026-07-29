@@ -200,6 +200,13 @@ export type AiUsageResponse = {
   };
 };
 
+/** AI model tier for ranking: "none" skips AI entirely (keyword-only). */
+export type RankModelTier = "none" | "fast" | "standard";
+
+export type RankModelSettingResponse = {
+  tier: RankModelTier;
+};
+
 export type RankFeedLatestResponse = {
   scored: number;
   evaluated: number;
@@ -382,6 +389,16 @@ export class ApiClient {
 
   async getAiUsage(): Promise<AiUsageResponse> {
     return this.requestJson("GET", "/api/ai-usage");
+  }
+
+  async getRankModelSetting(): Promise<RankModelSettingResponse> {
+    return this.requestJson("GET", "/api/settings/rank-model");
+  }
+
+  async setRankModelSetting(
+    tier: RankModelTier,
+  ): Promise<RankModelSettingResponse> {
+    return this.requestJson("PATCH", "/api/settings/rank-model", { tier });
   }
 
   /** Run keyword + AI rank for the signed-in user (may take minutes). */

@@ -3,6 +3,7 @@ import {
   combineFinalRank,
   OllamaProvider,
   rankArticleBatch,
+  resolveModelForTier,
   scoreKeywordMatch,
   withInheritedCatalogKeywords,
   type AiProvider,
@@ -13,6 +14,7 @@ import {
   articles,
   canSpendAiTokens,
   clearUserDirty,
+  getUserRankModelTier,
   jobs,
   listDirtyRankUserIds,
   pruneUserArticleScores,
@@ -478,13 +480,10 @@ export async function runRank(
     batchSize?: number;
   } = {},
 ): Promise<RankResult> {
-  const provider = options.provider ?? new OllamaProvider();
   const batchSize = options.batchSize ?? resolveRankBatchSize();
-  if (!options.provider) {
-    console.log(
-      `[newsroom-worker] Ollama model=${process.env.OLLAMA_MODEL ?? "llama3.2"} batch=${batchSize} (OLLAMA_TIMEOUT_MS default 300000 if unset)`,
-    );
-  }
+  console.log(
+    `[newsroom-worker] rank pass starting batch=${batchSize} (OLLAMA_TIMEOUT_MS default 300000 if unset)`,
+  );
   const result: RankResult = {
     users: 0,
     scored: 0,
@@ -584,17 +583,32 @@ export async function runRank(
         });
       }
 
+      // "none" tier forces keyword-only ranking: skip AI entirely, no budget spent.
+      const tier = await getUserRankModelTier(db, userId);
+      const provider: AiProvider | null =
+        tier === "none"
+          ? null
+          : options.provider ??
+            new OllamaProvider({
+              model: resolveModelForTier(tier === "standard" ? "standard" : "fast"),
+            });
+
       // AI pass: cap by run/day/global article budget, then token hard cap.
-      const budget = await remainingRankAiBudget(db, userId);
-      const needingAi = shortlist.slice(0, Math.max(0, budget.remaining));
+      const remainingBudget =
+        provider != null ? (await remainingRankAiBudget(db, userId)).remaining : 0;
+      const needingAi = shortlist.slice(0, Math.max(0, remainingBudget));
       const deferredByArticleCap = shortlist.length - needingAi.length;
       if (deferredByArticleCap > 0) {
         result.aiSkipped += deferredByArticleCap;
         result.errors.push(
-          `${userId}:rank_ai_budget_keyword_only:${deferredByArticleCap}`,
+          tier === "none"
+            ? `${userId}:rank_model_tier_none:${deferredByArticleCap}`
+            : `${userId}:rank_ai_budget_keyword_only:${deferredByArticleCap}`,
         );
         console.warn(
-          `[newsroom-worker] rank AI article budget for ${userId}: scoring ${needingAi.length}/${shortlist.length} (remaining=${budget.remaining})`,
+          tier === "none"
+            ? `[newsroom-worker] rank model tier "none" for ${userId}: ${shortlist.length} article(s) stay keyword-only`
+            : `[newsroom-worker] rank AI article budget for ${userId}: scoring ${needingAi.length}/${shortlist.length} (remaining=${remainingBudget})`,
         );
       }
 
@@ -616,7 +630,8 @@ export async function runRank(
         aiQueued += chunk.length;
         result.aiBatches += 1;
         try {
-          const ranked = await rankArticleBatch(provider, {
+          // needingAi is only non-empty when provider != null (see remainingBudget above).
+          const ranked = await rankArticleBatch(provider as AiProvider, {
             topics: keywordTopics.map((t) => ({
               id: t.id,
               name: t.name ?? "",

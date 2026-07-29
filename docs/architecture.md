@@ -84,7 +84,7 @@ Personal mode = one user row. Multi-user = same schema.
 
 1. **Ingest** (~10–15 min): adapters fetch; upsert `articles` by canonical URL.
 2. **Keyword pass:** match title/summary against topic keywords; write `user_article_evaluations` for every checked article (hit or miss). Only hits get a `user_article_scores` row.
-3. **AI pass (Ollama):** batch shortlist; relevance 0–1, near-duplicates, one-line why, and per-article `confirmedTopicIds` (subset of its keyword-matched topics the model believes it's genuinely about — narrows, never adds); update `user_article_scores`.
+3. **AI pass (Ollama):** batch shortlist; relevance 0–1, near-duplicates, one-line why, and per-article `confirmedTopicIds` (subset of its keyword-matched topics the model believes it's genuinely about — narrows, never adds); update `user_article_scores`. Each user picks a persisted **rank model tier** (`user.rank_model_tier`): `none` skips this step entirely (keyword-only, no AI budget spent), `fast` uses `RANK_MODEL_FAST`/`OLLAMA_MODEL` (default), `standard` uses `RANK_MODEL_STANDARD` (default `llama3.1:8b`, stronger/slower). Settings UI: `GET/PATCH /api/settings/rank-model` (`user-selectable-rank-model`, ADR 005).
 4. **Feed API:** `GET /api/feed` returns ranked items for the session user, plus pipeline counts `rankedCount` / `evaluatedCount` / `articlesCount` (score rows / keyword checks / distinct articles from enabled sources). The `topic=` filter checks the stored `matched_topic_ids` (AI-narrowed) rather than re-deriving membership from raw keywords; pre-migration rows (`NULL`) fall back to a live keyword re-check (`ai-confirmed-topic-membership`, ADR 004).
 
 Never call Ollama from UI code.
@@ -117,6 +117,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `GET /api/feed?cursor=&topic=&source=&status=`
 - `POST /api/feed/rank` — session; run keyword + AI rank for the current user only (may take minutes)
 - `POST /api/feed/wipe-rankings` — session; delete `new`/`seen` scores (+ orphan evaluations); keep saved/dismissed; clear dirty (no auto re-rank)
+- `GET/PATCH /api/settings/rank-model` — session; get/set the caller's rank model tier (`none` \| `fast` \| `standard`); PATCH marks preferences dirty
 - `POST /api/feed/:id/seen|saved|dismissed`
 - `GET /api/ai-usage` — session; today’s token rollup vs daily limits
 - `POST /api/chat` — session chat for topic/keyword advice via `AiProvider` (`web-ai-advisor-chat`); may return `tokens` / `aiUsage`; `429 token_budget_exceeded` when over daily hard cap

@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "rank_model_tier" text DEFAULT 'fast' NOT NULL;

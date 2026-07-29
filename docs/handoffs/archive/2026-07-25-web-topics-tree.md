@@ -159,7 +159,7 @@ Static, versioned catalog (repo module). Thin API returns this JSON shape. Imple
 | `science.climate` | `science` | Climate & energy | **yes** |
 | `culture` | `null` | Culture & Society | no |
 | `culture.design` | `culture` | Design & media | **yes** |
-| `culture.policy` | `culture` | Policy & society | **yes** |
+| `culture.policy` | `culture` | Policy & rules | **yes** |
 
 `version`: integer `1`.
 

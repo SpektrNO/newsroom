@@ -169,7 +169,7 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
   {
     id: "culture.policy",
     parentId: "culture",
-    label: "Policy & society",
+    label: "Policy & rules",
     selectable: true,
   },
   {

@@ -2,7 +2,11 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { AiUsageResponse, HealthResponse } from "@newsroom/api-client";
+import type {
+  AiUsageResponse,
+  HealthResponse,
+  RankModelTier,
+} from "@newsroom/api-client";
 import { authClient } from "@/lib/auth-client";
 import { getBrowserApiClient } from "@/lib/api";
 
@@ -18,6 +22,13 @@ function formatTokens(n: number): string {
   return new Intl.NumberFormat("en-US").format(n);
 }
 
+const RANK_MODEL_TIER_HELP: Record<RankModelTier, string> = {
+  standard:
+    "Stronger model, better at judging genuine topic fit. Slower, and uses more of your daily AI budget.",
+  fast: "Default balance of speed and quality.",
+  none: "Keyword matching only — no AI calls, no AI budget used.",
+};
+
 export function SettingsClient({ email }: SettingsClientProps): ReactNode {
   const router = useRouter();
   const api = getBrowserApiClient();
@@ -26,6 +37,9 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
   const [aiUsage, setAiUsage] = useState<AiUsageResponse | null>(null);
   const [aiUsageError, setAiUsageError] = useState(false);
   const [pending, setPending] = useState(false);
+  const [rankModelTier, setRankModelTier] = useState<RankModelTier | null>(null);
+  const [rankModelSaving, setRankModelSaving] = useState(false);
+  const [rankModelError, setRankModelError] = useState(false);
 
   useEffect(() => {
     void api
@@ -48,7 +62,32 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
         setAiUsage(null);
         setAiUsageError(true);
       });
+    void api
+      .getRankModelSetting()
+      .then((res) => {
+        setRankModelTier(res.tier);
+        setRankModelError(false);
+      })
+      .catch(() => {
+        setRankModelError(true);
+      });
   }, [api]);
+
+  async function onRankModelTierChange(tier: RankModelTier) {
+    const previous = rankModelTier;
+    setRankModelTier(tier);
+    setRankModelSaving(true);
+    setRankModelError(false);
+    try {
+      const res = await api.setRankModelSetting(tier);
+      setRankModelTier(res.tier);
+    } catch {
+      setRankModelTier(previous);
+      setRankModelError(true);
+    } finally {
+      setRankModelSaving(false);
+    }
+  }
 
   async function onSignOut() {
     setPending(true);
@@ -70,6 +109,38 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
         <button type="button" onClick={() => void onSignOut()} disabled={pending}>
           {pending ? "Signing out…" : "Sign out"}
         </button>
+      </div>
+
+      <div className="settings-block">
+        <h2 className="form-heading">Ranking model</h2>
+        {rankModelTier === null ? (
+          <p className="feed-placeholder">Checking…</p>
+        ) : (
+          <>
+            <label className="filter-field">
+              <span className="filter-label">AI tier</span>
+              <select
+                value={rankModelTier}
+                disabled={rankModelSaving}
+                onChange={(e) =>
+                  void onRankModelTierChange(e.target.value as RankModelTier)
+                }
+              >
+                <option value="standard">Standard</option>
+                <option value="fast">Fast</option>
+                <option value="none">None (keyword only)</option>
+              </select>
+            </label>
+            <p className="manage-meta">
+              {RANK_MODEL_TIER_HELP[rankModelTier]}
+            </p>
+            {rankModelError ? (
+              <p className="manage-meta" role="status">
+                Couldn’t save the ranking model setting. Try again.
+              </p>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="settings-block">
