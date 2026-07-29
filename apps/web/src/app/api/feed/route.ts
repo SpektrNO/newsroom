@@ -24,9 +24,10 @@ import {
   matchesTopicIds,
   parseFeedLimit,
   parseFeedSearchQuery,
-  parseFeedSourceFilter,
+  parseFeedSourceFilters,
   parseFeedStatusFilter,
   parseFeedTopicIds,
+  passesSourceFilter,
   passesTopicFilter,
   toFeedItemJson,
   tokenizeFeedSearch,
@@ -114,7 +115,7 @@ async function loadFeedCounts(args: {
   topicIds: string[] | null;
   topicKeywords: string[] | null;
   topicInheritedKeywords: string[] | null;
-  sourceFilter: string | null;
+  sourceFilter: string[] | null;
   searchQuery: string | null;
 }): Promise<{
   matchedCount: number;
@@ -244,18 +245,20 @@ export async function GET(request: Request) {
   const limit = parseFeedLimit(url.searchParams.get("limit"));
   const cursorRaw = url.searchParams.get("cursor");
   const topicIds = parseFeedTopicIds(url);
-  const sourceFilter = parseFeedSourceFilter(url.searchParams.get("source"));
+  const sourceFilters = parseFeedSourceFilters(url);
   const statusFilter = parseFeedStatusFilter(url.searchParams.get("status"));
   const searchQuery = parseFeedSearchQuery(url.searchParams.get("q"));
 
   if (
     topicIds === "invalid" ||
-    sourceFilter === "invalid" ||
+    sourceFilters === "invalid" ||
     statusFilter === "invalid" ||
     searchQuery === "invalid"
   ) {
     return Response.json({ error: "invalid_filter" }, { status: 400 });
   }
+
+  const sourceFilter = sourceFilters.length > 0 ? sourceFilters : null;
 
   let cursor: { finalRank: number; articleId: string } | null = null;
   if (cursorRaw) {
@@ -446,7 +449,7 @@ export async function GET(request: Request) {
     }
     if (sourceFilter !== null) {
       const types = sourceTypesByArticle.get(row.articleId);
-      if (!types?.has(sourceFilter)) continue;
+      if (!passesSourceFilter(types, sourceFilter)) continue;
     }
     filtered.push(row);
     if (filtered.length >= limit + 1) break;

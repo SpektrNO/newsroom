@@ -9,9 +9,11 @@ import {
   parseFeedLimit,
   parseFeedSearchQuery,
   parseFeedSourceFilter,
+  parseFeedSourceFilters,
   parseFeedStatusFilter,
   parseFeedTopicIds,
   passesSearchFilter,
+  passesSourceFilter,
   tokenizeFeedSearch,
   formatEpisodeDuration,
 } from "./feed.js";
@@ -43,6 +45,35 @@ describe("feed query parsers", () => {
     assert.equal(parseFeedSourceFilter("bluesky"), "bluesky");
     assert.equal(parseFeedSourceFilter("nope"), "invalid");
     assert.equal(parseFeedSourceFilter(null), null);
+  });
+
+  it("parses multi source filters from source and sources params", () => {
+    const url = new URL(
+      "http://localhost/api/feed?source=hackernews&source=podcast&sources=bluesky,podcast",
+    );
+    assert.deepEqual(parseFeedSourceFilters(url), [
+      "hackernews",
+      "podcast",
+      "bluesky",
+    ]);
+    assert.deepEqual(
+      parseFeedSourceFilters(new URL("http://localhost/api/feed")),
+      [],
+    );
+    assert.equal(
+      parseFeedSourceFilters(
+        new URL("http://localhost/api/feed?source=nope"),
+      ),
+      "invalid",
+    );
+  });
+
+  it("matches articles against multi source allow-list", () => {
+    const types = new Set(["hackernews", "bluesky"]);
+    assert.equal(passesSourceFilter(types, ["podcast"]), false);
+    assert.equal(passesSourceFilter(types, ["hackernews", "podcast"]), true);
+    assert.equal(passesSourceFilter(undefined, ["hackernews"]), false);
+    assert.equal(passesSourceFilter(types, []), true);
   });
 
   it("formats episode duration", () => {
@@ -164,7 +195,7 @@ describe("countMatchingFeedRows", () => {
       countMatchingFeedRows(rows, {
         topicIds: ["topic-llm"],
         topicKeywords: ["llm"],
-        sourceFilter: "hackernews",
+        sourceFilter: ["hackernews"],
         searchQuery: null,
         sourceTypesByArticle: sources,
       }),

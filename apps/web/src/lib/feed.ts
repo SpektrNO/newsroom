@@ -60,19 +60,66 @@ export function parseFeedLimit(raw: string | null): number {
   return Math.min(50, Math.floor(n));
 }
 
+export const FEED_SOURCE_TYPES = [
+  "hackernews",
+  "substack",
+  "podcast",
+  "bluesky",
+] as const;
+
+export type FeedSourceType = (typeof FEED_SOURCE_TYPES)[number];
+
 export function parseFeedSourceFilter(
   raw: string | null,
-): "hackernews" | "substack" | "podcast" | "bluesky" | null | "invalid" {
+): FeedSourceType | null | "invalid" {
   if (raw === null || raw === "") return null;
-  if (
-    raw === "hackernews" ||
-    raw === "substack" ||
-    raw === "podcast" ||
-    raw === "bluesky"
-  ) {
-    return raw;
+  if ((FEED_SOURCE_TYPES as readonly string[]).includes(raw)) {
+    return raw as FeedSourceType;
   }
   return "invalid";
+}
+
+/**
+ * Collect source types from repeatable `source` and/or comma-separated `sources`.
+ * Empty = no source filter (all types). Article matches if it has any selected type.
+ */
+export function parseFeedSourceFilters(
+  url: URL,
+): FeedSourceType[] | "invalid" {
+  const fromRepeat = url.searchParams.getAll("source").flatMap((raw) =>
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const fromCsv = (url.searchParams.get("sources") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: FeedSourceType[] = [];
+  for (const raw of [...fromRepeat, ...fromCsv]) {
+    if (seen.has(raw)) continue;
+    const parsed = parseFeedSourceFilter(raw);
+    if (parsed === null) continue;
+    if (parsed === "invalid") return "invalid";
+    seen.add(raw);
+    out.push(parsed);
+  }
+  return out;
+}
+
+/** True when the article has at least one of the allowed source types. */
+export function passesSourceFilter(
+  articleTypes: Set<string> | undefined,
+  allowed: readonly string[],
+): boolean {
+  if (allowed.length === 0) return true;
+  if (!articleTypes || articleTypes.size === 0) return false;
+  for (const type of allowed) {
+    if (articleTypes.has(type)) return true;
+  }
+  return false;
 }
 
 /** When omitted, feed excludes dismissed. When set, only that status. */
@@ -268,7 +315,8 @@ export function countMatchingFeedRows(
     topicIds: string[] | null;
     topicKeywords: string[] | null;
     topicInheritedKeywords?: string[] | null;
-    sourceFilter: string | null;
+    /** Non-empty = include articles that have any of these source types. */
+    sourceFilter: string[] | null;
     searchQuery: string | null;
     sourceTypesByArticle: Map<string, Set<string>>;
   },
@@ -291,9 +339,9 @@ export function countMatchingFeedRows(
         continue;
       }
     }
-    if (opts.sourceFilter !== null) {
+    if (opts.sourceFilter !== null && opts.sourceFilter.length > 0) {
       const types = opts.sourceTypesByArticle.get(row.articleId);
-      if (!types?.has(opts.sourceFilter)) continue;
+      if (!passesSourceFilter(types, opts.sourceFilter)) continue;
     }
     if (
       opts.searchQuery !== null &&

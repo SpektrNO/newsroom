@@ -22,8 +22,15 @@ import { getBrowserApiClient } from "@/lib/api";
 import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
 import { formatEpisodeDuration } from "@/lib/feed";
 
-type SourceFilter = "" | SourceTypeV1;
+type SourceFilter = SourceTypeV1;
 type ViewFilter = "feed" | "saved" | "dismissed";
+
+const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
+  { id: "hackernews", label: "Hacker News" },
+  { id: "substack", label: "Feed" },
+  { id: "podcast", label: "Podcast" },
+  { id: "bluesky", label: "Bluesky" },
+];
 
 type TopicGroup = {
   root: string;
@@ -171,8 +178,11 @@ export function FeedClient(): ReactNode {
   const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(
     () => new Set(),
   );
+  /** Empty set = show all sources (no source filter). */
+  const [selectedSources, setSelectedSources] = useState<Set<SourceFilter>>(
+    () => new Set(),
+  );
   const [topicsReady, setTopicsReady] = useState(false);
-  const [source, setSource] = useState<SourceFilter>("");
   const [view, setView] = useState<ViewFilter>("feed");
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -234,6 +244,8 @@ export function FeedClient(): ReactNode {
 
   // Empty selection = all topics (no API filter). Any selection narrows the feed.
   const topicFilterActive = selectedTopicIds.size > 0;
+  // Empty selection = all sources. Any selection includes only those types.
+  const sourceFilterActive = selectedSources.size > 0;
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -258,7 +270,7 @@ export function FeedClient(): ReactNode {
         const page = await api.listFeed({
           cursor,
           topics: topicFilterActive ? [...selectedTopicIds] : undefined,
-          source: source || undefined,
+          sources: sourceFilterActive ? [...selectedSources] : undefined,
           status:
             view === "saved"
               ? "saved"
@@ -329,7 +341,7 @@ export function FeedClient(): ReactNode {
         }
       }
     },
-    [api, router, source, search, selectedTopicIds, topicFilterActive, view],
+    [api, router, search, selectedTopicIds, selectedSources, topicFilterActive, sourceFilterActive, view],
   );
 
   loadPageRef.current = loadPage;
@@ -432,6 +444,19 @@ export function FeedClient(): ReactNode {
     setSelectedTopicIds(new Set());
   }
 
+  function toggleSource(id: SourceFilter) {
+    setSelectedSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllSources() {
+    setSelectedSources(new Set());
+  }
+
   async function onRankLatest() {
     if (rankingRef.current || wipingRef.current) return;
     rankingRef.current = true;
@@ -512,7 +537,7 @@ export function FeedClient(): ReactNode {
 
   const hasFilters = Boolean(
     topicFilterActive ||
-      source ||
+      sourceFilterActive ||
       view === "saved" ||
       view === "dismissed" ||
       search,
@@ -702,19 +727,35 @@ export function FeedClient(): ReactNode {
           ) : null}
         </div>
 
-        <label className="filter-field">
-          <span className="filter-label">Source</span>
-          <select
-            value={source}
-            onChange={(e) => setSource(e.target.value as SourceFilter)}
-          >
-            <option value="">All sources</option>
-            <option value="hackernews">Hacker News</option>
-            <option value="substack">Feed</option>
-            <option value="podcast">Podcast</option>
-            <option value="bluesky">Bluesky</option>
-          </select>
-        </label>
+        <div className="source-filter" role="group" aria-label="Sources">
+          <div className="source-filter-header">
+            <span className="filter-label">Sources</span>
+            <button
+              type="button"
+              className="ghost topic-filter-link"
+              aria-pressed={!sourceFilterActive}
+              onClick={selectAllSources}
+            >
+              All
+            </button>
+          </div>
+          <div className="topic-filter-chips">
+            {SOURCE_OPTIONS.map((opt) => {
+              const on = selectedSources.has(opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={on ? "topic-filter-chip on" : "topic-filter-chip"}
+                  aria-pressed={on}
+                  onClick={() => toggleSource(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <label className="filter-field">
           <span className="filter-label">View</span>
           <select
@@ -754,7 +795,7 @@ export function FeedClient(): ReactNode {
                 className="ghost"
                 onClick={() => {
                   selectAllTopics();
-                  setSource("");
+                  selectAllSources();
                   setView("feed");
                   setSearchDraft("");
                   setSearch("");
