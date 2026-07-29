@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   combineFinalRank,
+  extractKeywordReason,
   OllamaProvider,
   rankArticleBatch,
   resolveModelForTier,
@@ -14,6 +15,7 @@ import {
   articles,
   canSpendAiTokens,
   clearUserDirty,
+  feedMaxAgeCutoff,
   getUserRankModelTier,
   jobs,
   listDirtyRankUserIds,
@@ -283,7 +285,13 @@ async function loadCandidateArticles(db: Database, userId: string) {
         eq(userArticleEvaluations.userId, userId),
       ),
     )
-    .where(inArray(articleSources.sourceSubscriptionId, ids))
+    .where(
+      and(
+        inArray(articleSources.sourceSubscriptionId, ids),
+        // Skip stale corpus (old podcasts, etc.) — same window as the feed.
+        sql`coalesce(${articles.publishedAt}, ${articles.createdAt}) >= ${feedMaxAgeCutoff().toISOString()}::timestamptz`,
+      ),
+    )
     .orderBy(
       // Never-evaluated first, then stale vs article content — so we walk the
       // corpus instead of thrashing needs-AI hits on the newest slice.
@@ -543,7 +551,7 @@ export async function runRank(
             showTitle: cand.showTitle,
             keywordScore: cand.keywordScore ?? 0,
             matchedTopicIds: cand.matchedTopicIds ?? [],
-            keywordReason: cand.reason ?? null,
+            keywordReason: extractKeywordReason(cand.reason),
           });
           continue;
         }

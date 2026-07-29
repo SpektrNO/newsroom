@@ -17,9 +17,8 @@ export type RankArticleInput = {
   /** Topic ids this article already keyword-matched (the AI narrows, never adds to this set). */
   candidateTopicIds?: string[];
   /**
-   * Keyword-match reason (e.g. "Matched keywords: llm, agent") used as the
-   * displayed reason when the model omits one or returns boilerplate that
-   * just restates these instructions instead of describing the article.
+   * Keyword-match reason (e.g. "Matched keywords: llm, agent"). Always kept
+   * in the stored reason; a genuine AI reason is appended after it.
    */
   keywordReason?: string | null;
 };
@@ -116,6 +115,41 @@ function isBoilerplateReason(reason: string): boolean {
   return SHORT_REF_PATTERN.test(reason);
 }
 
+const DEFAULT_FEED_REASON = "Relevant to your topics.";
+
+/**
+ * Build the stored feed reason: matched keywords first, then a genuine AI
+ * line. Boilerplate / missing AI falls back to keywords alone.
+ */
+export function composeFeedReason(
+  keywordReason: string | null | undefined,
+  aiReason: string | null | undefined,
+): string {
+  const kw = extractKeywordReason(keywordReason);
+  const aiRaw = aiReason?.trim() || null;
+  const ai =
+    aiRaw && !isBoilerplateReason(aiRaw) ? aiRaw.slice(0, 500) : null;
+
+  if (kw && ai) {
+    if (ai.toLowerCase().startsWith("matched keywords:")) {
+      return ai.slice(0, 500);
+    }
+    return `${kw}. ${ai}`.slice(0, 500);
+  }
+  return (ai ?? kw ?? DEFAULT_FEED_REASON).slice(0, 500);
+}
+
+/** Pull the "Matched keywords: …" line out of a stored reason (ignore AI suffix). */
+export function extractKeywordReason(
+  reason: string | null | undefined,
+): string | null {
+  if (!reason?.trim()) return null;
+  const trimmed = reason.trim();
+  if (!/^matched keywords:/i.test(trimmed)) return null;
+  const sep = trimmed.indexOf(". ");
+  return (sep === -1 ? trimmed : trimmed.slice(0, sep)).replace(/[.]+$/, "");
+}
+
 function looksLikeRankItem(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const rec = value as Record<string, unknown>;
@@ -199,14 +233,10 @@ function parseRankedItem(
   if (aiScore === null) return null;
 
   const reasonRaw = rec.reason;
-  const fallbackReason =
-    fallbackReasonByArticle.get(articleId) ?? "Relevant to your topics.";
-  const reason =
-    typeof reasonRaw === "string" &&
-    reasonRaw.trim() &&
-    !isBoilerplateReason(reasonRaw)
-      ? reasonRaw.trim().slice(0, 500)
-      : fallbackReason;
+  const keywordReason = fallbackReasonByArticle.get(articleId) ?? null;
+  const aiReason =
+    typeof reasonRaw === "string" && reasonRaw.trim() ? reasonRaw : null;
+  const reason = composeFeedReason(keywordReason, aiReason);
 
   let nearDuplicateOfArticleId: string | null = null;
   const dupRaw =

@@ -40,6 +40,8 @@ export {
 } from "./topic-tree.js";
 export {
   rankArticleBatch,
+  composeFeedReason,
+  extractKeywordReason,
   type RankTopicInput,
   type RankArticleInput,
   type RankedItem,

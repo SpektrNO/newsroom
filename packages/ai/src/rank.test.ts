@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractJsonArray, rankArticleBatch } from "./rank.js";
+import { extractJsonArray, composeFeedReason, rankArticleBatch } from "./rank.js";
 import type { AiProvider } from "./types.js";
 
 function fakeProvider(text: string): AiProvider {
@@ -13,6 +13,32 @@ function fakeProvider(text: string): AiProvider {
     },
   };
 }
+
+describe("composeFeedReason", () => {
+  it("keeps keywords then appends a genuine AI reason", () => {
+    assert.equal(
+      composeFeedReason(
+        "Matched keywords: llm, agent",
+        "Benchmarks a new open-source LLM inference engine",
+      ),
+      "Matched keywords: llm, agent. Benchmarks a new open-source LLM inference engine",
+    );
+  });
+
+  it("drops boilerplate AI and keeps keywords", () => {
+    assert.equal(
+      composeFeedReason(
+        "Matched keywords: llm",
+        "candidateTopics fully match confirmedTopicIds",
+      ),
+      "Matched keywords: llm",
+    );
+  });
+
+  it("uses the default when neither side is usable", () => {
+    assert.equal(composeFeedReason(null, "one line"), "Relevant to your topics.");
+  });
+});
 
 describe("rankArticleBatch", () => {
   const topics = [{ name: "AI", keywords: ["llm"], weight: 1 }];
@@ -316,7 +342,7 @@ describe("rankArticleBatch", () => {
     });
     assert.equal(
       ranked.items[0]?.reason,
-      "Benchmarks a new open-source LLM inference engine",
+      "Matched keywords: llm. Benchmarks a new open-source LLM inference engine",
     );
   });
 

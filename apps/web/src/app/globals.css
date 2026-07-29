@@ -608,6 +608,32 @@ button.danger-text:hover {
   flex: 1;
 }
 
+.filter-field-view {
+  flex: 0 1 9rem;
+  min-width: 7rem;
+}
+
+.feed-sort {
+  display: grid;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex: 0 0 auto;
+}
+
+.feed-sort-controls {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.feed-sort-controls select {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding-inline: 0.5rem 1.6rem;
+}
+
 .filter-label {
   color: var(--muted);
   font-weight: 600;
@@ -676,6 +702,14 @@ button.danger-text:hover {
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.4;
+}
+
+.story-reason-keywords {
+  font-size: 0.85rem;
+}
+
+.story-reason-ai {
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
 }
 
 .story-meta,

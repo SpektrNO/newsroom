@@ -1,10 +1,27 @@
 import { inheritedKeywordsForTopicName } from "@newsroom/ai";
-import { and, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import {
   articleSources,
   articles,
   countUserAvailableArticles,
   countUserEvaluatedArticles,
+  feedMaxAgeCutoff,
   getDb,
   isUserDirty,
   jobs,
@@ -21,23 +38,116 @@ import {
   decodeFeedCursor,
   encodeFeedCursor,
   escapeIlikePattern,
+  feedCursorFromRow,
   matchesTopicIds,
   parseFeedLimit,
+  parseFeedOrder,
   parseFeedSearchQuery,
+  parseFeedSort,
   parseFeedSourceFilters,
   parseFeedStatusFilter,
   parseFeedTopicIds,
-  passesSourceFilter,
   passesTopicFilter,
   toFeedItemJson,
   tokenizeFeedSearch,
+  type FeedCursor,
+  type FeedOrder,
+  type FeedSort,
   type FeedSourceJson,
 } from "@/lib/feed";
 
 export const dynamic = "force-dynamic";
 
-/** Cap for in-app topic/source matching when counting (personal-scale feed). */
+/** Cap for in-app topic matching when counting (personal-scale feed). */
 const MATCH_COUNT_SCAN_LIMIT = 2000;
+/** Batch size when walking ranked rows for topic app-filter. */
+const APP_FILTER_BATCH = 100;
+/** Safety cap so a sparse topic filter cannot scan the entire score table. */
+const APP_FILTER_MAX_SCAN = 5000;
+
+/** Article is linked to one of the allowed source types for this user (or orphan). */
+function articleHasSourceTypes(userId: string, sourceTypes: string[]): SQL {
+  return exists(
+    getDb()
+      .select({ id: articleSources.id })
+      .from(articleSources)
+      .leftJoin(
+        sourceSubscriptions,
+        eq(sourceSubscriptions.id, articleSources.sourceSubscriptionId),
+      )
+      .where(
+        and(
+          eq(articleSources.articleId, userArticleScores.articleId),
+          inArray(articleSources.sourceType, sourceTypes),
+          or(
+            isNull(sourceSubscriptions.userId),
+            eq(sourceSubscriptions.userId, userId),
+          ),
+        ),
+      ),
+  );
+}
+
+function feedCursorCondition(cursor: FeedCursor): SQL {
+  const idCmp =
+    cursor.order === "desc"
+      ? lt(userArticleScores.articleId, cursor.articleId)
+      : gt(userArticleScores.articleId, cursor.articleId);
+
+  if (cursor.sort === "score") {
+    const key = cursor.key ?? 0;
+    const keyCmp =
+      cursor.order === "desc"
+        ? lt(userArticleScores.finalRank, key)
+        : gt(userArticleScores.finalRank, key);
+    const keyEq = eq(userArticleScores.finalRank, key);
+    return or(keyCmp, and(keyEq, idCmp))!;
+  }
+
+  // Date sort uses NULLS LAST in both directions.
+  if (cursor.key === null) {
+    return and(isNull(articles.publishedAt), idCmp)!;
+  }
+
+  const keyDate = new Date(cursor.key);
+  if (cursor.order === "desc") {
+    // Include IS NULL so the nulls-last tail is reachable after non-null dates.
+    return or(
+      and(isNotNull(articles.publishedAt), lt(articles.publishedAt, keyDate)),
+      and(eq(articles.publishedAt, keyDate), idCmp),
+      isNull(articles.publishedAt),
+    )!;
+  }
+  return or(
+    and(isNotNull(articles.publishedAt), gt(articles.publishedAt, keyDate)),
+    and(eq(articles.publishedAt, keyDate), idCmp),
+    isNull(articles.publishedAt),
+  )!;
+}
+
+function feedOrderBy(sort: FeedSort, order: FeedOrder): SQL[] {
+  if (sort === "score") {
+    return order === "desc"
+      ? [desc(userArticleScores.finalRank), desc(userArticleScores.articleId)]
+      : [asc(userArticleScores.finalRank), asc(userArticleScores.articleId)];
+  }
+  // NULLS LAST so undated articles stay at the end for both asc and desc.
+  return order === "desc"
+    ? [
+        sql`${articles.publishedAt} DESC NULLS LAST`,
+        desc(userArticleScores.articleId),
+      ]
+    : [
+        sql`${articles.publishedAt} ASC NULLS LAST`,
+        asc(userArticleScores.articleId),
+      ];
+}
+
+/** Hide items older than ~3 months (published_at, else created_at). */
+function feedRecencyCondition(cutoff: Date = feedMaxAgeCutoff()): SQL {
+  // Pass ISO text — postgres.js rejects bare Date through this sql/gte path.
+  return sql`COALESCE(${articles.publishedAt}, ${articles.createdAt}) >= ${cutoff.toISOString()}::timestamptz`;
+}
 
 async function loadPipelineTimes(userId: string): Promise<{
   lastIngestAt: string | null;
@@ -61,40 +171,6 @@ async function loadPipelineTimes(userId: string): Promise<{
     lastIngestAt: toIsoOrNull(ingestRow?.at ?? null),
     lastRankedAt: toIsoOrNull(rankRow?.at ?? null),
   };
-}
-
-async function loadSourceTypesForUser(
-  userId: string,
-  articleIds: string[],
-): Promise<Map<string, Set<string>>> {
-  const sourceTypesByArticle = new Map<string, Set<string>>();
-  if (articleIds.length === 0) return sourceTypesByArticle;
-
-  const sourceRows = await getDb()
-    .select({
-      articleId: articleSources.articleId,
-      sourceType: articleSources.sourceType,
-      subscriptionUserId: sourceSubscriptions.userId,
-    })
-    .from(articleSources)
-    .leftJoin(
-      sourceSubscriptions,
-      eq(sourceSubscriptions.id, articleSources.sourceSubscriptionId),
-    )
-    .where(inArray(articleSources.articleId, articleIds));
-
-  for (const row of sourceRows) {
-    if (
-      row.subscriptionUserId !== null &&
-      row.subscriptionUserId !== userId
-    ) {
-      continue;
-    }
-    const types = sourceTypesByArticle.get(row.articleId) ?? new Set();
-    types.add(row.sourceType);
-    sourceTypesByArticle.set(row.articleId, types);
-  }
-  return sourceTypesByArticle;
 }
 
 /** AND of ILIKE token matches across title / summary / reason. */
@@ -145,27 +221,21 @@ async function loadFeedCounts(args: {
   const totalCount = Number(totalRow?.n ?? 0);
   const rankedCount = totalCount;
 
-  if (
-    args.topicIds === null &&
-    args.sourceFilter === null &&
-    args.searchQuery === null
-  ) {
-    return {
-      matchedCount: totalCount,
-      totalCount,
-      rankedCount,
-      evaluatedCount,
-      articlesCount,
-    };
-  }
-
   const searchConds =
     args.searchQuery !== null ? feedSearchConditions(args.searchQuery) : [];
-  const scoredWhere =
-    searchConds.length > 0 ? and(baseWhere, ...searchConds) : baseWhere;
+  const sourceCond =
+    args.sourceFilter !== null && args.sourceFilter.length > 0
+      ? articleHasSourceTypes(args.userId, args.sourceFilter)
+      : null;
+  const scoredWhere = and(
+    baseWhere,
+    feedRecencyCondition(),
+    ...searchConds,
+    ...(sourceCond ? [sourceCond] : []),
+  )!;
 
-  // Search alone can be counted in SQL; topic/source still need an app scan.
-  if (args.topicIds === null && args.sourceFilter === null) {
+  // Recency (+ search/source) are SQL; topic still needs an app scan.
+  if (args.topicIds === null) {
     const [matchedRow] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(userArticleScores)
@@ -194,22 +264,14 @@ async function loadFeedCounts(args: {
     .where(scoredWhere)
     .limit(MATCH_COUNT_SCAN_LIMIT);
 
-  const sourceTypesByArticle =
-    args.sourceFilter !== null
-      ? await loadSourceTypesForUser(
-          args.userId,
-          scanRows.map((r) => r.articleId),
-        )
-      : new Map<string, Set<string>>();
-
   const matchedCount = countMatchingFeedRows(scanRows, {
     topicIds: args.topicIds,
     topicKeywords: args.topicKeywords,
     topicInheritedKeywords: args.topicInheritedKeywords,
-    sourceFilter: args.sourceFilter,
-    // Search already applied in SQL.
+    // Source + recency already applied in SQL.
+    sourceFilter: null,
     searchQuery: null,
-    sourceTypesByArticle,
+    sourceTypesByArticle: new Map(),
   });
 
   return {
@@ -248,22 +310,29 @@ export async function GET(request: Request) {
   const sourceFilters = parseFeedSourceFilters(url);
   const statusFilter = parseFeedStatusFilter(url.searchParams.get("status"));
   const searchQuery = parseFeedSearchQuery(url.searchParams.get("q"));
+  const sort = parseFeedSort(url.searchParams.get("sort"));
+  const order = parseFeedOrder(url.searchParams.get("order"));
 
   if (
     topicIds === "invalid" ||
     sourceFilters === "invalid" ||
     statusFilter === "invalid" ||
-    searchQuery === "invalid"
+    searchQuery === "invalid" ||
+    sort === "invalid" ||
+    order === "invalid"
   ) {
     return Response.json({ error: "invalid_filter" }, { status: 400 });
   }
 
+  const selectedTopicIds: string[] = topicIds;
+  const feedSort: FeedSort = sort;
+  const feedOrder: FeedOrder = order;
   const sourceFilter = sourceFilters.length > 0 ? sourceFilters : null;
 
-  let cursor: { finalRank: number; articleId: string } | null = null;
+  let cursor: FeedCursor | null = null;
   if (cursorRaw) {
     cursor = decodeFeedCursor(cursorRaw);
-    if (!cursor) {
+    if (!cursor || cursor.sort !== feedSort || cursor.order !== feedOrder) {
       return Response.json({ error: "invalid_cursor" }, { status: 400 });
     }
   }
@@ -273,17 +342,17 @@ export async function GET(request: Request) {
   // topic's own keyword has already matched. See scoreKeywordMatch.
   let topicKeywords: string[] | null = null;
   let topicInheritedKeywords: string[] | null = null;
-  if (topicIds.length > 0) {
+  if (selectedTopicIds.length > 0) {
     const topicRows = await getDb()
       .select()
       .from(topics)
       .where(
         and(
           eq(topics.userId, authResult.userId),
-          inArray(topics.id, topicIds),
+          inArray(topics.id, selectedTopicIds),
         ),
       );
-    if (topicRows.length !== topicIds.length) {
+    if (topicRows.length !== selectedTopicIds.length) {
       return Response.json({ error: "invalid_filter" }, { status: 400 });
     }
     const keywords: string[] = [];
@@ -308,64 +377,53 @@ export async function GET(request: Request) {
     topicInheritedKeywords = inheritedKeywords;
   }
 
-  const conditions = [
+  const conditions: SQL[] = [
     eq(userArticleScores.userId, authResult.userId),
     statusFilter !== null
       ? eq(userArticleScores.status, statusFilter)
       : ne(userArticleScores.status, "dismissed"),
+    feedRecencyCondition(),
   ];
-
-  if (cursor) {
-    conditions.push(
-      or(
-        lt(userArticleScores.finalRank, cursor.finalRank),
-        and(
-          eq(userArticleScores.finalRank, cursor.finalRank),
-          lt(userArticleScores.articleId, cursor.articleId),
-        ),
-      )!,
-    );
-  }
 
   if (searchQuery !== null) {
     conditions.push(...feedSearchConditions(searchQuery));
   }
 
-  // Over-fetch when filtering by topic/source in app layer (search is SQL).
-  const needsAppFilter = topicKeywords !== null || sourceFilter !== null;
-  const fetchLimit = needsAppFilter ? Math.min(200, limit * 10) : limit + 1;
+  // Source allow-list in SQL so sparse types (e.g. Bluesky) are not lost when
+  // they sit below the previous top-N over-fetch window.
+  if (sourceFilter !== null) {
+    conditions.push(articleHasSourceTypes(authResult.userId, sourceFilter));
+  }
 
-  const [scoreRows, pipeline, counts] = await Promise.all([
-    getDb()
-      .select({
-        articleId: userArticleScores.articleId,
-        title: articles.title,
-        summary: articles.summary,
-        canonicalUrl: articles.canonicalUrl,
-        author: articles.author,
-        publishedAt: articles.publishedAt,
-        showTitle: articles.showTitle,
-        durationSeconds: articles.durationSeconds,
-        enclosureUrl: articles.enclosureUrl,
-        keywordScore: userArticleScores.keywordScore,
-        aiScore: userArticleScores.aiScore,
-        finalRank: userArticleScores.finalRank,
-        reason: userArticleScores.reason,
-        nearDuplicateOfArticleId: userArticleScores.nearDuplicateOfArticleId,
-        status: userArticleScores.status,
-        scoredAt: userArticleScores.scoredAt,
-        matchedTopicIds: userArticleScores.matchedTopicIds,
-      })
-      .from(userArticleScores)
-      .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
-      .where(and(...conditions))
-      .orderBy(desc(userArticleScores.finalRank), desc(userArticleScores.articleId))
-      .limit(fetchLimit),
+  // Topic filter still needs an app-layer pass (matchedTopicIds + legacy keyword).
+  const needsTopicAppFilter = selectedTopicIds.length > 0;
+
+  const scoreSelect = {
+    articleId: userArticleScores.articleId,
+    title: articles.title,
+    summary: articles.summary,
+    canonicalUrl: articles.canonicalUrl,
+    author: articles.author,
+    publishedAt: articles.publishedAt,
+    showTitle: articles.showTitle,
+    durationSeconds: articles.durationSeconds,
+    enclosureUrl: articles.enclosureUrl,
+    keywordScore: userArticleScores.keywordScore,
+    aiScore: userArticleScores.aiScore,
+    finalRank: userArticleScores.finalRank,
+    reason: userArticleScores.reason,
+    nearDuplicateOfArticleId: userArticleScores.nearDuplicateOfArticleId,
+    status: userArticleScores.status,
+    scoredAt: userArticleScores.scoredAt,
+    matchedTopicIds: userArticleScores.matchedTopicIds,
+  };
+
+  const [pipeline, counts] = await Promise.all([
     loadPipelineTimes(authResult.userId),
     loadFeedCounts({
       userId: authResult.userId,
       statusFilter,
-      topicIds: topicIds.length > 0 ? topicIds : null,
+      topicIds: selectedTopicIds.length > 0 ? selectedTopicIds : null,
       topicKeywords,
       topicInheritedKeywords,
       sourceFilter,
@@ -373,7 +431,87 @@ export async function GET(request: Request) {
     }),
   ]);
 
-  if (scoreRows.length === 0) {
+  type FeedScoreRow = {
+    articleId: string;
+    title: string;
+    summary: string | null;
+    canonicalUrl: string;
+    author: string | null;
+    publishedAt: Date | null;
+    showTitle: string | null;
+    durationSeconds: number | null;
+    enclosureUrl: string | null;
+    keywordScore: number;
+    aiScore: number | null;
+    finalRank: number;
+    reason: string | null;
+    nearDuplicateOfArticleId: string | null;
+    status: string;
+    scoredAt: Date;
+    matchedTopicIds: string[] | null;
+  };
+
+  async function fetchScoreBatch(
+    batchCursor: FeedCursor | null,
+    batchLimit: number,
+  ): Promise<FeedScoreRow[]> {
+    const where = and(
+      ...conditions,
+      ...(batchCursor ? [feedCursorCondition(batchCursor)] : []),
+    )!;
+    return getDb()
+      .select(scoreSelect)
+      .from(userArticleScores)
+      .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
+      .where(where)
+      .orderBy(...feedOrderBy(feedSort, feedOrder))
+      .limit(batchLimit);
+  }
+
+  function passesTopicAppFilter(row: FeedScoreRow): boolean {
+    if (selectedTopicIds.length === 0) return true;
+    const verdict = matchesTopicIds(row.matchedTopicIds, selectedTopicIds);
+    if (verdict === "no-match") return false;
+    if (
+      verdict === "unknown" &&
+      !passesTopicFilter(
+        row.title,
+        row.summary,
+        topicKeywords ?? [],
+        topicInheritedKeywords ?? undefined,
+        row.showTitle,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  const filtered: FeedScoreRow[] = [];
+  if (!needsTopicAppFilter) {
+    const scoreRows = await fetchScoreBatch(cursor, limit + 1);
+    filtered.push(...scoreRows);
+  } else {
+    // Walk ranked rows in batches until we fill a page — a single over-fetch
+    // misses matches that sit below the window (same bug source filters had).
+    let batchCursor = cursor;
+    let scanned = 0;
+    while (filtered.length < limit + 1 && scanned < APP_FILTER_MAX_SCAN) {
+      const scoreRows = await fetchScoreBatch(batchCursor, APP_FILTER_BATCH);
+      if (scoreRows.length === 0) break;
+      scanned += scoreRows.length;
+      const last = scoreRows[scoreRows.length - 1]!;
+      batchCursor = feedCursorFromRow(last, feedSort, feedOrder);
+      for (const row of scoreRows) {
+        if (!passesTopicAppFilter(row)) continue;
+        filtered.push(row);
+        if (filtered.length >= limit + 1) break;
+      }
+      if (scoreRows.length < APP_FILTER_BATCH) break;
+    }
+  }
+
+  if (filtered.length === 0) {
     return Response.json({
       items: [],
       nextCursor: null,
@@ -388,7 +526,9 @@ export async function GET(request: Request) {
     });
   }
 
-  const articleIds = scoreRows.map((r) => r.articleId);
+  const page = filtered.slice(0, limit);
+  const hasMore = filtered.length > limit;
+  const articleIds = page.map((r) => r.articleId);
 
   const sourceRows = await getDb()
     .select({
@@ -405,10 +545,8 @@ export async function GET(request: Request) {
     .where(inArray(articleSources.articleId, articleIds));
 
   const sourcesByArticle = new Map<string, FeedSourceJson[]>();
-  const sourceTypesByArticle = new Map<string, Set<string>>();
 
   for (const row of sourceRows) {
-    // Prefer sources linked to this user's subscription, or orphan/shared links.
     if (
       row.subscriptionUserId !== null &&
       row.subscriptionUserId !== authResult.userId
@@ -421,49 +559,12 @@ export async function GET(request: Request) {
       externalId: row.externalId,
     });
     sourcesByArticle.set(row.articleId, list);
-
-    const types = sourceTypesByArticle.get(row.articleId) ?? new Set();
-    types.add(row.sourceType);
-    sourceTypesByArticle.set(row.articleId, types);
   }
 
-  const filtered = [];
-  for (const row of scoreRows) {
-    if (topicIds.length > 0) {
-      const verdict = matchesTopicIds(row.matchedTopicIds, topicIds);
-      if (verdict === "no-match") continue;
-      // Pre-migration row (matchedTopicIds not yet populated) — fall back
-      // to a live keyword re-check until it's naturally re-ranked.
-      if (
-        verdict === "unknown" &&
-        !passesTopicFilter(
-          row.title,
-          row.summary,
-          topicKeywords ?? [],
-          topicInheritedKeywords ?? undefined,
-          row.showTitle,
-        )
-      ) {
-        continue;
-      }
-    }
-    if (sourceFilter !== null) {
-      const types = sourceTypesByArticle.get(row.articleId);
-      if (!passesSourceFilter(types, sourceFilter)) continue;
-    }
-    filtered.push(row);
-    if (filtered.length >= limit + 1) break;
-  }
-
-  const page = filtered.slice(0, limit);
-  const hasMore = filtered.length > limit;
   const last = page[page.length - 1];
   const nextCursor =
     hasMore && last
-      ? encodeFeedCursor({
-          finalRank: last.finalRank,
-          articleId: last.articleId,
-        })
+      ? encodeFeedCursor(feedCursorFromRow(last, feedSort, feedOrder))
       : null;
 
   return Response.json({

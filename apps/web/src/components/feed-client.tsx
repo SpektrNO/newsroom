@@ -20,10 +20,12 @@ import {
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
 import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
-import { formatEpisodeDuration } from "@/lib/feed";
+import { formatEpisodeDuration, splitFeedReason } from "@/lib/feed";
 
 type SourceFilter = SourceTypeV1;
 type ViewFilter = "feed" | "saved" | "dismissed";
+type SortField = "score" | "date";
+type SortOrder = "asc" | "desc";
 
 const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
   { id: "hackernews", label: "Hacker News" },
@@ -95,6 +97,7 @@ function formatPublished(iso: string | null): string | null {
   return d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
 }
 
@@ -113,6 +116,19 @@ function absoluteTimeTitle(iso: string | null | undefined): string | undefined {
 function formatRank(score: number): string {
   if (!Number.isFinite(score)) return "—";
   return score.toFixed(2);
+}
+
+function StoryReason({ reason }: { reason: string }): ReactNode {
+  const { keywordsLine, detail } = splitFeedReason(reason);
+  if (keywordsLine && detail) {
+    return (
+      <>
+        <p className="story-reason story-reason-keywords">{keywordsLine}</p>
+        <p className="story-reason story-reason-ai">{detail}</p>
+      </>
+    );
+  }
+  return <p className="story-reason">{reason}</p>;
 }
 
 function rankDetail(item: FeedItem): string {
@@ -184,6 +200,8 @@ export function FeedClient(): ReactNode {
   );
   const [topicsReady, setTopicsReady] = useState(false);
   const [view, setView] = useState<ViewFilter>("feed");
+  const [sort, setSort] = useState<SortField>("score");
+  const [order, setOrder] = useState<SortOrder>("desc");
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -278,6 +296,8 @@ export function FeedClient(): ReactNode {
                 ? "dismissed"
                 : undefined,
           q: search || undefined,
+          sort,
+          order,
           limit: 20,
         });
         if (gen !== loadGenRef.current) return;
@@ -341,7 +361,7 @@ export function FeedClient(): ReactNode {
         }
       }
     },
-    [api, router, search, selectedTopicIds, selectedSources, topicFilterActive, sourceFilterActive, view],
+    [api, router, search, selectedTopicIds, selectedSources, topicFilterActive, sourceFilterActive, view, sort, order],
   );
 
   loadPageRef.current = loadPage;
@@ -756,7 +776,7 @@ export function FeedClient(): ReactNode {
             })}
           </div>
         </div>
-        <label className="filter-field">
+        <label className="filter-field filter-field-view">
           <span className="filter-label">View</span>
           <select
             value={view}
@@ -767,6 +787,27 @@ export function FeedClient(): ReactNode {
             <option value="dismissed">Dismissed</option>
           </select>
         </label>
+        <div className="feed-sort" role="group" aria-label="Sort">
+          <span className="filter-label">Sort</span>
+          <div className="feed-sort-controls">
+            <select
+              value={sort}
+              aria-label="Sort by"
+              onChange={(e) => setSort(e.target.value as SortField)}
+            >
+              <option value="score">Score</option>
+              <option value="date">Date</option>
+            </select>
+            <select
+              value={order}
+              aria-label="Sort order"
+              onChange={(e) => setOrder(e.target.value as SortOrder)}
+            >
+              <option value="desc">Desc</option>
+              <option value="asc">Asc</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {loading || !topicsReady ? (
@@ -858,9 +899,7 @@ export function FeedClient(): ReactNode {
                       {formatRank(item.finalRank)}
                     </span>
                   </div>
-                  {item.reason ? (
-                    <p className="story-reason">{item.reason}</p>
-                  ) : null}
+                  {item.reason ? <StoryReason reason={item.reason} /> : null}
                   {metaParts.length > 0 ? (
                     <p className="story-meta">{metaParts.join(" · ")}</p>
                   ) : null}

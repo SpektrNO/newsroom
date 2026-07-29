@@ -5,30 +5,105 @@ import {
   decodeFeedCursor,
   encodeFeedCursor,
   escapeIlikePattern,
+  feedCursorFromRow,
+  feedMaxAgeCutoff,
+  FEED_MAX_AGE_DAYS,
   matchesTopicIds,
   parseFeedLimit,
+  parseFeedOrder,
   parseFeedSearchQuery,
+  parseFeedSort,
   parseFeedSourceFilter,
   parseFeedSourceFilters,
   parseFeedStatusFilter,
   parseFeedTopicIds,
   passesSearchFilter,
   passesSourceFilter,
+  splitFeedReason,
   tokenizeFeedSearch,
   formatEpisodeDuration,
 } from "./feed.js";
 
 describe("feed cursor", () => {
   it("round-trips opaque cursor", () => {
-    const encoded = encodeFeedCursor({ finalRank: 0.75, articleId: "abc" });
+    const encoded = encodeFeedCursor({
+      sort: "score",
+      order: "desc",
+      key: 0.75,
+      articleId: "abc",
+    });
     assert.deepEqual(decodeFeedCursor(encoded), {
-      finalRank: 0.75,
+      sort: "score",
+      order: "desc",
+      key: 0.75,
       articleId: "abc",
     });
   });
 
+  it("accepts legacy score cursors as score/desc", () => {
+    const legacy = Buffer.from(
+      JSON.stringify({ finalRank: 0.5, articleId: "x" }),
+      "utf8",
+    ).toString("base64url");
+    assert.deepEqual(decodeFeedCursor(legacy), {
+      sort: "score",
+      order: "desc",
+      key: 0.5,
+      articleId: "x",
+    });
+  });
+
+  it("builds date cursors including null publish times", () => {
+    assert.deepEqual(
+      feedCursorFromRow(
+        {
+          articleId: "a1",
+          finalRank: 0.1,
+          publishedAt: new Date("2024-01-15T12:00:00.000Z"),
+        },
+        "date",
+        "asc",
+      ),
+      {
+        sort: "date",
+        order: "asc",
+        key: Date.parse("2024-01-15T12:00:00.000Z"),
+        articleId: "a1",
+      },
+    );
+    assert.deepEqual(
+      feedCursorFromRow(
+        { articleId: "a2", finalRank: 0.2, publishedAt: null },
+        "date",
+        "desc",
+      ),
+      { sort: "date", order: "desc", key: null, articleId: "a2" },
+    );
+  });
+
   it("rejects bad cursor", () => {
     assert.equal(decodeFeedCursor("not-base64"), null);
+  });
+});
+
+describe("feed query params", () => {
+  it("parses sort and order", () => {
+    assert.equal(parseFeedSort(null), "score");
+    assert.equal(parseFeedSort("date"), "date");
+    assert.equal(parseFeedSort("nope"), "invalid");
+    assert.equal(parseFeedOrder(null), "desc");
+    assert.equal(parseFeedOrder("asc"), "asc");
+    assert.equal(parseFeedOrder("up"), "invalid");
+  });
+
+  it("computes a ~3 month feed age cutoff", () => {
+    const now = new Date("2026-07-29T12:00:00.000Z");
+    const cutoff = feedMaxAgeCutoff(now);
+    assert.equal(FEED_MAX_AGE_DAYS, 90);
+    assert.equal(
+      cutoff.toISOString(),
+      new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    );
   });
 });
 
@@ -109,6 +184,26 @@ describe("feed query parsers", () => {
     assert.equal(parseFeedSearchQuery("  "), null);
     assert.equal(parseFeedSearchQuery("  llm agents  "), "llm agents");
     assert.equal(parseFeedSearchQuery("x".repeat(201)), "invalid");
+  });
+
+  it("splits keyword + AI feed reasons", () => {
+    assert.deepEqual(
+      splitFeedReason(
+        "Matched keywords: llm, agent. Benchmarks a new open-source LLM",
+      ),
+      {
+        keywordsLine: "Matched keywords: llm, agent",
+        detail: "Benchmarks a new open-source LLM",
+      },
+    );
+    assert.deepEqual(splitFeedReason("Matched keywords: llm"), {
+      keywordsLine: "Matched keywords: llm",
+      detail: null,
+    });
+    assert.deepEqual(splitFeedReason("Just an AI line"), {
+      keywordsLine: null,
+      detail: "Just an AI line",
+    });
   });
 });
 

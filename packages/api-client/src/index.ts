@@ -147,6 +147,10 @@ export type ListFeedOptions = {
   status?: FeedItemStatus;
   /** Free-text find-in-feed (title / summary / reason). */
   q?: string;
+  /** `score` (final rank, default) or `date` (publishedAt). */
+  sort?: "score" | "date";
+  /** `desc` (default) or `asc`. */
+  order?: "asc" | "desc";
   limit?: number;
 };
 
@@ -368,6 +372,8 @@ export class ApiClient {
     }
     if (options.status) params.set("status", options.status);
     if (options.q?.trim()) params.set("q", options.q.trim());
+    if (options.sort) params.set("sort", options.sort);
+    if (options.order) params.set("order", options.order);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     const qs = params.toString();
     return this.requestJson("GET", qs ? `/api/feed?${qs}` : "/api/feed");

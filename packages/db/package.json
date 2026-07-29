@@ -8,6 +8,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./feed-window": {
+      "types": "./dist/feed-window.d.ts",
+      "default": "./dist/feed-window.js"
+    },
     "./schema": {
       "types": "./dist/schema/index.d.ts",
       "default": "./dist/schema/index.js"

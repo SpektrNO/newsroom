@@ -26,10 +26,33 @@ export type FeedItemJson = {
   scoredAt: string;
 };
 
+export type FeedSort = "score" | "date";
+export type FeedOrder = "asc" | "desc";
+
+export { FEED_MAX_AGE_DAYS, feedMaxAgeCutoff } from "@newsroom/db/feed-window";
+
 export type FeedCursor = {
-  finalRank: number;
+  sort: FeedSort;
+  order: FeedOrder;
+  /**
+   * Sort key: `finalRank` for score, `publishedAt` epoch ms for date
+   * (`null` when date-sorting an article with no publish time).
+   */
+  key: number | null;
   articleId: string;
 };
+
+export function parseFeedSort(raw: string | null): FeedSort | "invalid" {
+  if (raw === null || raw === "" || raw === "score") return "score";
+  if (raw === "date") return "date";
+  return "invalid";
+}
+
+export function parseFeedOrder(raw: string | null): FeedOrder | "invalid" {
+  if (raw === null || raw === "" || raw === "desc") return "desc";
+  if (raw === "asc") return "asc";
+  return "invalid";
+}
 
 export function encodeFeedCursor(cursor: FeedCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
@@ -39,18 +62,67 @@ export function decodeFeedCursor(raw: string): FeedCursor | null {
   try {
     const json = Buffer.from(raw, "base64url").toString("utf8");
     const parsed = JSON.parse(json) as Record<string, unknown>;
+    if (typeof parsed.articleId !== "string" || !parsed.articleId) return null;
+
+    // Legacy cursors: { finalRank, articleId } → score/desc.
     if (
-      typeof parsed.finalRank !== "number" ||
-      !Number.isFinite(parsed.finalRank) ||
-      typeof parsed.articleId !== "string" ||
-      !parsed.articleId
+      typeof parsed.finalRank === "number" &&
+      Number.isFinite(parsed.finalRank) &&
+      parsed.sort === undefined &&
+      parsed.order === undefined &&
+      parsed.key === undefined
     ) {
+      return {
+        sort: "score",
+        order: "desc",
+        key: parsed.finalRank,
+        articleId: parsed.articleId,
+      };
+    }
+
+    const sort = parseFeedSort(
+      typeof parsed.sort === "string" ? parsed.sort : null,
+    );
+    const order = parseFeedOrder(
+      typeof parsed.order === "string" ? parsed.order : null,
+    );
+    if (sort === "invalid" || order === "invalid") return null;
+
+    const key = parsed.key;
+    if (key !== null && (typeof key !== "number" || !Number.isFinite(key))) {
       return null;
     }
-    return { finalRank: parsed.finalRank, articleId: parsed.articleId };
+    if (sort === "score" && key === null) return null;
+
+    return { sort, order, key, articleId: parsed.articleId };
   } catch {
     return null;
   }
+}
+
+/** Build the next-page cursor from a feed row under the active sort. */
+export function feedCursorFromRow(
+  row: {
+    articleId: string;
+    finalRank: number;
+    publishedAt: Date | string | null;
+  },
+  sort: FeedSort,
+  order: FeedOrder,
+): FeedCursor {
+  let key: number | null;
+  if (sort === "score") {
+    key = row.finalRank;
+  } else if (row.publishedAt == null) {
+    key = null;
+  } else {
+    const d =
+      row.publishedAt instanceof Date
+        ? row.publishedAt
+        : new Date(row.publishedAt);
+    key = Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+  return { sort, order, key, articleId: row.articleId };
 }
 
 export function parseFeedLimit(raw: string | null): number {
@@ -177,6 +249,33 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
     nearDuplicateOfArticleId: row.nearDuplicateOfArticleId,
     status: row.status as UserArticleScoreStatus,
     scoredAt: row.scoredAt.toISOString(),
+  };
+}
+
+/**
+ * Split a stored feed reason into the keyword line and optional AI detail.
+ * Reasons are written as "Matched keywords: a, b. <ai line>" after AI ranking.
+ */
+export function splitFeedReason(reason: string): {
+  keywordsLine: string | null;
+  detail: string | null;
+} {
+  const trimmed = reason.trim();
+  if (!trimmed) return { keywordsLine: null, detail: null };
+  const prefix = "Matched keywords:";
+  if (!trimmed.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return { keywordsLine: null, detail: trimmed };
+  }
+  const afterPrefix = trimmed.slice(prefix.length).trimStart();
+  const sep = afterPrefix.indexOf(". ");
+  if (sep === -1) {
+    return { keywordsLine: trimmed.replace(/[.]+$/, ""), detail: null };
+  }
+  const keywords = afterPrefix.slice(0, sep).trim();
+  const detail = afterPrefix.slice(sep + 2).trim();
+  return {
+    keywordsLine: `${prefix} ${keywords}`,
+    detail: detail || null,
   };
 }
 
