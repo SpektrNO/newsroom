@@ -5,6 +5,7 @@ export type {
 } from "./types.js";
 export { StubSourceAdapter } from "./stub.js";
 export { normalizeCanonicalUrl } from "./url.js";
+export { normalizeBlueskyHandle } from "./bluesky-handle.js";
 export { hashArticleContent } from "./hash.js";
 export {
   HackerNewsAdapter,

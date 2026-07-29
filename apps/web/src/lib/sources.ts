@@ -1,7 +1,10 @@
 import type { SourceSubscriptionConfig } from "@newsroom/db";
-import { normalizeCanonicalUrl } from "@newsroom/sources";
+import {
+  normalizeBlueskyHandle,
+  normalizeCanonicalUrl,
+} from "@newsroom/sources";
 
-export type SourceTypeV1 = "hackernews" | "substack" | "podcast";
+export type SourceTypeV1 = "hackernews" | "substack" | "podcast" | "bluesky";
 
 export type SourceJson = {
   id: string;
@@ -61,14 +64,11 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     return { ok: false, error: "invalid_config" };
   }
 
-  if (sourceType === "bluesky") {
-    return { ok: false, error: "unsupported_source_type" };
-  }
-
   if (
     sourceType !== "hackernews" &&
     sourceType !== "substack" &&
-    sourceType !== "podcast"
+    sourceType !== "podcast" &&
+    sourceType !== "bluesky"
   ) {
     return { ok: false, error: "unsupported_source_type" };
   }
@@ -83,6 +83,23 @@ export function parseCreateBody(body: unknown): ParsedCreate {
       config.mode = mode;
     }
     return { ok: true, sourceType, config, enabled };
+  }
+
+  if (sourceType === "bluesky") {
+    const handleRaw = configRaw.handle;
+    if (typeof handleRaw !== "string" || !handleRaw.trim()) {
+      return { ok: false, error: "invalid_config" };
+    }
+    try {
+      return {
+        ok: true,
+        sourceType,
+        config: { handle: normalizeBlueskyHandle(handleRaw) },
+        enabled,
+      };
+    } catch {
+      return { ok: false, error: "invalid_config" };
+    }
   }
 
   const rssUrlRaw = configRaw.rssUrl;
@@ -152,6 +169,16 @@ export function parsePatchBody(
       }
       try {
         result.config = { rssUrl: normalizeCanonicalUrl(rssUrlRaw) };
+      } catch {
+        return { ok: false, error: "invalid_config" };
+      }
+    } else if (currentType === "bluesky") {
+      const handleRaw = configRaw.handle;
+      if (typeof handleRaw !== "string" || !handleRaw.trim()) {
+        return { ok: false, error: "invalid_config" };
+      }
+      try {
+        result.config = { handle: normalizeBlueskyHandle(handleRaw) };
       } catch {
         return { ok: false, error: "invalid_config" };
       }
