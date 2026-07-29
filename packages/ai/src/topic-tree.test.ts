@@ -9,10 +9,10 @@ import {
 } from "./topic-tree.js";
 
 describe("topic tree catalog", () => {
-  it("exposes version 2 with required seed leaf", () => {
+  it("exposes version 3 with required seed leaf", () => {
     const tree = getTopicTree();
     assert.equal(tree.version, TOPIC_TREE_VERSION);
-    assert.equal(tree.version, 2);
+    assert.equal(tree.version, 3);
     const infra = tree.nodes.find((n) => n.id === "tech.ai.infra");
     assert.ok(infra);
     assert.equal(infra.label, "AI & infra");
@@ -37,9 +37,18 @@ describe("topic tree catalog", () => {
       resolveSelectableTopicLabel("Philosophy & ideas"),
       "Philosophy & ideas",
     );
+    assert.equal(resolveSelectableTopicLabel("Art & craft"), "Art & craft");
+    assert.equal(
+      resolveSelectableTopicLabel("Music & theatre"),
+      "Music & theatre",
+    );
     assert.deepEqual(topicPathLabels("Literature & poesy"), [
       "Culture & Society",
       "Literature & poesy",
+    ]);
+    assert.deepEqual(topicPathLabels("Art & craft"), [
+      "Culture & Society",
+      "Art & craft",
     ]);
   });
 

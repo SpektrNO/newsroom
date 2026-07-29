@@ -10,8 +10,8 @@ export type TopicTreeResponse = {
   nodes: TopicTreeNode[];
 };
 
-/** Curated hierarchical topic catalog (v2 — richer leaves under existing roots). */
-export const TOPIC_TREE_VERSION = 2;
+/** Curated hierarchical topic catalog (v3 — Art & craft, Music & theatre). */
+export const TOPIC_TREE_VERSION = 3;
 
 export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
   { id: "tech", parentId: null, label: "Technology", selectable: false },
@@ -188,6 +188,18 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
     id: "culture.history",
     parentId: "culture",
     label: "History & archives",
+    selectable: true,
+  },
+  {
+    id: "culture.art",
+    parentId: "culture",
+    label: "Art & craft",
+    selectable: true,
+  },
+  {
+    id: "culture.music",
+    parentId: "culture",
+    label: "Music & theatre",
     selectable: true,
   },
 ] as const;
