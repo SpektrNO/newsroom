@@ -3,7 +3,10 @@
  *
  * Match: case-insensitive whole-word/phrase match on `title` + optional
  * `showTitle` + `summary` (word-boundary, not raw substring — "space" won't
- * fire inside "workspace").
+ * fire inside "workspace"). Light English plural folding on single ASCII
+ * tokens (regulation ↔ regulations); phrases and short tokens stay exact.
+ * User keywords are sanitized before matching so junk input cannot blow up
+ * regex construction or invent nonsense variants.
  * Score: min(1, sum of primary hits × weight × 0.25 + inherited hits × weight × 0.1).
  * Inherited (ancestor) keywords never hit a topic on their own — e.g. an
  * article mentioning "culture" shouldn't match the "Design & media" leaf
@@ -15,6 +18,38 @@ import { inheritedKeywordsForTopicName } from "./topic-keywords.js";
 
 /** Primary keyword hits use weight × 0.25; inherited (ancestor) hits use this. */
 export const INHERITED_KEYWORD_WEIGHT_FACTOR = 0.1;
+
+/** Reject absurdly long user keywords (regex size / noise). */
+export const MAX_KEYWORD_LENGTH = 64;
+
+/** Match catalog tokenize floor — single-char tokens are too noisy. */
+export const MIN_KEYWORD_LENGTH = 2;
+
+/** Plural fold only for tokens at least this long (keeps "ai", "css", "go" exact). */
+export const MIN_PLURAL_FOLD_LENGTH = 4;
+
+/**
+ * Mass nouns / invariants where stripping a trailing "s"/"ies" is wrong.
+ * Only consulted when singularizing a user keyword.
+ */
+const DO_NOT_SINGULARIZE = new Set([
+  "series",
+  "species",
+  "news",
+  "physics",
+  "mathematics",
+  "economics",
+  "politics",
+  "ethics",
+  "athletics",
+  "means",
+  "thanks",
+  "clothes",
+  "glasses",
+  "scissors",
+  "diabetes",
+  "measles",
+]);
 
 export type KeywordTopic = {
   id?: string;
@@ -58,12 +93,91 @@ function escapeRegExp(value: string): string {
 }
 
 /**
+ * Normalize and validate a user/catalog keyword before matching.
+ * Returns null when the token is empty, too long, or contains characters we
+ * refuse to compile into a word-boundary pattern (regex metacharacters,
+ * punctuation spam, control chars, etc.).
+ */
+export function sanitizeKeyword(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+
+  let s = raw.normalize("NFKC").toLowerCase().trim();
+  // Drop controls / zero-widths that trim won't remove.
+  s = s.replace(/[\u0000-\u001f\u007f\u200b-\u200d\ufeff]/g, "");
+  s = s.replace(/\s+/g, " ");
+
+  if (s.length < MIN_KEYWORD_LENGTH || s.length > MAX_KEYWORD_LENGTH) {
+    return null;
+  }
+
+  // Letters / digits with optional interior space, hyphen, or apostrophe.
+  // Rejects ".", "*", "(", "c++", emoji-only, etc.
+  if (!/^[\p{L}\p{N}]+(?:[ '\-][\p{L}\p{N}]+)*$/u.test(s)) {
+    return null;
+  }
+
+  return s;
+}
+
+/**
+ * English plural/singular variants for a *sanitized* single ASCII token.
+ * Phrases, hyphenated forms, digits, and short tokens return `[keyword]` only.
+ */
+export function englishPluralVariants(keyword: string): string[] {
+  const out = new Set<string>([keyword]);
+  if (keyword.length < MIN_PLURAL_FOLD_LENGTH) return [...out];
+  // Only fold plain ASCII letter words — not "open source", "gpt-4", "cafés".
+  if (!/^[a-z]+$/.test(keyword)) return [...out];
+
+  // keyword → plausible plural forms in article text (skip if already plural-ish)
+  if (!keyword.endsWith("s")) {
+    if (
+      keyword.endsWith("y") &&
+      keyword.length > 2 &&
+      !/[aeiou]y$/.test(keyword)
+    ) {
+      out.add(`${keyword.slice(0, -1)}ies`);
+    } else if (/(?:s|x|z|ch|sh)$/.test(keyword)) {
+      out.add(`${keyword}es`);
+    } else {
+      out.add(`${keyword}s`);
+    }
+  }
+
+  // keyword is plural → singular form in article text
+  if (!DO_NOT_SINGULARIZE.has(keyword)) {
+    if (
+      keyword.endsWith("ies") &&
+      keyword.length > 4 &&
+      /[^aeiou]ies$/.test(keyword)
+    ) {
+      out.add(`${keyword.slice(0, -3)}y`);
+    } else if (/(?:s|x|z|ch|sh)es$/.test(keyword) && keyword.length > 4) {
+      out.add(keyword.slice(0, -2));
+    } else if (
+      keyword.endsWith("s") &&
+      !keyword.endsWith("ss") &&
+      keyword.length >= 5
+    ) {
+      out.add(keyword.slice(0, -1));
+    }
+  }
+
+  return [...out];
+}
+
+/**
  * Whole-word/phrase match (word-boundary), not raw substring — prevents
  * short keywords like "space" or "ai" from firing inside unrelated words
- * like "workspace" or "said".
+ * like "workspace" or "said". Applies light plural folding when safe.
  */
 function matchesKeyword(text: string, keyword: string): boolean {
-  return new RegExp(`\\b${escapeRegExp(keyword)}\\b`).test(text);
+  for (const variant of englishPluralVariants(keyword)) {
+    if (new RegExp(`\\b${escapeRegExp(variant)}\\b`).test(text)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -85,13 +199,13 @@ export function scoreKeywordMatch(
   for (const topic of topics) {
     const weight = Number.isFinite(topic.weight) ? topic.weight : 1;
     let primaryHit = false;
-    const primaryKeys = new Set(
-      topic.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean),
-    );
-    const topicMatchedKeywords: string[] = [];
+    const primaryKeys = new Set<string>();
     for (const raw of topic.keywords) {
-      const kw = raw.trim().toLowerCase();
-      if (!kw) continue;
+      const kw = sanitizeKeyword(raw);
+      if (kw) primaryKeys.add(kw);
+    }
+    const topicMatchedKeywords: string[] = [];
+    for (const kw of primaryKeys) {
       if (matchesKeyword(text, kw)) {
         sum += weight * 0.25;
         primaryHit = true;
@@ -102,7 +216,7 @@ export function scoreKeywordMatch(
     // own keywords have matched — they must never trigger a hit alone.
     if (primaryHit) {
       for (const raw of topic.inheritedKeywords ?? []) {
-        const kw = raw.trim().toLowerCase();
+        const kw = sanitizeKeyword(raw);
         if (!kw || primaryKeys.has(kw)) continue;
         if (matchesKeyword(text, kw)) {
           sum += weight * INHERITED_KEYWORD_WEIGHT_FACTOR;

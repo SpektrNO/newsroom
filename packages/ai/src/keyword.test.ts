@@ -3,8 +3,65 @@ import { describe, it } from "node:test";
 import {
   articleMatchesTopicKeywords,
   combineFinalRank,
+  englishPluralVariants,
+  sanitizeKeyword,
   scoreKeywordMatch,
 } from "./keyword.js";
+
+describe("sanitizeKeyword", () => {
+  it("normalizes case, trim, and interior whitespace", () => {
+    assert.equal(sanitizeKeyword("  Open   Source  "), "open source");
+  });
+
+  it("rejects empty, too-short, and too-long input", () => {
+    assert.equal(sanitizeKeyword(""), null);
+    assert.equal(sanitizeKeyword("a"), null);
+    assert.equal(sanitizeKeyword("x".repeat(65)), null);
+  });
+
+  it("rejects regex / punctuation spam and non-strings", () => {
+    assert.equal(sanitizeKeyword(".*"), null);
+    assert.equal(sanitizeKeyword("(llm)"), null);
+    assert.equal(sanitizeKeyword("c++"), null);
+    assert.equal(sanitizeKeyword("!!!"), null);
+    assert.equal(sanitizeKeyword(null), null);
+    assert.equal(sanitizeKeyword(12), null);
+  });
+
+  it("allows letters, digits, spaces, hyphens, and apostrophes", () => {
+    assert.equal(sanitizeKeyword("gpt-4"), "gpt-4");
+    assert.equal(sanitizeKeyword("o'reilly"), "o'reilly");
+    assert.equal(sanitizeKeyword("Lex Fridman"), "lex fridman");
+  });
+});
+
+describe("englishPluralVariants", () => {
+  it("folds regular plurals both ways", () => {
+    assert.deepEqual(
+      [...englishPluralVariants("regulation")].sort(),
+      ["regulation", "regulations"].sort(),
+    );
+    assert.deepEqual(
+      [...englishPluralVariants("regulations")].sort(),
+      ["regulation", "regulations"].sort(),
+    );
+  });
+
+  it("handles y → ies and -es plurals", () => {
+    assert.ok(englishPluralVariants("policy").includes("policies"));
+    assert.ok(englishPluralVariants("policies").includes("policy"));
+    assert.ok(englishPluralVariants("match").includes("matches"));
+    assert.ok(englishPluralVariants("matches").includes("match"));
+  });
+
+  it("does not fold short tokens, phrases, or mass nouns", () => {
+    assert.deepEqual(englishPluralVariants("ai"), ["ai"]);
+    assert.deepEqual(englishPluralVariants("css"), ["css"]);
+    assert.deepEqual(englishPluralVariants("open source"), ["open source"]);
+    assert.deepEqual(englishPluralVariants("news"), ["news"]);
+    assert.ok(!englishPluralVariants("news").includes("new"));
+  });
+});
 
 describe("scoreKeywordMatch", () => {
   it("does not match a keyword inside an unrelated longer word", () => {
@@ -22,6 +79,31 @@ describe("scoreKeywordMatch", () => {
   it("still matches a keyword as a standalone word", () => {
     const result = scoreKeywordMatch("New rover explores deep space", null, [
       { id: "space", keywords: ["space"], weight: 1 },
+    ]);
+    assert.equal(result.hit, true);
+    assert.equal(result.keywordScore, 0.25);
+  });
+
+  it("matches plural article text against a singular keyword", () => {
+    const result = scoreKeywordMatch(
+      "New EU regulations for AI models",
+      null,
+      [{ id: "policy", keywords: ["regulation"], weight: 1 }],
+    );
+    assert.equal(result.hit, true);
+    assert.match(result.reason ?? "", /regulation/);
+  });
+
+  it("matches singular article text against a plural keyword", () => {
+    const result = scoreKeywordMatch("A new regulation landed today", null, [
+      { keywords: ["regulations"], weight: 1 },
+    ]);
+    assert.equal(result.hit, true);
+  });
+
+  it("ignores unsanitary user keywords instead of throwing", () => {
+    const result = scoreKeywordMatch("Hello LLM world", null, [
+      { keywords: [".*", "(llm)", "llm!!!", "llm"], weight: 1 },
     ]);
     assert.equal(result.hit, true);
     assert.equal(result.keywordScore, 0.25);

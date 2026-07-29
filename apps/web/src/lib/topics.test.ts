@@ -35,7 +35,8 @@ describe("followDefaultsForLabel", () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     assert.equal(parsed.name, "LLMs & agents");
-    assert.deepEqual(parsed.keywords, ["LLMs", "agents"]);
+    // Stored keywords are sanitized (lowercased) at write time.
+    assert.deepEqual(parsed.keywords, ["llms", "agents"]);
     assert.equal(parsed.weight, 1);
     assert.equal(parsed.enabled, true);
   });
@@ -109,6 +110,31 @@ describe("parseTopicCreateBody", () => {
     assert.equal(omitted.ok, true);
     if (!omitted.ok) return;
     assert.deepEqual(omitted.keywords, []);
+  });
+
+  it("sanitizes keywords and rejects junk patterns", () => {
+    const ok = parseTopicCreateBody({
+      name: "AI & infra",
+      keywords: ["  LLM  ", "Postgres"],
+    });
+    assert.equal(ok.ok, true);
+    if (!ok.ok) return;
+    assert.deepEqual(ok.keywords, ["llm", "postgres"]);
+
+    assert.equal(
+      parseTopicCreateBody({
+        name: "AI & infra",
+        keywords: [".*"],
+      }).ok,
+      false,
+    );
+    assert.equal(
+      parseTopicCreateBody({
+        name: "AI & infra",
+        keywords: ["c++"],
+      }).ok,
+      false,
+    );
   });
 
   it("accepts numeric string weight", () => {

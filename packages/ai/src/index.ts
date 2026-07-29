@@ -14,7 +14,12 @@ export {
   articleMatchesTopicKeywords,
   withInheritedCatalogKeywords,
   combineFinalRank,
+  sanitizeKeyword,
+  englishPluralVariants,
   INHERITED_KEYWORD_WEIGHT_FACTOR,
+  MAX_KEYWORD_LENGTH,
+  MIN_KEYWORD_LENGTH,
+  MIN_PLURAL_FOLD_LENGTH,
   type KeywordTopic,
   type KeywordMatchResult,
 } from "./keyword.js";

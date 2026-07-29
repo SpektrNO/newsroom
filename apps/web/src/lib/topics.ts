@@ -1,3 +1,4 @@
+import { sanitizeKeyword } from "@newsroom/ai";
 import { isUniqueViolation } from "./sources";
 import { resolveSelectableTopicLabel } from "./topic-tree";
 
@@ -13,7 +14,6 @@ export {
 } from "./topics-catalog";
 
 const MAX_KEYWORDS = 50;
-const MAX_KEYWORD_LEN = 64;
 const MIN_WEIGHT = 0.1;
 const MAX_WEIGHT = 10;
 
@@ -52,12 +52,17 @@ export function toTopicJson(row: TopicRow): TopicJson {
 function normalizeKeywords(raw: unknown): string[] | null {
   if (!Array.isArray(raw)) return null;
   const out: string[] = [];
+  const seen = new Set<string>();
   for (const item of raw) {
     if (typeof item !== "string") return null;
-    const trimmed = item.trim();
-    if (!trimmed) continue;
-    if (trimmed.length > MAX_KEYWORD_LEN) return null;
-    out.push(trimmed);
+    if (!item.trim()) continue;
+    const kw = sanitizeKeyword(item);
+    // Reject the whole payload on junk rather than silently dropping — users
+    // should see the keyword was invalid (regex spam, too long, etc.).
+    if (!kw) return null;
+    if (seen.has(kw)) continue;
+    seen.add(kw);
+    out.push(kw);
     if (out.length > MAX_KEYWORDS) return null;
   }
   return out;
