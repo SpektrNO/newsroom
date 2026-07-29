@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -191,6 +192,13 @@ export function FeedClient(): ReactNode {
   const [rankNote, setRankNote] = useState<string | null>(null);
   /** Topics chip panel; restored from localStorage after mount. */
   const [topicsOpen, setTopicsOpen] = useState(true);
+  /** Ignore stale feed responses when filters change mid-flight. */
+  const loadGenRef = useRef(0);
+  const rankingRef = useRef(false);
+  const wipingRef = useRef(false);
+  const loadPageRef = useRef<(cursor?: string, append?: boolean) => Promise<void>>(
+    async () => undefined,
+  );
 
   useEffect(() => {
     try {
@@ -236,9 +244,14 @@ export function FeedClient(): ReactNode {
 
   const loadPage = useCallback(
     async (cursor?: string, append = false) => {
+      const gen = ++loadGenRef.current;
       if (append) setLoadingMore(true);
       else {
-        setLoading(true);
+        // Keep the list visible while Rank latest runs — filter/search during
+        // ranking used to flash the full-page loader and felt like a hang.
+        if (!rankingRef.current && !wipingRef.current) {
+          setLoading(true);
+        }
         setError(null);
       }
       try {
@@ -255,6 +268,7 @@ export function FeedClient(): ReactNode {
           q: search || undefined,
           limit: 20,
         });
+        if (gen !== loadGenRef.current) return;
         setItems((prev) => (append ? [...prev, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
         if (!append) {
@@ -283,6 +297,7 @@ export function FeedClient(): ReactNode {
           setNeedsRank(Boolean(page.needsRank));
         }
       } catch (err) {
+        if (gen !== loadGenRef.current) return;
         const status =
           err instanceof ApiError
             ? err.status
@@ -306,12 +321,18 @@ export function FeedClient(): ReactNode {
           setArticlesCount(null);
         }
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        // Only the latest in-flight load owns the loading flags — older
+        // requests must not clear them while a newer filter load is pending.
+        if (gen === loadGenRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [api, router, source, search, selectedTopicIds, topicFilterActive, view],
   );
+
+  loadPageRef.current = loadPage;
 
   useEffect(() => {
     let cancelled = false;
@@ -412,14 +433,19 @@ export function FeedClient(): ReactNode {
   }
 
   async function onRankLatest() {
-    if (ranking || wiping) return;
+    if (rankingRef.current || wipingRef.current) return;
+    rankingRef.current = true;
     setRanking(true);
     setRankNote(null);
     setError(null);
     try {
       const result = await api.rankFeedLatest();
       setRankNote(formatRankLatestNote(result));
-      await loadPage();
+      // Drop the Ranking… state before refreshing the feed so filter/search
+      // loads that raced during the rank call cannot leave the button stuck.
+      rankingRef.current = false;
+      setRanking(false);
+      await loadPageRef.current();
       setNeedsRank(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -438,12 +464,13 @@ export function FeedClient(): ReactNode {
         setRankNote("Couldn't rank — try again.");
       }
     } finally {
+      rankingRef.current = false;
       setRanking(false);
     }
   }
 
   async function onWipeRankings() {
-    if (ranking || wiping) return;
+    if (rankingRef.current || wipingRef.current) return;
     if (
       !window.confirm(
         "Clear ranked feed items? Saved and Dismissed stay. Rank latest when you want a fresh feed.",
@@ -451,6 +478,7 @@ export function FeedClient(): ReactNode {
     ) {
       return;
     }
+    wipingRef.current = true;
     setWiping(true);
     setRankNote(null);
     setError(null);
@@ -462,7 +490,9 @@ export function FeedClient(): ReactNode {
           ? "No ranked items to clear."
           : `Cleared ${scores} ranked item${scores === 1 ? "" : "s"}. Saved and Dismissed unchanged.`,
       );
-      await loadPage();
+      wipingRef.current = false;
+      setWiping(false);
+      await loadPageRef.current();
       setNeedsRank(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -475,6 +505,7 @@ export function FeedClient(): ReactNode {
         setRankNote("Couldn't wipe rankings — try again.");
       }
     } finally {
+      wipingRef.current = false;
       setWiping(false);
     }
   }

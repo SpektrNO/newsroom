@@ -15,8 +15,10 @@ Personal-first; multi-user-ready data model and APIs.
 
 ```bash
 cp .env.example .env
-# Set BETTER_AUTH_SECRET to ≥32 characters, e.g. openssl rand -base64 32
-# Copy the same app vars into apps/web/.env.local for Next.js
+cp apps/web/.env.example apps/web/.env.local
+# Set BETTER_AUTH_SECRET to ≥32 characters in BOTH files, e.g. openssl rand -base64 32
+# Keep shared vars (DB, Ollama, RANK_*) in sync — Next does not read root `.env`.
+# See docs/ops-local.md#environment-files
 
 pnpm install
 docker compose up -d          # Postgres + Ollama
@@ -95,7 +97,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see `.env.example` (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `EXPO_PUBLIC_API_URL`). Optional: `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores`, `RANK_BATCH_SIZE` (clamped 20–50, default 30), `OLLAMA_TIMEOUT_MS` (generate timeout, default 300000), `RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` (per-user ranking tiers — see [docs/ops-local.md#ranking-model-tiers](docs/ops-local.md#ranking-model-tiers); Fast falls back to `OLLAMA_MODEL`/`llama3.2`, Standard defaults to `llama3.1:8b`), `AI_TOKEN_DAILY_LIMIT` (default 200000), `AI_TOKEN_DAILY_SOFT_LIMIT` (default 80% of hard), `RANK_AI_MAX_PER_RUN` (default 60), `RANK_AI_MAX_PER_DAY` (default 0 = unlimited; prefer token cap), `RANK_AI_MAX_GLOBAL_PER_DAY` (default 0 = unlimited), `RANK_SCORE_TTL_DAYS` (default 30), `RANK_SCORE_KEEP_TOP_N` (default 500), `ARTICLE_TTL_DAYS` (default 90; keeps saved bookmarks), `BLUESKY_APPVIEW_URL` (default `https://public.api.bsky.app`; Bluesky ingest AppView base, no trailing slash).
+Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environment-files) for **which file** loads what. Templates: root [`.env.example`](.env.example) (worker/CLI) and [`apps/web/.env.example`](apps/web/.env.example) → `apps/web/.env.local` (Next / Rank latest). Shared: `DATABASE_URL`, `BETTER_AUTH_*`, `OLLAMA_*`, `RANK_*`, `AI_TOKEN_*`, TTLs. Root-only: `GITHUB_*`, `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE`. Mobile: `EXPO_PUBLIC_API_URL`. Ranking tiers: [docs/ops-local.md#ranking-model-tiers](docs/ops-local.md#ranking-model-tiers).
 
 ### Settings API (session cookie)
 

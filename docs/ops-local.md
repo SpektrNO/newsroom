@@ -11,6 +11,35 @@ pnpm build                                   # or: pnpm --filter @newsroom/ai bu
 
 `pnpm dev` (fresh start) now runs `^build` first via `turbo.json`, so cold starts are safe — this only bites you when editing source against an *already-running* dev server.
 
+## Environment files
+
+Two different processes load two different files. Mixing them up is a common gotcha (e.g. `RANK_BATCH_SIZE=20` in root `.env` while **Rank latest** still logs `batch=30`).
+
+| File | Who loads it | Used for |
+|------|----------------|----------|
+| **Repo root `.env`** | Worker via `tsx --env-file=../../.env` (`pnpm worker:ingest`, `worker:rank`, `worker:start`, …). GitHub scripts. Optional seed. | Background ingest/rank/prune; CLI one-shots |
+| **`apps/web/.env.local`** | Next.js only (`pnpm --filter @newsroom/web dev` / `start`) | Auth, health, chat, **Rank latest** (`POST /api/feed/rank` runs *in* the web process), Settings APIs |
+
+**Setup**
+
+```bash
+cp .env.example .env
+cp apps/web/.env.example apps/web/.env.local
+# Set the same BETTER_AUTH_SECRET (≥32 chars) in both.
+# Copy any shared rank/Ollama overrides into BOTH files when you change them.
+```
+
+| Variable group | Root `.env` | `apps/web/.env.local` |
+|----------------|:-----------:|:---------------------:|
+| `DATABASE_URL`, Better Auth URLs/secret | yes | yes (required for web) |
+| `OLLAMA_*`, `RANK_MODEL_*`, `RANK_BATCH_SIZE`, `OLLAMA_TIMEOUT_MS` | yes (worker rank) | yes (**Rank latest** / chat) |
+| `AI_TOKEN_*`, `RANK_AI_MAX_*`, score/article TTL | yes (worker) | yes (Rank latest + Settings usage) |
+| `BLUESKY_APPVIEW_URL` | yes (worker ingest) | only if a web path ever fetches Bluesky (ingest is worker) |
+| `GITHUB_*`, `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE` | yes | no |
+| `EXPO_PUBLIC_API_URL` | optional (docs/mobile) | no — use `apps/mobile` env |
+
+After changing `apps/web/.env.local`, **restart** the Next dev server.
+
 ## Compose
 
 ```bash
