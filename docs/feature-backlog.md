@@ -195,8 +195,19 @@ Notes for `web-source-discovery` (shipped — catalog v1):
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
 | `multiuser-harden` | Registration, isolation, rate limits, host AI swap | ⬜ | `docs/architecture.md` |
+| `security-harden` | Auth hardening, API keys, abuse/misuse controls | ⬜ | `docs/architecture.md` |
 | `source-bluesky` | Bluesky adapter | ⬜ | `docs/architecture.md` |
 | `source-podcast` | Podcast RSS adapter + episode cards in feed | ✅ | `docs/architecture.md` |
+
+Notes for `security-harden`:
+
+- **Goal:** Harden the product against account takeover, credential abuse, and automated misuse of session APIs / future machine clients — without turning the personal app into an enterprise IdP.
+- **Authentication:** Review Better Auth setup end-to-end — secret rotation, cookie flags (`Secure`/`HttpOnly`/`SameSite`), CSRF posture for cookie sessions, password policy / lockout or progressive delays, email verification expectations, session revocation (sign-out-all / rotate on password change). Close any open signup/spam paths that don’t belong in a personal or small multi-user deploy (align with `multiuser-harden` registration gates).
+- **API keys (machine clients):** Session cookies are fine for the browser; mobile and any CLI/automation need a first-class, **revocable** credential. Spec should cover: create/list/revoke keys in Settings; scoped permissions (e.g. read feed vs mutate topics vs trigger rank); hashed-at-rest storage; last-used metadata; never return the secret after create. Prefer Bearer keys on `/api/*` alongside existing session auth — do not invent a parallel API surface.
+- **Misuse / abuse:** Expand beyond today’s ad-hoc per-route limits (chat, Rank latest) to a coherent abuse story: per-user and per-IP rate limits on expensive routes (`/api/feed/rank`, `/api/chat`, auth endpoints, source create); backoff on auth failures; optional global kill-switches/env caps for rank and chat; ensure AI token/article budgets (`ai-token-metering`, `rank-ai-budgets`) cannot be bypassed by spawning accounts or hammering catch-up rank. Log/alert enough to diagnose abuse without storing sensitive payloads.
+- **Isolation audit:** Reconfirm every mutating and list endpoint is session-/key-scoped to the caller (topics, sources, feed scores, settings, AI usage) — regression tests for cross-user IDOR.
+- **Relation to `multiuser-harden`:** That feature is product multi-tenancy (open registration policy, stronger isolation defaults, hosted AI provider swap). This feature is the **threat/abuse** pass (credentials, keys, rate/misuse). Spec either together or land `security-harden` first if running a semi-public deploy before full multi-user polish.
+- **Out of scope v1:** OAuth social login, SSO/SAML, fine-grained admin RBAC consoles, WAF/CDN productization, penetration-test remediation beyond issues found in this pass.
 
 Notes for `source-podcast`:
 
