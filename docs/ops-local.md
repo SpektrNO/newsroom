@@ -30,7 +30,7 @@ Ollama listens on `http://localhost:11434` (`OLLAMA_HOST`). First time, pull the
 docker exec -it newsroom-ollama ollama pull llama3.2
 ```
 
-Optional: also pull one of the stronger models (see [Model options](#model-options)) if `llama3.2`'s ranking `reason` text is too often generic or boilerplate for your taste:
+Optional: also pull one of the stronger models (see [Model options](#model-options)) if you use the **Standard** ranking tier (defaults to `llama3.1:8b`) or want a better Fast/`OLLAMA_MODEL` than `llama3.2`:
 
 ```bash
 docker exec -it newsroom-ollama ollama pull llama3.1:8b
@@ -110,28 +110,58 @@ Both expose the same API. App env does not change. Do **not** run both at once o
 
 Newsroom defaults (see `.env.example`):
 
-| Variable | Default |
-|----------|---------|
-| `OLLAMA_HOST` | `http://localhost:11434` |
-| `OLLAMA_MODEL` | `llama3.2` |
+| Variable | Default | Role |
+|----------|---------|------|
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama base URL |
+| `OLLAMA_MODEL` | `llama3.2` | Default model for non-tiered calls (chat/advisor) and fallback for the **fast** ranking tier |
+| `RANK_MODEL_FAST` | *(unset → `OLLAMA_MODEL` → `llama3.2`)* | Model when Settings ranking tier is **Fast** |
+| `RANK_MODEL_STANDARD` | *(unset → `llama3.1:8b`)* | Model when Settings ranking tier is **Standard** |
 
-Without Ollama: auth, ingest, topics, and keyword-only ranking still work; health is `degraded` (`checks.ollama: "error"`). AI scores, AI “why” reasons, and near-dup hints are missing until a model is reachable.
+Without Ollama: auth, ingest, topics, and keyword-only ranking still work; health is `degraded` (`checks.ollama: "error"`). AI scores, AI “why” reasons, and near-dup hints are missing until a model is reachable. Users on the **None** ranking tier never call Ollama.
+
+### Ranking model tiers
+
+Each signed-in user picks a ranking model tier in **Settings** (`none` \| `fast` \| `standard`; see [ADR 005](./decisions/005-user-selectable-rank-model.md)). Env vars `RANK_MODEL_FAST` and `RANK_MODEL_STANDARD` map those tiers to Ollama model names. The worker resolves the model per user:
+
+| User tier | Model resolution |
+|-----------|------------------|
+| `none` | No AI — keyword shortlist only; ignores all three env vars |
+| `fast` | `RANK_MODEL_FAST` → else `OLLAMA_MODEL` → else `llama3.2` |
+| `standard` | `RANK_MODEL_STANDARD` → else `llama3.1:8b` (**does not** fall back to `OLLAMA_MODEL`) |
+
+Examples:
+
+```bash
+# Chat + Fast ranking use llama3.2; Standard ranking uses llama3.1:8b (built-in default)
+OLLAMA_MODEL=llama3.2
+
+# Keep chat on llama3.2, but make Fast ranking use qwen and Standard use llama3.1:8b
+OLLAMA_MODEL=llama3.2
+RANK_MODEL_FAST=qwen2.5:7b
+RANK_MODEL_STANDARD=llama3.1:8b
+
+# Point both ranking tiers at stronger models; leave OLLAMA_MODEL for advisor/chat
+RANK_MODEL_FAST=llama3.1:8b
+RANK_MODEL_STANDARD=qwen2.5:7b
+```
+
+Pull every model you reference before ranking with that tier (Compose or host — see below). `fast` and `standard` share the same AI article/token budgets; only the model name differs.
 
 ### Model options
 
-`llama3.2` (3B) is the default — fast and light, but a weak instruction-follower: it sometimes echoes the rank prompt's own JSON schema/instructions into the `reason` field instead of describing the article (mitigated in code, see [002-hybrid-ranking.md](./decisions/002-hybrid-ranking.md) decision 7, but not eliminated). Stronger local alternatives, same `AiProvider`/`OllamaProvider` interface, just pull + set `OLLAMA_MODEL`:
+`llama3.2` (3B) is the default for `OLLAMA_MODEL` / Fast — fast and light, but a weak instruction-follower: it sometimes echoes the rank prompt's own JSON schema/instructions into the `reason` field instead of describing the article (mitigated in code, see [002-hybrid-ranking.md](./decisions/002-hybrid-ranking.md) decision 7, but not eliminated). Stronger local alternatives use the same `AiProvider`/`OllamaProvider` interface — pull the image, then point a tier (or `OLLAMA_MODEL`) at it:
 
 | Model | Size | Notes |
 |-------|------|-------|
-| `llama3.2` | 2.0 GB | Default. Fastest, weakest instruction-following. |
-| `llama3.1:8b` | 4.9 GB | Noticeably better instruction-following; slower per batch. |
-| `qwen2.5:7b` | 4.7 GB | Similar tier to `llama3.1:8b`; often stronger structured-JSON output. |
-
-Pull whichever you want to try, then switch via env (no code change):
+| `llama3.2` | 2.0 GB | Default Fast / `OLLAMA_MODEL`. Fastest, weakest instruction-following. |
+| `llama3.1:8b` | 4.9 GB | Default **Standard** tier. Noticeably better instruction-following; slower per batch. |
+| `qwen2.5:7b` | 4.7 GB | Similar tier to `llama3.1:8b`; often stronger structured-JSON output. Good `RANK_MODEL_STANDARD` or `RANK_MODEL_FAST` override. |
 
 ```bash
 docker exec -it newsroom-ollama ollama pull llama3.1:8b   # or qwen2.5:7b
-# .env: OLLAMA_MODEL=llama3.1:8b
+# Optional overrides in .env — see Ranking model tiers above
+# RANK_MODEL_STANDARD=llama3.1:8b
+# OLLAMA_MODEL=llama3.1:8b   # only if you also want chat/advisor on this model
 ```
 
 Larger/slower models may need a higher `OLLAMA_TIMEOUT_MS` (default 5 minutes) for CPU-only ranking batches.
