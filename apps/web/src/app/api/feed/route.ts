@@ -39,6 +39,7 @@ import {
   encodeFeedCursor,
   escapeIlikePattern,
   feedCursorFromRow,
+  feedSourceSubscriptionLabel,
   matchesTopicIds,
   parseFeedLimit,
   parseFeedOrder,
@@ -536,6 +537,7 @@ export async function GET(request: Request) {
       sourceType: articleSources.sourceType,
       externalId: articleSources.externalId,
       subscriptionUserId: sourceSubscriptions.userId,
+      config: sourceSubscriptions.config,
     })
     .from(articleSources)
     .leftJoin(
@@ -557,6 +559,7 @@ export async function GET(request: Request) {
     list.push({
       sourceType: row.sourceType,
       externalId: row.externalId,
+      label: feedSourceSubscriptionLabel(row.sourceType, row.config),
     });
     sourcesByArticle.set(row.articleId, list);
   }

@@ -20,6 +20,8 @@ import {
   passesSearchFilter,
   passesSourceFilter,
   splitFeedReason,
+  feedSourceSubscriptionLabel,
+  feedSourceTypeLabel,
   tokenizeFeedSearch,
   formatEpisodeDuration,
 } from "./feed.js";
@@ -204,6 +206,25 @@ describe("feed query parsers", () => {
       keywordsLine: null,
       detail: "Just an AI line",
     });
+  });
+
+  it("labels source types and subscription identities", () => {
+    assert.equal(feedSourceTypeLabel("substack"), "Feed");
+    assert.equal(feedSourceTypeLabel("podcast"), "Podcast");
+    assert.equal(
+      feedSourceSubscriptionLabel("substack", {
+        rssUrl: "https://www.platformer.news/feed",
+      }),
+      "platformer.news",
+    );
+    assert.equal(
+      feedSourceSubscriptionLabel("bluesky", { handle: "@Jay.Bsky.Social" }),
+      "@Jay.Bsky.Social",
+    );
+    assert.equal(
+      feedSourceSubscriptionLabel("hackernews", { mode: "new" }),
+      "New",
+    );
   });
 });
 

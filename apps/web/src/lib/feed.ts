@@ -4,6 +4,8 @@ import type { UserArticleScoreStatus } from "@newsroom/db";
 export type FeedSourceJson = {
   sourceType: string;
   externalId: string | null;
+  /** Short subscription identity (host, handle, HN mode, …). */
+  label: string | null;
 };
 
 export type FeedItemJson = {
@@ -250,6 +252,43 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
     status: row.status as UserArticleScoreStatus,
     scoredAt: row.scoredAt.toISOString(),
   };
+}
+
+/** Human label for a source type (Feed / Podcast / …). */
+export function feedSourceTypeLabel(sourceType: string): string {
+  if (sourceType === "hackernews") return "Hacker News";
+  if (sourceType === "substack") return "Feed";
+  if (sourceType === "podcast") return "Podcast";
+  if (sourceType === "bluesky") return "Bluesky";
+  return sourceType;
+}
+
+/** Compact identity for a subscription (hostname, @handle, Top/New). */
+export function feedSourceSubscriptionLabel(
+  sourceType: string,
+  config: {
+    rssUrl?: unknown;
+    handle?: unknown;
+    mode?: unknown;
+  } | null | undefined,
+): string | null {
+  if (sourceType === "hackernews") {
+    return config?.mode === "new" ? "New" : "Top";
+  }
+  if (sourceType === "bluesky") {
+    if (typeof config?.handle !== "string" || !config.handle.trim()) return null;
+    const handle = config.handle.trim().replace(/^@/, "");
+    return handle ? `@${handle}` : null;
+  }
+  if (typeof config?.rssUrl === "string" && config.rssUrl.trim()) {
+    try {
+      const host = new URL(config.rssUrl).hostname.replace(/^www\./, "");
+      return host || config.rssUrl.trim();
+    } catch {
+      return config.rssUrl.trim();
+    }
+  }
+  return null;
 }
 
 /**

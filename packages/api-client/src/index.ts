@@ -87,6 +87,8 @@ export type FeedItemStatus = "new" | "seen" | "saved" | "dismissed";
 export type FeedSource = {
   sourceType: string;
   externalId: string | null;
+  /** Short subscription identity (host, handle, HN mode, …). */
+  label?: string | null;
 };
 
 export type FeedItem = {

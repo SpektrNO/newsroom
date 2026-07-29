@@ -20,7 +20,7 @@ import {
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
 import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
-import { formatEpisodeDuration, splitFeedReason } from "@/lib/feed";
+import { formatEpisodeDuration, feedSourceTypeLabel, splitFeedReason } from "@/lib/feed";
 
 type SourceFilter = SourceTypeV1;
 type ViewFilter = "feed" | "saved" | "dismissed";
@@ -77,12 +77,19 @@ function formatRankLatestNote(result: RankFeedLatestResponse): string {
   return `${parts.join(". ")}.`;
 }
 
-function sourceLabel(type: string): string {
-  if (type === "hackernews") return "Hacker News";
-  if (type === "substack") return "Feed";
-  if (type === "podcast") return "Podcast";
-  if (type === "bluesky") return "Bluesky";
-  return type;
+function formatStoryMeta(item: FeedItem): string | null {
+  const date = formatPublished(item.publishedAt);
+  const primary = item.sources[0];
+  if (!primary) return date;
+
+  const type = feedSourceTypeLabel(primary.sourceType);
+  let name = primary.label?.trim() || null;
+  if (!name && primary.sourceType === "podcast" && item.showTitle?.trim()) {
+    name = item.showTitle.trim();
+  }
+  const duration = formatEpisodeDuration(item.durationSeconds);
+  const parts = [type, name, duration, date].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function formatPublished(iso: string | null): string | null {
@@ -862,13 +869,7 @@ export function FeedClient(): ReactNode {
       ) : (
         <ul className="story-list">
           {items.map((item, index) => {
-            const metaParts = [
-              ...new Set(item.sources.map((s) => sourceLabel(s.sourceType))),
-              item.showTitle,
-              formatEpisodeDuration(item.durationSeconds),
-              item.author,
-              formatPublished(item.publishedAt),
-            ].filter(Boolean);
+            const meta = formatStoryMeta(item);
             const playAudio =
               item.enclosureUrl &&
               item.enclosureUrl !== item.canonicalUrl
@@ -900,9 +901,7 @@ export function FeedClient(): ReactNode {
                     </span>
                   </div>
                   {item.reason ? <StoryReason reason={item.reason} /> : null}
-                  {metaParts.length > 0 ? (
-                    <p className="story-meta">{metaParts.join(" · ")}</p>
-                  ) : null}
+                  {meta ? <p className="story-meta">{meta}</p> : null}
                   {playAudio ? (
                     <p className="story-meta">
                       <a

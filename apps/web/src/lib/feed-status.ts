@@ -7,7 +7,7 @@ import {
   sourceSubscriptions,
 } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
-import { toFeedItemJson, type FeedSourceJson } from "@/lib/feed";
+import { toFeedItemJson, feedSourceSubscriptionLabel, type FeedSourceJson } from "@/lib/feed";
 import { updateScoreStatusForUser } from "@/lib/feed-queries";
 
 export async function updateFeedStatusResponse(
@@ -43,6 +43,7 @@ export async function updateFeedStatusResponse(
       sourceType: articleSources.sourceType,
       externalId: articleSources.externalId,
       subscriptionUserId: sourceSubscriptions.userId,
+      config: sourceSubscriptions.config,
     })
     .from(articleSources)
     .leftJoin(
@@ -62,6 +63,7 @@ export async function updateFeedStatusResponse(
     sources.push({
       sourceType: row.sourceType,
       externalId: row.externalId,
+      label: feedSourceSubscriptionLabel(row.sourceType, row.config),
     });
   }
 
