@@ -188,6 +188,33 @@ export function FeedClient(): ReactNode {
   const [ranking, setRanking] = useState(false);
   const [wiping, setWiping] = useState(false);
   const [rankNote, setRankNote] = useState<string | null>(null);
+  /** Topics chip panel; restored from localStorage after mount. */
+  const [topicsOpen, setTopicsOpen] = useState(true);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("newsroom.feed.topicsOpen");
+      if (stored === "0") setTopicsOpen(false);
+      if (stored === "1") setTopicsOpen(true);
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, []);
+
+  function toggleTopicsOpen() {
+    setTopicsOpen((open) => {
+      const next = !open;
+      try {
+        window.localStorage.setItem(
+          "newsroom.feed.topicsOpen",
+          next ? "1" : "0",
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   const topicGroups = useMemo(
     () => groupTopics(topics, treeNodes),
@@ -545,7 +572,18 @@ export function FeedClient(): ReactNode {
 
         <div className="topic-filter" role="group" aria-label="Topics">
           <div className="topic-filter-header">
-            <span className="filter-label">Topics</span>
+            <button
+              type="button"
+              className="topic-filter-collapse"
+              aria-expanded={topicsOpen}
+              aria-controls="feed-topic-filter-body"
+              onClick={toggleTopicsOpen}
+            >
+              <span className="topic-filter-collapse-chevron" aria-hidden>
+                {topicsOpen ? "▾" : "▸"}
+              </span>
+              <span className="filter-label">Topics</span>
+            </button>
             {topics.length > 0 ? (
               <span className="topic-filter-actions">
                 <button
@@ -559,58 +597,62 @@ export function FeedClient(): ReactNode {
               </span>
             ) : null}
           </div>
-          {topics.length === 0 ? (
-            <p className="topic-filter-empty">
-              No topics yet.{" "}
-              <Link href="/topics">Follow topics</Link> to filter your feed.
-            </p>
-          ) : (
-            <ul className="topic-filter-groups">
-              {topicGroups.map((group) => {
-                const groupIds = group.topics.map((t) => t.id);
-                const selectedCount = groupIds.filter((id) =>
-                  selectedTopicIds.has(id),
-                ).length;
-                const groupAllOn = selectedCount === groupIds.length;
-                return (
-                  <li key={group.root} className="topic-filter-group">
-                    <button
-                      type="button"
-                      className={
-                        groupAllOn
-                          ? "topic-filter-group-toggle on"
-                          : "topic-filter-group-toggle"
-                      }
-                      aria-pressed={groupAllOn}
-                      onClick={() => toggleGroup(group)}
-                    >
-                      {group.root}
-                    </button>
-                    <div className="topic-filter-chips">
-                      {group.topics.map((topic) => {
-                        const on = selectedTopicIds.has(topic.id);
-                        return (
-                          <button
-                            key={topic.id}
-                            type="button"
-                            className={
-                              on
-                                ? "topic-filter-chip on"
-                                : "topic-filter-chip"
-                            }
-                            aria-pressed={on}
-                            onClick={() => toggleTopic(topic.id)}
-                          >
-                            {topic.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          {topicsOpen ? (
+            <div id="feed-topic-filter-body">
+              {topics.length === 0 ? (
+                <p className="topic-filter-empty">
+                  No topics yet.{" "}
+                  <Link href="/topics">Follow topics</Link> to filter your feed.
+                </p>
+              ) : (
+                <ul className="topic-filter-groups">
+                  {topicGroups.map((group) => {
+                    const groupIds = group.topics.map((t) => t.id);
+                    const selectedCount = groupIds.filter((id) =>
+                      selectedTopicIds.has(id),
+                    ).length;
+                    const groupAllOn = selectedCount === groupIds.length;
+                    return (
+                      <li key={group.root} className="topic-filter-group">
+                        <button
+                          type="button"
+                          className={
+                            groupAllOn
+                              ? "topic-filter-group-toggle on"
+                              : "topic-filter-group-toggle"
+                          }
+                          aria-pressed={groupAllOn}
+                          onClick={() => toggleGroup(group)}
+                        >
+                          {group.root}
+                        </button>
+                        <div className="topic-filter-chips">
+                          {group.topics.map((topic) => {
+                            const on = selectedTopicIds.has(topic.id);
+                            return (
+                              <button
+                                key={topic.id}
+                                type="button"
+                                className={
+                                  on
+                                    ? "topic-filter-chip on"
+                                    : "topic-filter-chip"
+                                }
+                                aria-pressed={on}
+                                onClick={() => toggleTopic(topic.id)}
+                              >
+                                {topic.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          ) : null}
           {topicFilterActive ? (
             <p className="topic-filter-hint">
               Showing {selectedTopicIds.size} of {allTopicIds.length} topics

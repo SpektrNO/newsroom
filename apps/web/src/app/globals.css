@@ -468,6 +468,31 @@ button.danger-text:hover {
   gap: 0.5rem 1rem;
 }
 
+.topic-filter-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.topic-filter-collapse:hover .filter-label,
+.topic-filter-collapse:hover .topic-filter-collapse-chevron {
+  color: var(--ink);
+}
+
+.topic-filter-collapse-chevron {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  width: 0.75rem;
+  text-align: center;
+}
+
 .topic-filter-actions {
   display: flex;
   gap: 0.35rem;
