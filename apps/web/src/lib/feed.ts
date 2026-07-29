@@ -31,7 +31,11 @@ export type FeedItemJson = {
 export type FeedSort = "score" | "date";
 export type FeedOrder = "asc" | "desc";
 
-export { FEED_MAX_AGE_DAYS, feedMaxAgeCutoff } from "@newsroom/db/feed-window";
+export {
+  FEED_MAX_AGE_DAYS,
+  feedMaxAgeCutoff,
+  resolveFeedMaxAgeDays,
+} from "@newsroom/db/feed-window";
 
 export type FeedCursor = {
   sort: FeedSort;

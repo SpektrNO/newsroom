@@ -90,8 +90,8 @@ Notes for `rank-score-retention`:
 
 - **Problem:** `user_article_scores` grows with users × retained items; shared `articles` also accumulate forever.
 - **GC scores:** Drop old `new`/`seen` rows past TTL or outside top-N by `final_rank`; **keep** `saved`; prune old `dismissed` by TTL.
-- **GC articles:** Delete ingested rows older than `ARTICLE_TTL_DAYS` (default **90**) by `COALESCE(published_at, created_at)`; **never** delete an article any user has `saved`. Cascades sources + remaining scores.
-- **Worker:** Periodic/`pnpm worker:prune-scores` runs score prune then article prune; rank-adjacent score prune per user after rank.
+- **GC articles:** Delete ingested rows older than `ARTICLE_TTL_DAYS` (default **90**) by `COALESCE(published_at, created_at)`; **never** delete an article any user has `saved`. Cascades sources + remaining scores/evaluations for **all** users. Same TTL is the feed/rank/pipeline age window (`feedMaxAgeCutoff`). Multi-user: one prune can desync other users’ unsaved rankings from the shared corpus — see architecture caveat; revisit under `multiuser-harden` if needed.
+- **Worker:** Periodic/`pnpm worker:prune-scores` runs score prune then article prune; each rank pass prunes scores per user and articles once at the end.
 - **Can ship after** dirty incremental; independent of AI budgets if storage pressure appears earlier.
 
 ### B3. AI token metering

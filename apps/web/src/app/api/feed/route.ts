@@ -144,8 +144,11 @@ function feedOrderBy(sort: FeedSort, order: FeedOrder): SQL[] {
       ];
 }
 
-/** Hide items older than ~3 months (published_at, else created_at). */
-function feedRecencyCondition(cutoff: Date = feedMaxAgeCutoff()): SQL {
+/** Hide items older than ARTICLE_TTL_DAYS (published_at, else created_at). */
+function feedRecencyCondition(
+  cutoff: Date | null = feedMaxAgeCutoff(),
+): SQL | undefined {
+  if (!cutoff) return undefined;
   // Pass ISO text — postgres.js rejects bare Date through this sql/gte path.
   return sql`COALESCE(${articles.publishedAt}, ${articles.createdAt}) >= ${cutoff.toISOString()}::timestamptz`;
 }
@@ -211,13 +214,18 @@ async function loadFeedCounts(args: {
     statusCondition,
   );
 
+  // Same window as article GC / rank candidates (`ARTICLE_TTL_DAYS`).
+  const ageCutoff = feedMaxAgeCutoff();
+  const ageOpts = ageCutoff ? { notBefore: ageCutoff } : undefined;
+  const recency = feedRecencyCondition(ageCutoff);
   const [[totalRow], evaluatedCount, articlesCount] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(userArticleScores)
-      .where(baseWhere),
-    countUserEvaluatedArticles(db, args.userId),
-    countUserAvailableArticles(db, args.userId),
+      .innerJoin(articles, eq(articles.id, userArticleScores.articleId))
+      .where(and(baseWhere, ...(recency ? [recency] : []))),
+    countUserEvaluatedArticles(db, args.userId, ageOpts),
+    countUserAvailableArticles(db, args.userId, ageOpts),
   ]);
   const totalCount = Number(totalRow?.n ?? 0);
   const rankedCount = totalCount;
@@ -230,7 +238,7 @@ async function loadFeedCounts(args: {
       : null;
   const scoredWhere = and(
     baseWhere,
-    feedRecencyCondition(),
+    ...(recency ? [recency] : []),
     ...searchConds,
     ...(sourceCond ? [sourceCond] : []),
   )!;
@@ -383,8 +391,9 @@ export async function GET(request: Request) {
     statusFilter !== null
       ? eq(userArticleScores.status, statusFilter)
       : ne(userArticleScores.status, "dismissed"),
-    feedRecencyCondition(),
   ];
+  const listRecency = feedRecencyCondition();
+  if (listRecency) conditions.push(listRecency);
 
   if (searchQuery !== null) {
     conditions.push(...feedSearchConditions(searchQuery));

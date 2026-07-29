@@ -75,7 +75,11 @@ export {
   type PruneScoresResult,
   type PruneArticlesResult,
 } from "./score-retention.js";
-export { FEED_MAX_AGE_DAYS, feedMaxAgeCutoff } from "./feed-window.js";
+export {
+  FEED_MAX_AGE_DAYS,
+  feedMaxAgeCutoff,
+  resolveFeedMaxAgeDays,
+} from "./feed-window.js";
 export {
   upsertArticleEvaluation,
   invalidatePreferenceEvaluations,

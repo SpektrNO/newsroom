@@ -88,20 +88,38 @@ export async function pruneUserArticleEvaluations(
   return { deleted: deleted.length };
 }
 
+export type ArticleCountOptions = {
+  /** When set, only count articles with COALESCE(published_at, created_at) >= cutoff. */
+  notBefore?: Date;
+};
+
 /** Distinct articles available via the user's enabled subscriptions. */
 export async function countUserAvailableArticles(
   db: Database,
   userId: string,
+  opts?: ArticleCountOptions,
 ): Promise<number> {
-  const result = await db.execute<{ n: number }>(sql`
-    SELECT COUNT(DISTINCT a.id)::int AS n
-    FROM articles AS a
-    INNER JOIN article_sources AS s ON s.article_id = a.id
-    INNER JOIN source_subscriptions AS sub
-      ON sub.id = s.source_subscription_id
-    WHERE sub.user_id = ${userId}
-      AND sub.enabled = true
-  `);
+  const cutoff = opts?.notBefore;
+  const result = cutoff
+    ? await db.execute<{ n: number }>(sql`
+        SELECT COUNT(DISTINCT a.id)::int AS n
+        FROM articles AS a
+        INNER JOIN article_sources AS s ON s.article_id = a.id
+        INNER JOIN source_subscriptions AS sub
+          ON sub.id = s.source_subscription_id
+        WHERE sub.user_id = ${userId}
+          AND sub.enabled = true
+          AND COALESCE(a.published_at, a.created_at) >= ${cutoff.toISOString()}::timestamptz
+      `)
+    : await db.execute<{ n: number }>(sql`
+        SELECT COUNT(DISTINCT a.id)::int AS n
+        FROM articles AS a
+        INNER JOIN article_sources AS s ON s.article_id = a.id
+        INNER JOIN source_subscriptions AS sub
+          ON sub.id = s.source_subscription_id
+        WHERE sub.user_id = ${userId}
+          AND sub.enabled = true
+      `);
   const rows = result as unknown as Array<{ n: number }>;
   return Number(rows[0]?.n ?? 0);
 }
@@ -110,17 +128,32 @@ export async function countUserAvailableArticles(
 export async function countUserEvaluatedArticles(
   db: Database,
   userId: string,
+  opts?: ArticleCountOptions,
 ): Promise<number> {
-  const result = await db.execute<{ n: number }>(sql`
-    SELECT COUNT(DISTINCT e.article_id)::int AS n
-    FROM user_article_evaluations AS e
-    INNER JOIN article_sources AS s ON s.article_id = e.article_id
-    INNER JOIN source_subscriptions AS sub
-      ON sub.id = s.source_subscription_id
-    WHERE e.user_id = ${userId}
-      AND sub.user_id = ${userId}
-      AND sub.enabled = true
-  `);
+  const cutoff = opts?.notBefore;
+  const result = cutoff
+    ? await db.execute<{ n: number }>(sql`
+        SELECT COUNT(DISTINCT e.article_id)::int AS n
+        FROM user_article_evaluations AS e
+        INNER JOIN articles AS a ON a.id = e.article_id
+        INNER JOIN article_sources AS s ON s.article_id = e.article_id
+        INNER JOIN source_subscriptions AS sub
+          ON sub.id = s.source_subscription_id
+        WHERE e.user_id = ${userId}
+          AND sub.user_id = ${userId}
+          AND sub.enabled = true
+          AND COALESCE(a.published_at, a.created_at) >= ${cutoff.toISOString()}::timestamptz
+      `)
+    : await db.execute<{ n: number }>(sql`
+        SELECT COUNT(DISTINCT e.article_id)::int AS n
+        FROM user_article_evaluations AS e
+        INNER JOIN article_sources AS s ON s.article_id = e.article_id
+        INNER JOIN source_subscriptions AS sub
+          ON sub.id = s.source_subscription_id
+        WHERE e.user_id = ${userId}
+          AND sub.user_id = ${userId}
+          AND sub.enabled = true
+      `);
   const rows = result as unknown as Array<{ n: number }>;
   return Number(rows[0]?.n ?? 0);
 }

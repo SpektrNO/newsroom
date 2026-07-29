@@ -500,34 +500,33 @@ export function FeedClient(): ReactNode {
     setRankNote(null);
     setError(null);
 
-    // Match route maxDuration (300s) with a little headroom so Ranking… cannot
-    // stick forever if the browser never sees the response.
+    // Route maxDuration is 300s; keep client wait slightly above so a late 200
+    // is not aborted just as the server finishes.
     const ac = new AbortController();
     rankAbortRef.current?.abort();
     rankAbortRef.current = ac;
-    const timeoutId = window.setTimeout(() => ac.abort(), 310_000);
+    const timeoutId = window.setTimeout(() => ac.abort(), 340_000);
+    let refreshAfter = true;
 
     try {
       const result = await api.rankFeedLatest({ signal: ac.signal });
-      if (ac.signal.aborted) return;
-      setRankNote(formatRankLatestNote(result));
-      // Drop Ranking… before refreshing so filter races cannot leave it stuck.
-      rankingRef.current = false;
-      setRanking(false);
-      await loadPageRef.current();
-      setNeedsRank(false);
+      if (ac.signal.aborted) {
+        setRankNote(
+          "Ranking stopped or timed out — check Ollama, then try Rank latest again.",
+        );
+      } else {
+        setRankNote(formatRankLatestNote(result));
+        setNeedsRank(false);
+      }
     } catch (err) {
       if (ac.signal.aborted) {
         setRankNote(
           "Ranking stopped or timed out — check Ollama, then try Rank latest again.",
         );
-        return;
-      }
-      if (err instanceof ApiError && err.status === 401) {
+      } else if (err instanceof ApiError && err.status === 401) {
+        refreshAfter = false;
         router.push("/sign-in?callbackUrl=%2F");
-        return;
-      }
-      if (err instanceof ApiError && err.code === "rate_limited") {
+      } else if (err instanceof ApiError && err.code === "rate_limited") {
         setRankNote("Too many rank requests — wait a few minutes.");
       } else if (err instanceof ApiError && err.code === "no_topics") {
         setRankNote("Follow an enabled topic before ranking.");
@@ -541,8 +540,17 @@ export function FeedClient(): ReactNode {
     } finally {
       window.clearTimeout(timeoutId);
       if (rankAbortRef.current === ac) rankAbortRef.current = null;
+      // Drop Ranking… before refresh so filter races cannot leave it stuck.
       rankingRef.current = false;
       setRanking(false);
+      // Always refresh — server may have written scores even if the client timed out.
+      if (refreshAfter) {
+        try {
+          await loadPageRef.current();
+        } catch {
+          /* loadPage sets its own error */
+        }
+      }
     }
   }
 
@@ -606,15 +614,24 @@ export function FeedClient(): ReactNode {
           evaluatedCount != null &&
           articlesCount != null ? (
             <dl className="feed-stat-group">
-              <div className="feed-stat" title="Ranked (in feed)">
+              <div
+                className="feed-stat"
+                title="Keyword hits within article retention (AI may still be pending)"
+              >
                 <dt>Ranked</dt>
                 <dd>{rankedCount}</dd>
               </div>
-              <div className="feed-stat" title="Keyword-evaluated">
+              <div
+                className="feed-stat"
+                title="Keyword-checked within article retention"
+              >
                 <dt>Evaluated</dt>
                 <dd>{evaluatedCount}</dd>
               </div>
-              <div className="feed-stat" title="Available from sources">
+              <div
+                className="feed-stat"
+                title="From enabled sources within article retention (ARTICLE_TTL_DAYS)"
+              >
                 <dt>Articles</dt>
                 <dd>{articlesCount}</dd>
               </div>

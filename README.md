@@ -44,7 +44,7 @@ One-shot ingest then rank (requires migrate + seed or your own subscriptions/top
 pnpm worker:ingest            # upserts articles; marks affected users dirty; enqueues per-user rank jobs
 pnpm worker:rank              # drains rank jobs for dirty ∩ active users (feed activity in last 30m)
 pnpm worker:rank -- --all-dirty  # enqueue/drain all dirty users (ignore activity gate)
-pnpm worker:prune-scores      # prune stale scores + articles older than ARTICLE_TTL_DAYS (keeps saved)
+pnpm worker:prune-scores      # prune stale scores + articles older than ARTICLE_TTL_DAYS (keeps saved; also runs after Rank latest)
 # or: NEWSROOM_WORKER_ONCE=ingest|rank|prune-scores pnpm --filter @newsroom/worker start
 ```
 
@@ -87,7 +87,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm --filter @newsroom/worker start` | Long-running ingest + rank job poller |
 | `pnpm worker:ingest` / `pnpm --filter @newsroom/worker ingest` | One-shot ingest then exit (enqueues rank) |
 | `pnpm worker:rank` / `pnpm --filter @newsroom/worker rank` | One-shot rank then exit |
-| `pnpm worker:prune-scores` | One-shot prune of stale scores + old articles then exit |
+| `pnpm worker:prune-scores` | One-shot prune of stale scores + old articles then exit (same article GC also runs at end of each rank pass) |
 | `pnpm --filter @newsroom/mobile start` | Expo dev server |
 | `pnpm sources:test` | Adapter + URL normalization fixture tests |
 | `pnpm worker:test` | Ingest + rank integration tests (needs Postgres; AI mocked) |

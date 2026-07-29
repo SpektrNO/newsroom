@@ -98,12 +98,28 @@ describe("feed query params", () => {
     assert.equal(parseFeedOrder("up"), "invalid");
   });
 
-  it("computes a ~3 month feed age cutoff", () => {
+  it("uses ARTICLE_TTL_DAYS as the feed age window", () => {
     const now = new Date("2026-07-29T12:00:00.000Z");
-    const cutoff = feedMaxAgeCutoff(now);
-    assert.equal(FEED_MAX_AGE_DAYS, 90);
+    const seven = feedMaxAgeCutoff(now, {
+      ARTICLE_TTL_DAYS: "7",
+    } as unknown as NodeJS.ProcessEnv);
+    assert.ok(seven);
     assert.equal(
-      cutoff.toISOString(),
+      seven!.toISOString(),
+      new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    );
+    assert.equal(
+      feedMaxAgeCutoff(now, {
+        ARTICLE_TTL_DAYS: "0",
+      } as unknown as NodeJS.ProcessEnv),
+      null,
+    );
+    // Default when unset matches article retention default (90).
+    assert.equal(FEED_MAX_AGE_DAYS, 90);
+    const def = feedMaxAgeCutoff(now, {} as unknown as NodeJS.ProcessEnv);
+    assert.ok(def);
+    assert.equal(
+      def!.toISOString(),
       new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(),
     );
   });

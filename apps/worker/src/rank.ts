@@ -20,6 +20,7 @@ import {
   jobs,
   listDirtyRankUserIds,
   pruneUserArticleScores,
+  pruneOldArticles,
   recordAiTokenUsage,
   recordRankAiArticles,
   remainingRankAiBudget,
@@ -248,6 +249,7 @@ async function loadCandidateArticles(db: Database, userId: string) {
   if (subIds.length === 0) return [];
 
   const ids = subIds.map((s) => s.id);
+  const ageCutoff = feedMaxAgeCutoff();
 
   const rows = await db
     .select({
@@ -288,8 +290,12 @@ async function loadCandidateArticles(db: Database, userId: string) {
     .where(
       and(
         inArray(articleSources.sourceSubscriptionId, ids),
-        // Skip stale corpus (old podcasts, etc.) — same window as the feed.
-        sql`coalesce(${articles.publishedAt}, ${articles.createdAt}) >= ${feedMaxAgeCutoff().toISOString()}::timestamptz`,
+        // Same window as article GC (`ARTICLE_TTL_DAYS`); skip when TTL is 0.
+        ...(ageCutoff
+          ? [
+              sql`coalesce(${articles.publishedAt}, ${articles.createdAt}) >= ${ageCutoff.toISOString()}::timestamptz`,
+            ]
+          : []),
       ),
     )
     .orderBy(
@@ -736,6 +742,21 @@ export async function runRank(
         message,
       );
     }
+  }
+
+  // Shared corpus GC — previously only `pnpm worker:prune-scores`.
+  try {
+    const articlesPruned = await pruneOldArticles(db);
+    if (articlesPruned.deleted > 0) {
+      console.log(
+        `[newsroom-worker] pruned ${articlesPruned.deleted} old article(s)`,
+      );
+    }
+  } catch (pruneErr) {
+    const message =
+      pruneErr instanceof Error ? pruneErr.message : String(pruneErr);
+    result.errors.push(`articles:prune:${message}`);
+    console.error("[newsroom-worker] article prune failed:", message);
   }
 
   if (

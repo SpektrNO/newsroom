@@ -125,6 +125,25 @@ describe("user_article_evaluations", () => {
 
     assert.equal(await countUserEvaluatedArticles(db, userId), 2);
 
+    const futureCutoff = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    assert.equal(
+      await countUserAvailableArticles(db, userId, { notBefore: futureCutoff }),
+      0,
+    );
+    assert.equal(
+      await countUserEvaluatedArticles(db, userId, { notBefore: futureCutoff }),
+      0,
+    );
+    const pastCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    assert.equal(
+      await countUserAvailableArticles(db, userId, { notBefore: pastCutoff }),
+      2,
+    );
+    assert.equal(
+      await countUserEvaluatedArticles(db, userId, { notBefore: pastCutoff }),
+      2,
+    );
+
     await upsertArticleEvaluation(db, {
       userId,
       articleId: missId,
