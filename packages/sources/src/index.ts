@@ -24,6 +24,13 @@ export {
   type PodcastAdapterOptions,
 } from "./podcast.js";
 export {
+  BlueskyAdapter,
+  DEFAULT_BLUESKY_APPVIEW_URL,
+  BLUESKY_FETCH_LIMIT,
+  type BlueskyConfig,
+  type BlueskyAdapterOptions,
+} from "./bluesky.js";
+export {
   fetchAndParseRss,
   parseDurationSeconds,
   enclosureUrlFromItem,
