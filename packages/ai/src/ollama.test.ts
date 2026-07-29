@@ -9,6 +9,22 @@ describe("ollamaJsonFormat", () => {
     assert.equal((rank as { type: string }).type, "array");
   });
 
+  it("declares confirmedTopicIds as a required schema property", () => {
+    // Regression: this field was missing from the constrained-decoding schema,
+    // so Ollama's grammar didn't actually enforce/attend to it — the model
+    // reliably echoed every keyword-matched candidate back unfiltered
+    // (e.g. "matter" in an article about code comments still confirmed the
+    // "Space & matter" topic) no matter how the prompt worded the ask.
+    const rank = ollamaJsonFormat("rank-array") as {
+      items: {
+        properties: Record<string, unknown>;
+        required: string[];
+      };
+    };
+    assert.ok(rank.items.properties.confirmedTopicIds);
+    assert.ok(rank.items.required.includes("confirmedTopicIds"));
+  });
+
   it("uses plain json for advisor-style requests", () => {
     assert.equal(ollamaJsonFormat(true), "json");
     assert.equal(ollamaJsonFormat("object"), "json");

@@ -26,11 +26,12 @@ export function ollamaJsonFormat(
           articleId: { type: "string" },
           aiScore: { type: "number" },
           reason: { type: "string" },
+          confirmedTopicIds: { type: "array", items: { type: "string" } },
           nearDuplicateOfArticleId: {
             anyOf: [{ type: "string" }, { type: "null" }],
           },
         },
-        required: ["articleId", "aiScore", "reason"],
+        required: ["articleId", "aiScore", "reason", "confirmedTopicIds"],
       },
     };
   }
