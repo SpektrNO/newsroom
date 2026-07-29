@@ -231,9 +231,18 @@ export function FeedClient(): ReactNode {
   const loadGenRef = useRef(0);
   const rankingRef = useRef(false);
   const wipingRef = useRef(false);
+  const rankAbortRef = useRef<AbortController | null>(null);
   const loadPageRef = useRef<(cursor?: string, append?: boolean) => Promise<void>>(
     async () => undefined,
   );
+
+  useEffect(() => {
+    return () => {
+      rankAbortRef.current?.abort();
+      rankAbortRef.current = null;
+      rankingRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -490,16 +499,30 @@ export function FeedClient(): ReactNode {
     setRanking(true);
     setRankNote(null);
     setError(null);
+
+    // Match route maxDuration (300s) with a little headroom so Ranking… cannot
+    // stick forever if the browser never sees the response.
+    const ac = new AbortController();
+    rankAbortRef.current?.abort();
+    rankAbortRef.current = ac;
+    const timeoutId = window.setTimeout(() => ac.abort(), 310_000);
+
     try {
-      const result = await api.rankFeedLatest();
+      const result = await api.rankFeedLatest({ signal: ac.signal });
+      if (ac.signal.aborted) return;
       setRankNote(formatRankLatestNote(result));
-      // Drop the Ranking… state before refreshing the feed so filter/search
-      // loads that raced during the rank call cannot leave the button stuck.
+      // Drop Ranking… before refreshing so filter races cannot leave it stuck.
       rankingRef.current = false;
       setRanking(false);
       await loadPageRef.current();
       setNeedsRank(false);
     } catch (err) {
+      if (ac.signal.aborted) {
+        setRankNote(
+          "Ranking stopped or timed out — check Ollama, then try Rank latest again.",
+        );
+        return;
+      }
       if (err instanceof ApiError && err.status === 401) {
         router.push("/sign-in?callbackUrl=%2F");
         return;
@@ -516,6 +539,8 @@ export function FeedClient(): ReactNode {
         setRankNote("Couldn't rank — try again.");
       }
     } finally {
+      window.clearTimeout(timeoutId);
+      if (rankAbortRef.current === ac) rankAbortRef.current = null;
       rankingRef.current = false;
       setRanking(false);
     }

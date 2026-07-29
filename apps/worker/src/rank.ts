@@ -593,13 +593,18 @@ export async function runRank(
 
       // "none" tier forces keyword-only ranking: skip AI entirely, no budget spent.
       const tier = await getUserRankModelTier(db, userId);
+      const resolvedModel =
+        tier === "none"
+          ? null
+          : resolveModelForTier(tier === "standard" ? "standard" : "fast");
       const provider: AiProvider | null =
         tier === "none"
           ? null
           : options.provider ??
             new OllamaProvider({
-              model: resolveModelForTier(tier === "standard" ? "standard" : "fast"),
+              model: resolvedModel ?? undefined,
             });
+      const modelLabel = provider?.model ?? resolvedModel ?? "unknown";
 
       // AI pass: cap by run/day/global article budget, then token hard cap.
       const remainingBudget =
@@ -616,7 +621,12 @@ export async function runRank(
         console.warn(
           tier === "none"
             ? `[newsroom-worker] rank model tier "none" for ${userId}: ${shortlist.length} article(s) stay keyword-only`
-            : `[newsroom-worker] rank AI article budget for ${userId}: scoring ${needingAi.length}/${shortlist.length} (remaining=${remainingBudget})`,
+            : `[newsroom-worker] rank AI article budget for ${userId}: scoring ${needingAi.length}/${shortlist.length} (remaining=${remainingBudget}) model=${modelLabel}`,
+        );
+      }
+      if (provider != null && needingAi.length > 0) {
+        console.log(
+          `[newsroom-worker] rank AI for ${userId}: tier=${tier} model=${modelLabel} batch=${batchSize} articles=${needingAi.length}`,
         );
       }
 
@@ -687,7 +697,7 @@ export async function runRank(
           const message = err instanceof Error ? err.message : String(err);
           result.errors.push(`${userId}:ai:${message}`);
           console.error(
-            `[newsroom-worker] rank AI batch failed for user ${userId}:`,
+            `[newsroom-worker] rank AI batch failed for user ${userId} model=${modelLabel}:`,
             message,
           );
         }

@@ -31,6 +31,8 @@ export type AiCompleteResult = {
  * UI must never call this — only API routes and workers.
  */
 export interface AiProvider {
+  /** Model id when known (e.g. Ollama tag). */
+  readonly model?: string;
   complete(request: AiCompleteRequest): Promise<AiCompleteResult>;
   /** Lightweight reachability probe (no generation required). */
   health(): Promise<boolean>;

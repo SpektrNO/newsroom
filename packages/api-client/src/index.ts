@@ -421,8 +421,10 @@ export class ApiClient {
   }
 
   /** Run keyword + AI rank for the signed-in user (may take minutes). */
-  async rankFeedLatest(): Promise<RankFeedLatestResponse> {
-    return this.requestJson("POST", "/api/feed/rank");
+  async rankFeedLatest(options?: {
+    signal?: AbortSignal;
+  }): Promise<RankFeedLatestResponse> {
+    return this.requestJson("POST", "/api/feed/rank", undefined, options?.signal);
   }
 
   /** Clear new/seen rankings; keep saved/dismissed. Does not auto re-rank. */
@@ -434,10 +436,12 @@ export class ApiClient {
     method: string,
     path: string,
     body?: unknown,
+    signal?: AbortSignal,
   ): Promise<T> {
     const res = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method,
       credentials: "include",
+      signal,
       headers: {
         accept: "application/json",
         ...(body !== undefined ? { "content-type": "application/json" } : {}),
