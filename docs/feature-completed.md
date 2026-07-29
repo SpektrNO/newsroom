@@ -29,6 +29,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-27 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | #143 | Wipe rankings button; keep saved/dismissed; no auto re-rank |
 | 2026-07-28 | `web-elegant-refresh` | Elegant visual/UX polish across web client | #150 | Completed via spec→implement pipeline |
 | 2026-07-28 | `ai-confirmed-topic-membership` | AI narrows keyword-matched topics; feed topic filter uses it | — | Lean in-chat implement; fixes "space" matching "workspace"-style false positives in topic filter |
+| 2026-07-29 | `source-bluesky` | Bluesky adapter | #47 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -71,3 +72,4 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | ID | Feature | Completed | Spec | Notes |
 |----|---------|-----------|------|-------|
 | `source-podcast` | Podcast RSS adapter + episode cards in feed | 2026-07-27 | `docs/architecture.md` | Podcast RSS adapter + episode cards; mobile deferred to mobile-feed-topics |
+| `source-bluesky` | Bluesky adapter | 2026-07-29 | `docs/architecture.md` | Completed via spec→implement pipeline |
