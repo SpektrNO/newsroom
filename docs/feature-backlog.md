@@ -211,7 +211,7 @@ Notes for `web-source-discovery` (shipped — catalog v1):
 | `security-harden` | Auth hardening, API keys, abuse/misuse controls | ⬜ | `docs/architecture.md` |
 | `source-bluesky` | Bluesky adapter | ✅ | `docs/architecture.md` |
 | `source-podcast` | Podcast RSS adapter + episode cards in feed | ✅ | `docs/architecture.md` |
-| `source-reddit` | Reddit adapter (subreddits → ranked feed) | ⬜ | `docs/architecture.md` |
+| `source-reddit` | Reddit adapter (subreddits → ranked feed) | ✅ | `docs/architecture.md` |
 
 Notes for `security-harden`:
 

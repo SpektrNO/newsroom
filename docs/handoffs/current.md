@@ -1,9 +1,9 @@
 # Handoff: source-reddit
 
-**Status:** spec  
+**Status:** implementing  
 **Created:** 2026-07-30  
 **Specifier agent:** lean thin handoff  
-**Developer agent:** pending
+**Developer agent:** in progress
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `source-reddit` |
 | Parent issue | #165 — https://github.com/SpektrNO/newsroom/issues/165 |
-| Open tasks | `db` (#167), `api` (#168), `worker` (#169), `web` (#170), `mobile` (#171), `verify` (#172), `docs` (#173) |
-| Closed / Phase-1 | `spec` (#166) |
+| Open tasks | `verify` (#172), `docs` (#173) |
+| Closed | `spec` (#166), `db` (#167), `api` (#168), `worker` (#169), `web` (#170), `mobile` (#171 deferred) |
 | Backlog | `docs/feature-backlog.md` § E — `source-reddit` |
 
 Task order: `spec` → `db` → `api` → `worker` → `web` → ~~`mobile`~~ (defer) → `verify` → `docs`
@@ -27,11 +27,11 @@ Signed-in users subscribe to Reddit **subreddits** by name and see recent posts 
 |-------|----------|
 | `source_type` | `"reddit"` |
 | Config | `{ subreddit }` — normalized (no `r/` prefix, lowercase); many subs per user |
-| Auth | Operator env only: required `REDDIT_USER_AGENT`; optional `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` for application-only OAuth. **No** end-user Reddit OAuth |
+| Auth | Operator env only: `REDDIT_USER_AGENT`; optional `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` for application-only OAuth. **No** end-user Reddit OAuth |
 | Fetch | Prefer OAuth `oauth.reddit.com/r/{sub}/new` when credentials present; else public `www.reddit.com/r/{sub}/new.json` with User-Agent |
 | Cap | ~50 posts per `fetchRecent()` |
 | Canonical URL | `https://www.reddit.com{permalink}` (normalize); `externalId` = Reddit fullname `t3_…` |
-| Skip | Removed/deleted/empty title; pure media with no title+text haystack |
+| Skip | Removed/deleted/empty title |
 | Uniqueness | Partial unique `(user_id, config->>'subreddit')` where `source_type = 'reddit'` |
 | Mobile | Defer to `mobile-feed-topics` |
 
@@ -59,4 +59,25 @@ Comments as items, home/multi, catalog, HTML scrape, voting/posting, NSFW produc
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
+### Changes
+
+- DB: `subreddit` on config type; migration `0012_flowery_bucky.sql` unique index
+- `packages/sources`: `RedditAdapter`, `normalizeSubredditName`, factory wiring + tests
+- API: create/patch parse for reddit; feed `source=reddit`; api-client type
+- Web: Sources Add Reddit; feed filter chip; prefs allowlist
+- Docs: architecture, backlog ✅, README, `.env.example`, ops-local
+
+### Verification
+
+- [x] `pnpm --filter @newsroom/sources` reddit unit tests
+- [x] web `sources.test.ts` / `feed.test.ts` / `feed-prefs.test.ts`
+- [x] `pnpm --filter @newsroom/db migrate` applied locally
+- [ ] Manual: add subreddit + worker ingest + Rank latest (needs Reddit UA / optional OAuth)
+
+### Deviations from spec
+
+- None material
+
+### Follow-ups
+
+- Curated Reddit catalog; stronger rate-limit/backoff if Reddit throttles anonymous JSON
