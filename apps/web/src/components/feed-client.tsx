@@ -40,6 +40,7 @@ const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
   { id: "substack", label: "Feed" },
   { id: "podcast", label: "Podcast" },
   { id: "bluesky", label: "Bluesky" },
+  { id: "reddit", label: "Reddit" },
 ];
 
 type TopicGroup = {
