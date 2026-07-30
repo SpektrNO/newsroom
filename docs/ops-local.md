@@ -40,6 +40,29 @@ cp apps/web/.env.example apps/web/.env.local
 
 After changing `apps/web/.env.local`, **restart** the Next dev server.
 
+### Auth via ngrok (or other tunnels)
+
+Better Auth rejects sign-in when the browser `Origin` is not in `trustedOrigins` (`invalid origin`).
+
+1. Point **both** auth URLs at the HTTPS tunnel (no trailing slash), in `apps/web/.env.local`:
+
+```bash
+BETTER_AUTH_URL=https://YOUR_SUBDOMAIN.ngrok-free.app
+NEXT_PUBLIC_BETTER_AUTH_URL=https://YOUR_SUBDOMAIN.ngrok-free.app
+```
+
+2. If you still need localhost sign-in in the same process, keep the tunnel as `BETTER_AUTH_URL` **or** list extras:
+
+```bash
+BETTER_AUTH_TRUSTED_ORIGINS=https://YOUR_SUBDOMAIN.ngrok-free.app
+```
+
+(`localhost` / `127.0.0.1:3000` are already trusted.)
+
+3. Restart `pnpm --filter @newsroom/web dev`. Use the **https** ngrok URL in the browser (not `http://localhost`).
+
+Ngrok free interstitial / changing subdomain → update env and restart again.
+
 ## Compose
 
 ```bash
@@ -111,6 +134,8 @@ pnpm worker:ingest           # one-shot ingest; enqueues pending rank (does not 
 pnpm worker:rank             # one-shot keyword + AI rank → user_article_scores
 # Or: Feed UI → Rank latest (current user only; requires Ollama)
 pnpm --filter @newsroom/worker start   # poll Postgres jobs (ingest ~12 min + rank)
+# Recovers stale `running` jobs (~45m) left by Ctrl+C/crash; otherwise a stuck
+# ingest blocks scheduling the next pass and the feed shows "Ingested … ago" forever.
 
 pnpm sources:test            # mocked adapter fixtures
 pnpm worker:test             # ingest + rank (mocked AI) + real Postgres

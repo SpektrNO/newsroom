@@ -1,6 +1,6 @@
 # Newsroom architecture
 
-Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, podcasts, and Bluesky; X deferred.
+Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, podcasts, Bluesky, and Reddit (planned); X deferred.
 
 ## Goals
 
@@ -105,6 +105,7 @@ Never call Ollama from UI code.
 | Substack | User-added RSS URLs + curated catalog (`web-source-discovery`) | v1 |
 | Podcasts | Podcast RSS/Atom (`source_type: podcast`, `{ rssUrl }`); episodes as feed items with show/duration/enclosure | v1 (`source-podcast`) |
 | Bluesky | Public AppView `getAuthorFeed` (`source_type: bluesky`, `{ handle }`); posts as feed items (no Bluesky auth) | v1 (`source-bluesky`) |
+| Reddit | Subreddit listings → posts as feed items (`source_type: reddit`, `{ subreddit }`); API User-Agent / optional app creds | planned (`source-reddit`) |
 | X | Paid API | deferred |
 
 Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`.

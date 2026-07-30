@@ -198,6 +198,7 @@ Notes for `web-source-discovery` (shipped — catalog v1):
 | `security-harden` | Auth hardening, API keys, abuse/misuse controls | ⬜ | `docs/architecture.md` |
 | `source-bluesky` | Bluesky adapter | ✅ | `docs/architecture.md` |
 | `source-podcast` | Podcast RSS adapter + episode cards in feed | ✅ | `docs/architecture.md` |
+| `source-reddit` | Reddit adapter (subreddits → ranked feed) | ⬜ | `docs/architecture.md` |
 
 Notes for `security-harden`:
 
@@ -226,3 +227,16 @@ Notes for `source-bluesky` (shipped):
 - **Ingest:** `getAuthorFeed` with `filter=posts_no_replies`; skip pure reposts and empty text; upsert on bsky.app post URL.
 - **Mobile:** Expo UI deferred to `mobile-feed-topics`.
 - **Out of scope v1:** personal timeline, firehose, catalog discovery, embeds/media gallery.
+
+Notes for `source-reddit`:
+
+- **Problem:** Topic niches live heavily on Reddit; Newsroom should rank subreddit posts alongside HN / Substack / podcasts / Bluesky.
+- **Subscribe (v1):** `source_type: reddit`, config `{ subreddit }` (normalized name, no `r/` prefix stored; many subs per user). **Subreddits only** — not user profiles, multis, or home/frontpage.
+- **Ingest:** Adapter fetches recent posts for that sub (public JSON or Reddit API with a documented User-Agent / optional app credentials via env — decide in spec; no end-user Reddit OAuth in v1). Map posts → `NormalizedArticle` (title, selftext/link URL as summary/canonical, author, publishedAt, `externalId`). Skip removed/deleted/empty-title; prefer link+self posts over pure media-only if text ranking would be empty. Upsert on canonical `reddit.com` / `redd.it` post URL.
+- **Feed UX:** Same hybrid keyword + AI path; source filter **Reddit**; Sources UI **Add Reddit** (subreddit name). Display subreddit + author in meta when cheap (reuse existing source label patterns).
+- **Discovery v1:** Manual subreddit entry only; curated catalog later (align with `web-source-discovery` follow-ups).
+- **Uniqueness:** Same user + same normalized subreddit + `reddit` → `duplicate` (409); partial unique index like Bluesky handle.
+- **Mobile:** Expo UI deferred to `mobile-feed-topics`.
+- **Out of scope v1:** Comments as feed items, personal home/multi, subreddit search API UI, scraping old.reddit HTML, voting/posting, NSFW gate productization beyond skip-or-config flag if API requires it.
+- **Depends on:** Existing ingest + feed UI; independent of Bluesky/podcast. Spec must cover rate limits / blocked anonymous access (Reddit often requires a proper User-Agent and may need script/app credentials for reliable ingest).
+- **Risk:** Reddit API policy and rate limits are stricter than HN/Bluesky public AppView — bake env-based credentials + backoff into the handoff, not “anonymous scrape and hope.”

@@ -1,4 +1,5 @@
 import { createDb } from "@newsroom/db";
+import { failStaleRunningJobs } from "./jobs.js";
 import {
   claimNextIngestJob,
   enqueueIngestNow,
@@ -27,6 +28,7 @@ function loadDb() {
 async function runOnceIngest(): Promise<number> {
   const db = loadDb();
   console.log("[newsroom-worker] one-shot ingest starting");
+  await failStaleRunningJobs(db);
   await enqueueIngestNow(db);
   const claimed = await claimNextIngestJob(db);
   if (!claimed) {
@@ -92,10 +94,22 @@ async function pollLoop(): Promise<void> {
   console.log(
     `[newsroom-worker] polling jobs (ingest ~${INGEST_INTERVAL_MS / 60_000} min; also rank)`,
   );
+  const stale = await failStaleRunningJobs(db);
+  if (stale > 0) {
+    console.log(
+      `[newsroom-worker] failed ${stale} stale running job(s) (crashed worker recovery)`,
+    );
+  }
   await ensureNextIngestJob(db, 0);
 
   const tick = async () => {
     try {
+      const reclaimed = await failStaleRunningJobs(db);
+      if (reclaimed > 0) {
+        console.log(
+          `[newsroom-worker] failed ${reclaimed} stale running job(s)`,
+        );
+      }
       const claimed = await claimNextWorkerJob(db);
       if (claimed?.type === "ingest") {
         console.log(`[newsroom-worker] claimed ingest job ${claimed.id}`);

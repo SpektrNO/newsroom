@@ -10,8 +10,19 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function extraTrustedOrigins(): string[] {
+  const raw = process.env.BETTER_AUTH_TRUSTED_ORIGINS?.trim();
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 // Reuse the process-wide pool (same as API routes) — do not createDb() again.
 const db = getDb();
+
+const baseURL = requireEnv("BETTER_AUTH_URL");
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -27,12 +38,13 @@ export const auth = betterAuth({
     enabled: true,
   },
   secret: requireEnv("BETTER_AUTH_SECRET"),
-  baseURL: requireEnv("BETTER_AUTH_URL"),
-  // Local dev often switches between localhost / 127.0.0.1 / WSL hostnames.
+  baseURL,
+  // Localhost aliases + optional tunnels (ngrok, etc.) via BETTER_AUTH_TRUSTED_ORIGINS.
   trustedOrigins: [
-    requireEnv("BETTER_AUTH_URL"),
+    baseURL,
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    ...extraTrustedOrigins(),
   ],
 });
 
