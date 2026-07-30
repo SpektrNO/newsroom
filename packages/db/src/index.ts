@@ -95,3 +95,15 @@ export {
   setUserRankModelTier,
   type RankModelTier,
 } from "./rank-model-tier.js";
+export {
+  getUserAiCredentialMeta,
+  upsertUserAiCredential,
+  clearUserAiCredential,
+  loadUserAiCredentialSecret,
+  parseUserAiCredentialProvider,
+  isByokConfigured,
+  resolveAiCredentialsKey,
+  userAiCredentialProviders,
+  type UserAiCredentialMeta,
+  type UserAiCredentialProvider,
+} from "./ai-credentials.js";

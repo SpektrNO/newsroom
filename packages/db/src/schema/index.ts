@@ -20,3 +20,8 @@ export {
   type AiTokenPurpose,
 } from "./ai-usage.js";
 export { rankAiDaily } from "./rank-ai.js";
+export {
+  userAiCredentials,
+  userAiCredentialProviders,
+  type UserAiCredentialProvider,
+} from "./ai-credentials.js";
