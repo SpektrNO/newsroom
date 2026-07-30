@@ -10,23 +10,22 @@ import {
 import { useRouter } from "next/navigation";
 import {
   ApiError,
-  type ChatMessage,
   type ChatSuggestion,
   type Topic,
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
 import {
+  chatApiMessages,
+  readStoredChatLog,
+  trimChatLog,
+  writeStoredChatLog,
+  type ChatLogTurn,
+} from "@/lib/chat-log";
+import {
   findTopicByLabel,
   followDefaultsForLabel,
   isFollowingLabel,
 } from "@/lib/topics-catalog";
-
-type Turn = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  suggestions?: ChatSuggestion[];
-};
 
 function mergeKeywords(existing: string[], incoming: string[]): string[] {
   const seen = new Set(existing.map((k) => k.toLowerCase()));
@@ -47,7 +46,8 @@ export function ChatClient(): ReactNode {
   const router = useRouter();
   const api = getBrowserApiClient();
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [turns, setTurns] = useState<ChatLogTurn[]>([]);
+  const [logReady, setLogReady] = useState(false);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +68,16 @@ export function ChatClient(): ReactNode {
     void refreshTopics();
   }, [refreshTopics]);
 
+  useEffect(() => {
+    setTurns(readStoredChatLog());
+    setLogReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!logReady) return;
+    writeStoredChatLog(turns);
+  }, [turns, logReady]);
+
   async function onSend(event: FormEvent) {
     event.preventDefault();
     const content = draft.trim();
@@ -77,31 +87,30 @@ export function ChatClient(): ReactNode {
     setActionNote(null);
     setDraft("");
 
-    const userTurn: Turn = {
+    const userTurn: ChatLogTurn = {
       id: `u-${Date.now()}`,
       role: "user",
       content,
     };
-    const nextTurns = [...turns, userTurn].slice(-12);
+    const nextTurns = trimChatLog([...turns, userTurn]);
     setTurns(nextTurns);
     setPending(true);
 
-    const messages: ChatMessage[] = nextTurns.map((t) => ({
-      role: t.role,
-      content: t.content,
-    }));
+    const messages = chatApiMessages(nextTurns);
 
     try {
       const res = await api.postChat({ messages });
-      setTurns((prev) => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: res.reply,
-          suggestions: res.suggestions,
-        },
-      ]);
+      setTurns((prev) =>
+        trimChatLog([
+          ...prev,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: res.reply,
+            suggestions: res.suggestions,
+          },
+        ]),
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push("/sign-in?callbackUrl=%2Fchat");
@@ -119,6 +128,16 @@ export function ChatClient(): ReactNode {
     } finally {
       setPending(false);
     }
+  }
+
+  function onClearLog() {
+    if (turns.length === 0) return;
+    if (!window.confirm("Clear the advisor chat history on this device?")) {
+      return;
+    }
+    setTurns([]);
+    setError(null);
+    setActionNote(null);
   }
 
   async function onFollow(suggestion: ChatSuggestion) {
@@ -176,14 +195,16 @@ export function ChatClient(): ReactNode {
       <header className="page-header">
         <h1 className="page-title">Advisor</h1>
         <p className="page-lede">
-          Ask for topic and keyword ideas. Suggestions stay yours until you
-          follow or apply them.
+          Ask for topic and keyword ideas. The last 25 messages stay on this
+          device. Suggestions stay yours until you follow or apply them.
         </p>
       </header>
 
       <div className="chat-panel panel-soft">
         <div className="chat-log" aria-live="polite">
-          {turns.length === 0 ? (
+          {!logReady ? (
+            <p className="empty-copy">Loading chat…</p>
+          ) : turns.length === 0 ? (
             <p className="empty-copy">
               Describe your interests to get catalog topics and matchable
               keywords.
@@ -275,6 +296,16 @@ export function ChatClient(): ReactNode {
             <button type="submit" disabled={pending || !draft.trim()}>
               {pending ? "Thinking…" : "Send"}
             </button>
+            {turns.length > 0 ? (
+              <button
+                type="button"
+                className="ghost"
+                disabled={pending}
+                onClick={onClearLog}
+              >
+                Clear history
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

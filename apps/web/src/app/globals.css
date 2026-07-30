@@ -1190,18 +1190,35 @@ button.danger-text:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem 1rem;
-  margin: 0.75rem 0 0.35rem;
+  margin: 0.75rem 0 0.85rem;
   align-items: flex-end;
 }
 
 .source-catalog-filters .filter-field {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: 0.25rem;
   flex: 1 1 12rem;
   min-width: 10rem;
   max-width: 22rem;
+  width: auto;
+  margin: 0;
+}
+
+.source-catalog-filters .filter-field input,
+.source-catalog-filters .filter-field select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.55rem;
 }
 
 .catalog-tag-filter {
   margin-bottom: 0.85rem;
+}
+
+.source-catalog-filters .catalog-tag-filter {
+  margin-bottom: 0;
 }
 
 .catalog-feed-tags {

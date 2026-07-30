@@ -9,10 +9,10 @@ import {
 } from "./topic-tree.js";
 
 describe("topic tree catalog", () => {
-  it("exposes version 3 with required seed leaf", () => {
+  it("exposes version 4 with required seed leaf", () => {
     const tree = getTopicTree();
     assert.equal(tree.version, TOPIC_TREE_VERSION);
-    assert.equal(tree.version, 3);
+    assert.equal(tree.version, 4);
     const infra = tree.nodes.find((n) => n.id === "tech.ai.infra");
     assert.ok(infra);
     assert.equal(infra.label, "AI & infra");
@@ -42,9 +42,17 @@ describe("topic tree catalog", () => {
       resolveSelectableTopicLabel("Music & theatre"),
       "Music & theatre",
     );
+    assert.equal(
+      resolveSelectableTopicLabel("Comedy & entertainment"),
+      "Comedy & entertainment",
+    );
     assert.deepEqual(topicPathLabels("Literature & poesy"), [
       "Culture & Society",
       "Literature & poesy",
+    ]);
+    assert.deepEqual(topicPathLabels("Comedy & entertainment"), [
+      "Culture & Society",
+      "Comedy & entertainment",
     ]);
     assert.deepEqual(topicPathLabels("Art & craft"), [
       "Culture & Society",

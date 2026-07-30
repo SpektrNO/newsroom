@@ -2,25 +2,37 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   FEED_CATALOG,
+  catalogEntryKind,
   getFeedCatalog,
   listCatalogTopicTags,
 } from "./feed-catalog.js";
 import {
+  isCatalogEntryAlreadyAdded,
   isFeedAlreadyAdded,
   tryNormalizeRssUrl,
 } from "./feed-catalog-match.js";
 
 describe("getFeedCatalog", () => {
-  it("returns versioned feeds with required fields", () => {
+  it("returns versioned feeds with required fields per kind", () => {
     const catalog = getFeedCatalog();
-    assert.equal(catalog.version, 1);
+    assert.equal(catalog.version, 2);
     assert.ok(catalog.feeds.length >= 5);
     for (const feed of catalog.feeds) {
       assert.ok(feed.id);
       assert.ok(feed.label);
-      assert.ok(feed.rssUrl.startsWith("http"));
       assert.ok(Array.isArray(feed.topicTags));
+      if (catalogEntryKind(feed) === "reddit") {
+        assert.ok(feed.subreddit);
+      } else {
+        assert.ok(feed.rssUrl?.startsWith("http"));
+      }
     }
+  });
+
+  it("includes curated subreddit entries", () => {
+    const reddit = FEED_CATALOG.filter((f) => catalogEntryKind(f) === "reddit");
+    assert.ok(reddit.length >= 5);
+    assert.ok(reddit.some((f) => f.subreddit === "machinelearning"));
   });
 });
 
@@ -70,6 +82,26 @@ describe("isFeedAlreadyAdded", () => {
       isFeedAlreadyAdded(
         [{ sourceType: "hackernews", config: {} }],
         "https://www.platformer.news/feed",
+      ),
+      false,
+    );
+  });
+});
+
+describe("isCatalogEntryAlreadyAdded", () => {
+  it("matches reddit subreddits case-insensitively", () => {
+    const entry = FEED_CATALOG.find((f) => f.id === "reddit-programming")!;
+    assert.equal(
+      isCatalogEntryAlreadyAdded(
+        [{ sourceType: "reddit", config: { subreddit: "Programming" } }],
+        entry,
+      ),
+      true,
+    );
+    assert.equal(
+      isCatalogEntryAlreadyAdded(
+        [{ sourceType: "reddit", config: { subreddit: "rust" } }],
+        entry,
       ),
       false,
     );

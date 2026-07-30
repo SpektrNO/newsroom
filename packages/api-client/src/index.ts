@@ -246,9 +246,11 @@ export type WipeFeedRankingsResponse = {
 export type FeedCatalogEntry = {
   id: string;
   label: string;
-  rssUrl: string;
   blurb: string;
   topicTags: string[];
+  kind?: "feed" | "reddit";
+  rssUrl?: string;
+  subreddit?: string;
 };
 
 export type FeedCatalogResponse = {

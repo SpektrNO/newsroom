@@ -1,18 +1,25 @@
 /**
- * Curated RSS / newsletter feed catalog (v1).
+ * Curated source catalog (newsletters + subreddits).
  * Browser-safe — no Node-only imports.
  *
  * Intentionally a small starter set — not every topic-tree leaf. Users paste
- * arbitrary RSS via Add a source for everything else.
+ * arbitrary RSS / subreddit names via Add a source for everything else.
  */
+
+export type FeedCatalogKind = "feed" | "reddit";
 
 export type FeedCatalogEntry = {
   id: string;
   label: string;
-  rssUrl: string;
   blurb: string;
   /** Optional topic-tree leaf labels for display / filter. */
   topicTags: string[];
+  /** Defaults to `feed` when omitted (legacy RSS rows). */
+  kind?: FeedCatalogKind;
+  /** Newsletter / blog RSS — required when kind is `feed`. */
+  rssUrl?: string;
+  /** Subreddit without r/ — required when kind is `reddit`. */
+  subreddit?: string;
 };
 
 export type FeedCatalogResponse = {
@@ -20,11 +27,11 @@ export type FeedCatalogResponse = {
   feeds: FeedCatalogEntry[];
 };
 
-export const FEED_CATALOG_VERSION = 1;
+export const FEED_CATALOG_VERSION = 2;
 
 /**
- * Editorial starter set — public RSS endpoints spanning tech, science,
- * security, and culture leaves from the topic tree.
+ * Editorial starter set — public RSS + a few high-signal subreddits
+ * spanning tech, science, security, and culture leaves from the topic tree.
  */
 export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   {
@@ -167,7 +174,90 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
     blurb: "Tyler Cowen and Alex Tabarrok on economics and ideas.",
     topicTags: ["Funding & markets", "Philosophy & ideas", "History & archives"],
   },
+  {
+    id: "semianalysis",
+    label: "SemiAnalysis",
+    rssUrl: "https://www.semianalysis.com/feed",
+    blurb: "Chips, AI infra, and semiconductor industry analysis.",
+    topicTags: ["Hardware & chips", "AI & infra"],
+  },
+  {
+    id: "dense-discovery",
+    label: "Dense Discovery",
+    rssUrl: "https://www.densediscovery.com/feed",
+    blurb: "Weekly design, tech, and culture links.",
+    topicTags: ["Design & media", "Philosophy & ideas"],
+  },
+  // --- Subreddits ---
+  {
+    id: "reddit-machinelearning",
+    kind: "reddit",
+    label: "r/MachineLearning",
+    subreddit: "machinelearning",
+    blurb: "Research papers, models, and ML engineering discussion.",
+    topicTags: ["LLMs & agents", "MLOps & data", "AI & infra"],
+  },
+  {
+    id: "reddit-localllama",
+    kind: "reddit",
+    label: "r/LocalLLaMA",
+    subreddit: "localllama",
+    blurb: "Running and fine-tuning open LLMs locally.",
+    topicTags: ["LLMs & agents", "Open source", "Hardware & chips"],
+  },
+  {
+    id: "reddit-programming",
+    kind: "reddit",
+    label: "r/programming",
+    subreddit: "programming",
+    blurb: "Broad software engineering news and discussion.",
+    topicTags: ["Developer tools", "Languages & runtimes", "Open source"],
+  },
+  {
+    id: "reddit-rust",
+    kind: "reddit",
+    label: "r/rust",
+    subreddit: "rust",
+    blurb: "Rust language news, crates, and community Q&A.",
+    topicTags: ["Languages & runtimes", "Open source"],
+  },
+  {
+    id: "reddit-netsec",
+    kind: "reddit",
+    label: "r/netsec",
+    subreddit: "netsec",
+    blurb: "Network security research and vulnerability write-ups.",
+    topicTags: ["Security & privacy"],
+  },
+  {
+    id: "reddit-spacex",
+    kind: "reddit",
+    label: "r/space",
+    subreddit: "space",
+    blurb: "Spaceflight, astronomy, and exploration news.",
+    topicTags: ["Space & matter"],
+  },
+  {
+    id: "reddit-climate",
+    kind: "reddit",
+    label: "r/climate",
+    subreddit: "climate",
+    blurb: "Climate science and energy transition discussion.",
+    topicTags: ["Climate & energy", "Policy & rules"],
+  },
+  {
+    id: "reddit-webdev",
+    kind: "reddit",
+    label: "r/webdev",
+    subreddit: "webdev",
+    blurb: "Frontend/backend web development links and advice.",
+    topicTags: ["Developer tools", "Languages & runtimes", "Design & media"],
+  },
 ];
+
+export function catalogEntryKind(entry: FeedCatalogEntry): FeedCatalogKind {
+  return entry.kind === "reddit" ? "reddit" : "feed";
+}
 
 export function getFeedCatalog(): FeedCatalogResponse {
   return {

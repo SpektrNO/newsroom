@@ -15,8 +15,8 @@ import {
   type Source,
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
-import { isFeedAlreadyAdded } from "@/lib/feed-catalog-match";
-import { listCatalogTopicTags } from "@/lib/feed-catalog";
+import { isCatalogEntryAlreadyAdded } from "@/lib/feed-catalog-match";
+import { catalogEntryKind, listCatalogTopicTags } from "@/lib/feed-catalog";
 
 type AddKind = "feed" | "podcast" | "bluesky" | "reddit";
 
@@ -114,7 +114,9 @@ export function SourcesClient(): ReactNode {
         return false;
       }
       if (!q) return true;
-      const hay = `${f.label} ${f.blurb} ${f.topicTags.join(" ")}`.toLowerCase();
+      const kind = catalogEntryKind(f);
+      const hay =
+        `${f.label} ${f.blurb} ${f.topicTags.join(" ")} ${kind} ${f.subreddit ?? ""} ${f.rssUrl ?? ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [catalog, tagFilter, catalogSearch]);
@@ -190,11 +192,29 @@ export function SourcesClient(): ReactNode {
     setCatalogNote(null);
     setAddingId(feed.id);
     try {
-      await api.createSource({
-        sourceType: "substack",
-        config: { rssUrl: feed.rssUrl },
-        enabled: true,
-      });
+      if (catalogEntryKind(feed) === "reddit") {
+        const subreddit = feed.subreddit?.trim();
+        if (!subreddit) {
+          setCatalogNote("Couldn't add source — try again.");
+          return;
+        }
+        await api.createSource({
+          sourceType: "reddit",
+          config: { subreddit },
+          enabled: true,
+        });
+      } else {
+        const rssUrl = feed.rssUrl?.trim();
+        if (!rssUrl) {
+          setCatalogNote("Couldn't add source — try again.");
+          return;
+        }
+        await api.createSource({
+          sourceType: "substack",
+          config: { rssUrl },
+          enabled: true,
+        });
+      }
       setCatalogNote(`Added ${feed.label}.`);
       await refresh();
     } catch (err) {
@@ -202,7 +222,13 @@ export function SourcesClient(): ReactNode {
         setCatalogNote("That source is already added.");
         await refresh();
       } else {
-        mapSourceError(err, setCatalogNote);
+        mapSourceError(
+          err,
+          setCatalogNote,
+          catalogEntryKind(feed) === "reddit"
+            ? "Check the subreddit name."
+            : "Check the RSS URL.",
+        );
       }
     } finally {
       setAddingId(null);
@@ -399,8 +425,8 @@ export function SourcesClient(): ReactNode {
           <div className="topics-section">
             <h2 className="section-heading">Suggested feeds</h2>
             <p className="section-lede">
-              A small curated starter set across a few topics — not the full
-              catalog of interests. Paste any RSS URL above for everything else.
+              A small curated starter set of newsletters and subreddits — not
+              every topic. Add anything else with the form above.
             </p>
             <div className="source-catalog-filters">
               <label className="filter-field">
@@ -414,7 +440,7 @@ export function SourcesClient(): ReactNode {
                 />
               </label>
               {topicTags.length > 0 ? (
-                <label className="filter-field catalog-tag-filter">
+                <label className="filter-field">
                   <span className="filter-label">Topic</span>
                   <select
                     value={tagFilter}
@@ -433,17 +459,21 @@ export function SourcesClient(): ReactNode {
             {catalogNote ? <p className="helper">{catalogNote}</p> : null}
             {visibleCatalog.length === 0 ? (
               <p className="empty-copy">
-                No suggested feeds match. Clear filters or add an RSS URL above.
+                No suggestions match. Clear filters or add a source above.
               </p>
             ) : (
               <ul className="manage-list">
                 {visibleCatalog.map((feed) => {
-                  const added = isFeedAlreadyAdded(sources, feed.rssUrl);
+                  const added = isCatalogEntryAlreadyAdded(sources, feed);
+                  const kind = catalogEntryKind(feed);
                   return (
                     <li key={feed.id} className="manage-row">
                       <div className="manage-main">
                         <p className="manage-title">{feed.label}</p>
-                        <p className="manage-meta">{feed.blurb}</p>
+                        <p className="manage-meta">
+                          {kind === "reddit" ? "Reddit · " : "Feed · "}
+                          {feed.blurb}
+                        </p>
                         {feed.topicTags.length > 0 ? (
                           <p className="catalog-feed-tags">
                             {feed.topicTags.join(" · ")}
