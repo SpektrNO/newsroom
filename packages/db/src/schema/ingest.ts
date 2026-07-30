@@ -19,6 +19,8 @@ export type SourceSubscriptionConfig = {
   handle?: string;
   /** Resolved Bluesky DID when known (optional). */
   did?: string;
+  /** Reddit subreddit name without r/ (normalized in app before insert). */
+  subreddit?: string;
   [key: string]: unknown;
 };
 
@@ -62,6 +64,10 @@ export const sourceSubscriptions = pgTable(
     uniqueIndex("source_subscriptions_user_bluesky_handle_uidx")
       .on(table.userId, sql`(${table.config}->>'handle')`)
       .where(sql`${table.sourceType} = 'bluesky'`),
+    /** One Reddit subreddit per user (name normalized in app before insert). */
+    uniqueIndex("source_subscriptions_user_reddit_sub_uidx")
+      .on(table.userId, sql`(${table.config}->>'subreddit')`)
+      .where(sql`${table.sourceType} = 'reddit'`),
   ],
 );
 

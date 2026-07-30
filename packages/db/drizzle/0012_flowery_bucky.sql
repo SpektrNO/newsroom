@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "source_subscriptions_user_reddit_sub_uidx" ON "source_subscriptions" USING btree ("user_id",("config"->>'subreddit')) WHERE "source_subscriptions"."source_type" = 'reddit';
