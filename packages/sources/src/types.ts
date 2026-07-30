@@ -1,4 +1,9 @@
-export type SourceType = "hackernews" | "substack" | "podcast" | "bluesky";
+export type SourceType =
+  | "hackernews"
+  | "substack"
+  | "podcast"
+  | "bluesky"
+  | "reddit";
 
 /** Canonical article shape produced by adapters. */
 export type NormalizedArticle = {
