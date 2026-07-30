@@ -1,9 +1,9 @@
 # Handoff: introduce-themes
 
-**Status:** spec  
+**Status:** done  
 **Created:** 2026-07-30  
 **Specifier agent:** spec complete  
-**Developer agent:** pending
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,8 +11,8 @@
 |-------|-------|
 | Feature id | `introduce-themes` |
 | Parent issue | #158 — https://github.com/SpektrNO/newsroom/issues/158 |
-| Open tasks | `api` (#160), `web` (#161), `verify` (#162), `docs` (#163) |
-| Closed / Phase-1 | `spec` (#159, this handoff) |
+| Open tasks | _(none — ready for Phase 3 PR)_ |
+| Closed / Phase-1 | `spec` (#159); `api` (#160, N/A); `web` (#161); `verify` (#162); `docs` (#163) |
 | Implementer note — `api` | **Skip / close #160 as not-applicable.** Persistence is `localStorage` only (no Postgres columns, no `/api/settings/*` appearance endpoints). Close with a short rationale comment when starting Phase 2. Do **not** invent a DB/API unless product revisits under `multiuser-harden`. |
 
 Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`  
@@ -190,24 +190,29 @@ DOM:
 
 ## Implementation result
 
-*(Developer agent fills this section.)*
-
 ### Changes
 
-- 
+- `apps/web/src/lib/appearance.ts` (+ test) — theme/density allowlists, localStorage keys, parse/apply/read/write, FOUC boot script string
+- `apps/web/src/app/layout.tsx` — inline boot script before paint
+- `apps/web/src/app/globals.css` — four `data-theme` atmospheres, `data-density=compact` spacing tokens, `--control-pad-*` tighten for buttons/inputs/selects/chips, filter fields hug content
+- `apps/web/src/components/settings-client.tsx` — Appearance block (swatches + density) above Ranking model; updated page lede
+- `docs/architecture.md` — Clients/web Appearance note
+- `docs/decisions/003-web-design-tokens.md` — addendum for client-only appearance
+- `#160` closed N/A (no API/DB)
 
 ### Verification
 
-- [ ] How tested
-- [ ] What remains manual
+- [x] How tested: `appearance.test.ts` (4/4); `tsc --noEmit` clean; static acceptance checklist (copy, tokens, FOUC script, keys, no per-theme accent, no appearance API)
+- [ ] What remains manual: browser — switch presets/density, confirm Compact + Rank latest/Wipe, hard-reload FOUC with non-default theme
 
 ### Deviations from spec
 
-- None / list with rationale
+- None
 
 ### Follow-ups
 
-- 
+- Optional cross-device sync under `multiuser-harden`
+- Manual FOUC / visual QA in browser before merge
 
 ---
 

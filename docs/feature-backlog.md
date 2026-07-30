@@ -123,7 +123,7 @@ Notes for `ai-token-metering`:
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
 | `web-elegant-refresh` | Elegant visual/UX polish across web client | ✅ | `docs/architecture.md` |
-| `introduce-themes` | User themes (background + density) + tighter controls | ⬜ | `docs/architecture.md` |
+| `introduce-themes` | User themes (background + density) + tighter controls | ✅ | `docs/architecture.md` |
 
 Notes for `wipe-rankings`:
 

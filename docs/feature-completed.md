@@ -30,6 +30,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-28 | `web-elegant-refresh` | Elegant visual/UX polish across web client | #150 | Completed via spec→implement pipeline |
 | 2026-07-28 | `ai-confirmed-topic-membership` | AI narrows keyword-matched topics; feed topic filter uses it | — | Lean in-chat implement; fixes "space" matching "workspace"-style false positives in topic filter |
 | 2026-07-29 | `source-bluesky` | Bluesky adapter | #47 | Completed via spec→implement pipeline |
+| 2026-07-30 | `introduce-themes` | User themes (background + density) + tighter controls | #158 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -66,7 +67,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `ai-token-metering` | Count, reveal, and cap AI tokens (rank + chat) | 2026-07-26 | `docs/architecture.md` | Daily token rollups; Settings reveal; chat 429 / rank keyword-only on hard cap |
 | `rank-ai-budgets` | AI caps, active-user priority, keyword-only fallback | 2026-07-26 | `docs/architecture.md` | Per-run/day AI article caps; keyword-only beyond budget; Settings reveal |
 | `rank-score-retention` | TTL / prune `user_article_scores`; keep saved | 2026-07-26 | `docs/architecture.md` | Prune new/seen/dismissed by TTL+top-N; keep saved; post-rank + CLI |
-
+| `introduce-themes` | User themes (background + density) + tighter controls | 2026-07-30 | `docs/architecture.md` | Completed via spec→implement pipeline |
 ## E. Multi-user and channels
 
 | ID | Feature | Completed | Spec | Notes |
