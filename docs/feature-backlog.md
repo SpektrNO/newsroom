@@ -2,14 +2,6 @@
 
 Segmentation index for feature-by-feature implementation.
 
-```text
-/spec-only <issue#|feature-id|title fragment>
-/spec-and-implement <issue#|feature-id|title fragment> — full
-/lean-implement <issue#|feature-id|title fragment>
-```
-
-Agents load parent issue + sub-tasks via `./scripts/load-feature-issue.sh`.
-
 **Legend:** ✅ Implemented · 🟡 Partial · ⬜ Spec only
 
 Shipped: [feature-completed.md](./feature-completed.md)
@@ -17,6 +9,8 @@ Shipped: [feature-completed.md](./feature-completed.md)
 GitHub lifecycle: [github-workflow.md](./github-workflow.md)
 
 Architecture: [architecture.md](./architecture.md)
+
+Contributing: [contributing.md](./contributing.md)
 
 ---
 

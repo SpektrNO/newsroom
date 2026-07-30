@@ -128,29 +128,13 @@ Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/d
 | [docs/decisions/004-ai-confirmed-topic-membership.md](docs/decisions/004-ai-confirmed-topic-membership.md) | Why the feed's topic filter uses AI-narrowed, not raw keyword, matches |
 | [docs/feature-backlog.md](docs/feature-backlog.md) | Feature segmentation index |
 | [docs/feature-completed.md](docs/feature-completed.md) | Shipped registry |
-| [docs/github-workflow.md](docs/github-workflow.md) | Issues, handoffs, scripts |
-
-## Spec → implement pipeline
-
-1. **Specifier** (`.cursor/agents/specifier.md`) → `docs/handoffs/current.md`
-2. **Developer** (`.cursor/agents/developer-implementer.md`) → implements + records
-
-```text
-/spec-and-implement <feature-id> — full
-/spec-only <feature-id>
-/lean-implement <feature-id>
-/implement-handoff
-```
-
-See [docs/github-workflow.md](docs/github-workflow.md).
-
-```bash
-./scripts/load-feature-issue.sh <feature-id>
-./scripts/github-issue-status.sh in-progress <task#> <parent#>
-./scripts/create-feature-issues.sh --dry-run
-./scripts/record-feature-complete.sh <feature-id>
-```
+| [docs/github-workflow.md](docs/github-workflow.md) | Issues, PRs, helper scripts |
+| [docs/contributing.md](docs/contributing.md) | Contribution norms |
 
 ## Status
 
 `scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, `web-ai-advisor-chat`, `web-source-discovery`, `source-podcast`, `source-bluesky`, `source-reddit`, and `ai-cloud-providers` are implemented (auth, sources including Bluesky/Reddit, ingest, topics/feed APIs, Advisor + rank via `createAiProvider` for Ollama/OpenAI/Google, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+
+## License
+
+[MIT](LICENSE) © 2026 SpektrNO

@@ -39,8 +39,8 @@ function formatTokens(n: number): string {
 
 const RANK_MODEL_TIER_HELP: Record<RankModelTier, string> = {
   standard:
-    "Stronger model, better at judging genuine topic fit. Slower, and uses more of your daily AI budget.",
-  fast: "Default balance of speed and quality.",
+    "Higher-quality model for this deploy (operator RANK_MODEL_STANDARD / provider default). Slower; uses more of your daily AI budget.",
+  fast: "Faster / cheaper model for this deploy (operator RANK_MODEL_FAST / provider default).",
   none: "Keyword matching only — no AI calls, no AI budget used.",
 };
 

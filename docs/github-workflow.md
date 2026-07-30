@@ -1,8 +1,8 @@
 # GitHub workflow
 
-How issues, handoffs, and docs stay in sync for feature work in `SpektrNO/newsroom`.
+How issues and docs stay in sync for feature work in `SpektrNO/newsroom`.
 
-**Related:** [feature-backlog.md](./feature-backlog.md) · [feature-completed.md](./feature-completed.md) · [handoffs/current.md](./handoffs/current.md) · [architecture.md](./architecture.md)
+**Related:** [feature-backlog.md](./feature-backlog.md) · [feature-completed.md](./feature-completed.md) · [architecture.md](./architecture.md) · [contributing.md](./contributing.md)
 
 ## Issue hierarchy
 
@@ -56,15 +56,11 @@ gh auth refresh -h github.com -s read:project,project
 
 ### GitHub Project Status sync
 
-Workflow labels and the board **Status** field stay aligned when agents call `github-issue-status.sh`:
-
 | Script arg | Label | Project Status (default names) |
 |------------|-------|--------------------------------|
 | `todo` | `status/todo` | Todo |
 | `in-progress` | `status/in-progress` | In Progress |
 | `done` | `status/done` | Done |
-
-Setup:
 
 ```bash
 gh auth refresh -h github.com -s read:project,project
@@ -76,54 +72,23 @@ If the issue is not on the board yet, the status script **adds** it, then sets S
 
 ## During work
 
-1. Load tracking: `./scripts/load-feature-issue.sh <feature-id>`
-2. Start a task: `./scripts/github-issue-status.sh in-progress <task#> <parent#>`
-3. Implement that task’s scope only.
-4. Close the task when done:
+1. Branch: `feature/<feature-id>` (one branch per feature).
+2. Load tracking: `./scripts/load-feature-issue.sh <feature-id>`
+3. Start a task: `./scripts/github-issue-status.sh in-progress <task#> <parent#>`
+4. Implement that task’s scope only; commit on the feature branch.
+5. Close the **task** when done (`gh issue close <task#>`). Never close the parent feature until the PR merges with `Closes #<parent>`.
+
+## Feature done + PR
 
 ```bash
-gh issue close <task#> --repo SpektrNO/newsroom --comment "Done: <short reason>"
-```
-
-Repeat for each open sub-task in slug order.
-
-## Feature branch + PR (agent pipeline)
-
-Canonical branch: **`feature/<feature-id>`**. Spec and all implementation tasks commit on **that one branch** — do not create per-task branches.
-
-Supervisor (Cursor) before Tasks:
-
-1. Resolve parent feature via `./scripts/load-feature-issue.sh`
-2. **If starting a new feature:** verify prior `docs/handoffs/current.md` is complete (Status `done`, backlog ✅, task sub-issues closed) → archive to `docs/handoffs/archive/YYYY-MM-DD-<id>.md`
-3. Checkout or create `feature/<feature-id>` and link it on the parent issue (comment or `gh issue develop`)
-4. After implement handoff Status `done` → ensure branch is pushed and `gh pr create` linking the parent issue
-
-Workers **commit and push on the feature branch after each closed task**. Supervisor does not squash that history unless asked.
-
-Agents follow `.cursor/skills/spec-and-implement/SKILL.md`: **full** mode Task-launches workers; **lean** (`/lean-implement` or `--lean`) does thin handoff + implement in the supervisor chat. Then open the PR.
-
-## Feature done + PR open
-
-```bash
-FEATURE=scaffold-monorepo   # feature id
+FEATURE=scaffold-monorepo
 REPO=SpektrNO/newsroom
-PR=123                       # your PR number
+PR=123
 
-# 1) See what is still open
 ./scripts/load-feature-issue.sh "$FEATURE"
-
-# 2) Close any remaining **task** sub-issues (not the parent feature)
+# Close any remaining task sub-issues (not the parent)
 gh issue close <task#> --repo "$REPO" --comment "Completed in PR #$PR"
 
-# 3) Optional: mark parent feature label status/done — leave the issue **open**
-./scripts/github-issue-status.sh done <parent-feature#>
-
-# 4) Do **not** close the parent feature issue here.
-#    PR body should include: Closes #<parent>
-
-# 5) Record docs completion
 ./scripts/record-feature-complete.sh "$FEATURE" --issue <parent#> --note "PR #$PR"
-
-# 6) Archive handoff
-# mv docs/handoffs/current.md docs/handoffs/archive/YYYY-MM-DD-$FEATURE.md
+# PR body should include: Closes #<parent>
 ```

@@ -12,6 +12,13 @@ expo-env.d.ts
 coverage/
 *.tsbuildinfo
 
+# Local Cursor agent pipeline + handoff scratch (kept on disk for maintainers;
+# not part of the public product surface — see docs/contributing.md)
+.cursor/agents/
+.cursor/skills/
+.cursor/rules/spec-implement-orchestrator.mdc
+docs/handoffs/
+
 # OS / editor
 .DS_Store
 *.swp

@@ -81,14 +81,14 @@ ensure_label "status/in-progress" "fbca04" "Agent or dev actively working"
 ensure_label "status/done" "0e8a16" "Work complete"
 
 # Standard task pipeline (slug|title|description)
-TASK_SPEC="spec|Product handoff|Write \`docs/handoffs/current.md\` via \`/spec-only <id>\`. Acceptance criteria + API/DB contract."
+TASK_SPEC="spec|Product handoff|Write acceptance criteria + API/DB contract for the feature (spec task)."
 TASK_AUDIT="audit|Audit partial work|Compare existing code to spec; list gaps in parent issue before continuing."
 TASK_DB="db|Database|Drizzle schema + migrations in \`packages/db/\`."
 TASK_API="api|API & auth|Next.js App Router API routes + Better Auth in \`apps/web/\`."
 TASK_WORKER="worker|Ingest & ranking worker|Jobs in \`apps/worker/\` using \`packages/sources\` and \`packages/ai\`."
 TASK_WEB="web|Web client|UI in \`apps/web/\`; match architecture visual direction."
 TASK_MOBILE="mobile|Expo mobile|Screens in \`apps/mobile/\` via shared \`packages/api-client\`."
-TASK_VERIFY="verify|Verify|Run \`pnpm build\` (and package tests when present); manual acceptance from handoff."
+TASK_VERIFY="verify|Verify|Run \`pnpm build\` (and package tests when present); confirm acceptance criteria."
 TASK_DOCS="docs|Docs|Update \`docs/architecture.md\`, \`docs/feature-backlog.md\` status, append \`docs/feature-completed.md\` via \`record-feature-complete.sh\`."
 
 BACKLOG_FILE="$ROOT/docs/feature-backlog.md"
@@ -292,16 +292,15 @@ build_parent_body() {
 ${task_section}
 _Sub-issues are linked below when created by \`create-feature-issues.sh\`._
 
-## Agent pipeline
+## Implementation
 
-\`\`\`text
-/spec-and-implement ${id} — full
-\`\`\`
+Use branch \`feature/${id}\`. Open a PR with \`Closes #<parent>\` when the feature is done.
 
 ## References
 
 - [Feature backlog](https://github.com/${REPO}/blob/main/docs/feature-backlog.md)
 - \`docs/architecture.md\`
+- \`docs/github-workflow.md\`
 EOF
 }
 
