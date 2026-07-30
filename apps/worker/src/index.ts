@@ -100,7 +100,9 @@ async function pollLoop(): Promise<void> {
       `[newsroom-worker] failed ${stale} stale running job(s) (crashed worker recovery)`,
     );
   }
-  await ensureNextIngestJob(db, 0);
+  // Due immediately — ensureNextIngestJob(0) can still no-op if a future
+  // pending row exists; enqueueIngestNow only reuses due/creates now.
+  await enqueueIngestNow(db);
 
   const tick = async () => {
     try {

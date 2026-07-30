@@ -679,22 +679,35 @@ export function FeedClient(): ReactNode {
         </p>
       ) : null}
       <div className="feed-filters" role="group" aria-label="Feed filters">
-        <label className="filter-field feed-search-field">
-          <span className="filter-label">Search</span>
-          <input
-            type="search"
-            value={searchDraft}
-            placeholder="Title, summary, or reason…"
-            onChange={(e) => setSearchDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                setSearch(searchDraft.trim());
-              }
-            }}
-            aria-label="Search feed"
-          />
-        </label>
+        <div className="source-filter" role="group" aria-label="Sources">
+          <div className="source-filter-header">
+            <span className="filter-label">Sources</span>
+            <button
+              type="button"
+              className="ghost topic-filter-link"
+              aria-pressed={!sourceFilterActive}
+              onClick={selectAllSources}
+            >
+              All
+            </button>
+          </div>
+          <div className="topic-filter-chips">
+            {SOURCE_OPTIONS.map((opt) => {
+              const on = selectedSources.has(opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={on ? "topic-filter-chip on" : "topic-filter-chip"}
+                  aria-pressed={on}
+                  onClick={() => toggleSource(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="topic-filter" role="group" aria-label="Topics">
           <div className="topic-filter-header">
@@ -796,67 +809,57 @@ export function FeedClient(): ReactNode {
           ) : null}
         </div>
 
-        <div className="source-filter" role="group" aria-label="Sources">
-          <div className="source-filter-header">
-            <span className="filter-label">Sources</span>
-            <button
-              type="button"
-              className="ghost topic-filter-link"
-              aria-pressed={!sourceFilterActive}
-              onClick={selectAllSources}
+        <div className="feed-view-sort" role="group" aria-label="View and sort">
+          <label className="filter-field filter-field-view">
+            <span className="filter-label">View</span>
+            <select
+              value={view}
+              onChange={(e) => setView(e.target.value as ViewFilter)}
             >
-              All
-            </button>
-          </div>
-          <div className="topic-filter-chips">
-            {SOURCE_OPTIONS.map((opt) => {
-              const on = selectedSources.has(opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={on ? "topic-filter-chip on" : "topic-filter-chip"}
-                  aria-pressed={on}
-                  onClick={() => toggleSource(opt.id)}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
+              <option value="feed">Feed</option>
+              <option value="saved">Saved</option>
+              <option value="dismissed">Dismissed</option>
+            </select>
+          </label>
+          <div className="feed-sort" role="group" aria-label="Sort">
+            <span className="filter-label">Sort</span>
+            <div className="feed-sort-controls">
+              <select
+                value={sort}
+                aria-label="Sort by"
+                onChange={(e) => setSort(e.target.value as SortField)}
+              >
+                <option value="score">Score</option>
+                <option value="date">Date</option>
+              </select>
+              <select
+                value={order}
+                aria-label="Sort order"
+                onChange={(e) => setOrder(e.target.value as SortOrder)}
+              >
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+            </div>
           </div>
         </div>
-        <label className="filter-field filter-field-view">
-          <span className="filter-label">View</span>
-          <select
-            value={view}
-            onChange={(e) => setView(e.target.value as ViewFilter)}
-          >
-            <option value="feed">Feed</option>
-            <option value="saved">Saved</option>
-            <option value="dismissed">Dismissed</option>
-          </select>
+
+        <label className="filter-field feed-search-field">
+          <span className="filter-label">Search</span>
+          <input
+            type="search"
+            value={searchDraft}
+            placeholder="Title, summary, or reason…"
+            onChange={(e) => setSearchDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                setSearch(searchDraft.trim());
+              }
+            }}
+            aria-label="Search feed"
+          />
         </label>
-        <div className="feed-sort" role="group" aria-label="Sort">
-          <span className="filter-label">Sort</span>
-          <div className="feed-sort-controls">
-            <select
-              value={sort}
-              aria-label="Sort by"
-              onChange={(e) => setSort(e.target.value as SortField)}
-            >
-              <option value="score">Score</option>
-              <option value="date">Date</option>
-            </select>
-            <select
-              value={order}
-              aria-label="Sort order"
-              onChange={(e) => setOrder(e.target.value as SortOrder)}
-            >
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </select>
-          </div>
-        </div>
       </div>
 
       {loading || !topicsReady ? (
