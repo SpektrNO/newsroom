@@ -2,6 +2,7 @@ import type { NormalizedArticle, SourceAdapter } from "./types.js";
 import { hashArticleContent } from "./hash.js";
 import { normalizeCanonicalUrl } from "./url.js";
 import { normalizeSubredditName } from "./reddit-subreddit.js";
+import { fetchAndParseRss, type RssFeedItem } from "./rss.js";
 
 export const REDDIT_FETCH_LIMIT = 50;
 export const DEFAULT_REDDIT_USER_AGENT = "newsroom:v1 (by /u/newsroom_bot)";
@@ -20,6 +21,10 @@ export type RedditAdapterOptions = {
   tokenUrl?: string;
   /** Override listing base — oauth host or www (tests). */
   listingBaseUrl?: string;
+  /** Override public RSS URL (tests). */
+  rssUrl?: string;
+  /** Skip JSON and use RSS only (tests). */
+  rssOnly?: boolean;
 };
 
 type RedditListingChild = {
@@ -56,7 +61,8 @@ type TokenResponse = {
 };
 
 /**
- * Reddit subreddit new-listing via public JSON or application-only OAuth.
+ * Reddit subreddit listing via OAuth JSON, public JSON, or RSS fallback.
+ * Public `.json` is often 403; `r/{sub}/.rss` still works with a User-Agent.
  * Operator credentials only — no end-user Reddit login.
  */
 export class RedditAdapter implements SourceAdapter {
@@ -69,6 +75,8 @@ export class RedditAdapter implements SourceAdapter {
   private readonly clientSecret: string | undefined;
   private readonly tokenUrl: string;
   private readonly listingBaseUrl: string | undefined;
+  private readonly rssUrlOverride: string | undefined;
+  private readonly rssOnly: boolean;
 
   constructor(config: RedditConfig, options: RedditAdapterOptions = {}) {
     if (!config.subreddit?.trim()) {
@@ -91,17 +99,37 @@ export class RedditAdapter implements SourceAdapter {
       options.tokenUrl?.trim() ||
       "https://www.reddit.com/api/v1/access_token";
     this.listingBaseUrl = options.listingBaseUrl?.replace(/\/+$/, "");
+    this.rssUrlOverride = options.rssUrl?.trim() || undefined;
+    this.rssOnly = Boolean(options.rssOnly);
   }
 
   async fetchRecent(): Promise<NormalizedArticle[]> {
+    if (this.rssOnly) {
+      return this.fetchViaRss();
+    }
+
+    try {
+      return await this.fetchViaListingJson();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Anonymous JSON is frequently blocked; RSS still serves public posts.
+      if (
+        /reddit_fetch_failed:(403|429|401)/.test(message) ||
+        /reddit_token_failed:/.test(message)
+      ) {
+        return this.fetchViaRss();
+      }
+      throw err;
+    }
+  }
+
+  private async fetchViaListingJson(): Promise<NormalizedArticle[]> {
     const useOAuth = Boolean(this.clientId && this.clientSecret);
     const token = useOAuth ? await this.fetchAccessToken() : null;
 
     const base =
       this.listingBaseUrl ||
-      (token
-        ? "https://oauth.reddit.com"
-        : "https://www.reddit.com");
+      (token ? "https://oauth.reddit.com" : "https://www.reddit.com");
     const path = token
       ? `/r/${this.subreddit}/new`
       : `/r/${this.subreddit}/new.json`;
@@ -130,6 +158,24 @@ export class RedditAdapter implements SourceAdapter {
     const articles: NormalizedArticle[] = [];
     for (const child of children) {
       const article = mapListingChild(child, this.subreddit);
+      if (article) articles.push(article);
+    }
+    return articles;
+  }
+
+  private async fetchViaRss(): Promise<NormalizedArticle[]> {
+    const rssUrl =
+      this.rssUrlOverride ||
+      `https://www.reddit.com/r/${this.subreddit}/.rss`;
+    const feed = await fetchAndParseRss(rssUrl, {
+      fetch: this.fetchImpl,
+      fetchErrorPrefix: "reddit_rss_fetch_failed",
+      headers: { "user-agent": this.userAgent },
+    });
+
+    const articles: NormalizedArticle[] = [];
+    for (const item of feed.items.slice(0, this.limit)) {
+      const article = mapRssItem(item, this.subreddit);
       if (article) articles.push(article);
     }
     return articles;
@@ -194,15 +240,9 @@ export function mapListingChild(
 
   const selftext =
     typeof data.selftext === "string" ? data.selftext.trim() : "";
-  if (
-    selftext === "[deleted]" ||
-    selftext === "[removed]"
-  ) {
+  if (selftext === "[deleted]" || selftext === "[removed]") {
     return null;
   }
-
-  // Pure media with no text haystack beyond a thin title is still rankable
-  // via title; skip only when title missing (already handled).
 
   const permalink =
     typeof data.permalink === "string" ? data.permalink.trim() : "";
@@ -231,6 +271,8 @@ export function mapListingChild(
       ? `t3_${data.id.trim()}`
       : undefined);
 
+  void subreddit;
+
   const article: NormalizedArticle = {
     url: canonicalUrl,
     title,
@@ -245,6 +287,74 @@ export function mapListingChild(
   };
   article.contentHash = hashArticleContent(article);
   return article;
+}
+
+/** Map a Reddit public RSS/Atom item — exported for tests. */
+export function mapRssItem(
+  item: RssFeedItem,
+  subreddit: string,
+): NormalizedArticle | null {
+  const title = item.title?.trim() ?? "";
+  if (!title || title === "[deleted]" || title === "[removed]") return null;
+
+  const link = item.link?.trim() || item.guid?.trim() || "";
+  if (!link) return null;
+
+  let canonicalUrl: string;
+  try {
+    canonicalUrl = normalizeCanonicalUrl(link);
+  } catch {
+    return null;
+  }
+
+  const summary =
+    item.contentSnippet?.trim() ||
+    item.summary?.trim() ||
+    item.content?.trim() ||
+    undefined;
+  const authorRaw = item.creator?.trim() || item.author?.trim() || undefined;
+  const author = authorRaw
+    ? authorRaw.startsWith("u/") || authorRaw.startsWith("/u/")
+      ? authorRaw.replace(/^\//, "")
+      : `u/${authorRaw}`
+    : undefined;
+
+  let publishedAt: Date | undefined;
+  if (item.isoDate) {
+    const d = new Date(item.isoDate);
+    if (!Number.isNaN(d.getTime())) publishedAt = d;
+  } else if (item.pubDate) {
+    const d = new Date(item.pubDate);
+    if (!Number.isNaN(d.getTime())) publishedAt = d;
+  }
+
+  const externalId =
+    extractRedditThingId(item.guid) ||
+    extractRedditThingId(link) ||
+    item.guid?.trim() ||
+    undefined;
+
+  void subreddit;
+
+  const article: NormalizedArticle = {
+    url: canonicalUrl,
+    title,
+    summary: summary || undefined,
+    author,
+    publishedAt,
+    externalId,
+    raw: item,
+  };
+  article.contentHash = hashArticleContent(article);
+  return article;
+}
+
+function extractRedditThingId(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const m =
+    /\/comments\/([a-z0-9]+)\b/i.exec(raw) || /\bt3_([a-z0-9]+)\b/i.exec(raw);
+  if (m?.[1]) return `t3_${m[1]}`;
+  return undefined;
 }
 
 function buildSummary(

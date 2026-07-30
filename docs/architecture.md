@@ -107,7 +107,7 @@ Never call Ollama from UI code.
 | Substack | User-added RSS URLs + curated catalog (`web-source-discovery`) | v1 |
 | Podcasts | Podcast RSS/Atom (`source_type: podcast`, `{ rssUrl }`); episodes as feed items with show/duration/enclosure | v1 (`source-podcast`) |
 | Bluesky | Public AppView `getAuthorFeed` (`source_type: bluesky`, `{ handle }`); posts as feed items (no Bluesky auth) | v1 (`source-bluesky`) |
-| Reddit | Subreddit `/new` listing (`source_type: reddit`, `{ subreddit }`); `REDDIT_USER_AGENT` + optional app client credentials | v1 (`source-reddit`) |
+| Reddit | Subreddit listing (`source_type: reddit`, `{ subreddit }`); OAuth JSON when creds set, else public JSON with `REDDIT_USER_AGENT`, falling back to `r/{sub}/.rss` on 403/429 | v1 (`source-reddit`) |
 | X | Paid API | deferred |
 
 Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`.

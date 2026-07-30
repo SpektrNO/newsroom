@@ -17,6 +17,8 @@ export type FetchRssOptions = {
   fetch?: typeof fetch;
   /** Error prefix when HTTP fails (e.g. podcast_fetch_failed). */
   fetchErrorPrefix?: string;
+  /** Extra request headers (e.g. Reddit User-Agent). */
+  headers?: Record<string, string>;
 };
 
 /**
@@ -40,6 +42,7 @@ export async function fetchAndParseRss(
     headers: {
       accept:
         "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+      ...options.headers,
     },
   });
   if (!res.ok) {

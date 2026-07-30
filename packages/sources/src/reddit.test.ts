@@ -178,4 +178,45 @@ describe("RedditAdapter", () => {
     assert.ok(urls[1]!.includes("/r/programming/new"));
     assert.ok(!urls[1]!.includes(".json"));
   });
+
+  it("falls back to RSS when public JSON returns 403", async () => {
+    const urls: string[] = [];
+    const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>funny</title>
+  <entry>
+    <author><name>/u/alice</name></author>
+    <id>t3_abc99</id>
+    <link href="https://www.reddit.com/r/funny/comments/abc99/a_joke_about_memes/"/>
+    <updated>2024-06-01T12:00:00Z</updated>
+    <title>A joke about memes</title>
+    <content type="html">funny post body</content>
+  </entry>
+</feed>`;
+    const fetchMock: typeof fetch = async (input) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes(".json")) {
+        return new Response("blocked", { status: 403 });
+      }
+      return new Response(rssXml, {
+        status: 200,
+        headers: { "content-type": "application/atom+xml" },
+      });
+    };
+
+    const adapter = new RedditAdapter(
+      { subreddit: "funny" },
+      {
+        fetch: fetchMock,
+        userAgent: "newsroom-test/1.0",
+        listingBaseUrl: "https://www.reddit.com",
+      },
+    );
+    const articles = await adapter.fetchRecent();
+    assert.equal(articles.length, 1);
+    assert.equal(articles[0]!.title, "A joke about memes");
+    assert.ok(urls.some((u) => u.includes(".json")));
+    assert.ok(urls.some((u) => u.includes("/r/funny/.rss")));
+  });
 });
