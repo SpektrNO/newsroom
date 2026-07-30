@@ -1,8 +1,10 @@
 # Newsroom
 
-Focused news for topics you care about — Hacker News, Substack, and more — with a simple web UI and Expo mobile apps.
+**Focused news aggregator** — an aggregator of aggregators. It sits on top of Hacker News, Substack, podcasts, Bluesky, Reddit, and other personal feeds you subscribe to, then ranks stories to the topics you care about.
 
-Personal-first; multi-user-ready data model and APIs.
+Instead of browsing each source separately, Newsroom pulls recent items into one hybrid-ranked feed (keywords + optional AI), with Save / Dismiss, topic filters, and an in-app Advisor for refining interests.
+
+Personal-first; multi-user-ready data model and APIs. Web UI today; Expo mobile feed next.
 
 ## Prerequisites
 
@@ -65,7 +67,7 @@ pnpm --filter @newsroom/worker start
 | `apps/worker` | Postgres job poller + one-shot ingest/rank CLI |
 | `packages/db` | Drizzle schema + migrations (auth, ingest, topics, scores) |
 | `packages/ai` | `AiProvider` + `createAiProvider` (Ollama / OpenAI / Google) + keyword/`rankArticleBatch` helpers |
-| `packages/sources` | HN + Substack + podcast + Bluesky adapters (`SourceAdapter`) |
+| `packages/sources` | Source adapters: HN, Substack/RSS, podcasts, Bluesky, Reddit |
 | `packages/api-client` | Typed client (health, sources, topics, topic-tree, feed) |
 
 ## Commands
@@ -103,7 +105,8 @@ Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environmen
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `GET/PATCH` | `/api/settings/rank-model` | Get / set the caller's ranking model tier: `none` (keyword-only, no AI) \| `fast` (default) \| `standard` (stronger, slower). Persisted per user; a change marks preferences dirty for the next rank pass. |
+| `GET/PATCH` | `/api/settings/rank-model` | Get / set ranking model tier: `none` \| `fast` \| `standard` |
+| `GET/PUT/DELETE` | `/api/settings/ai-credentials` | Optional BYOK OpenAI/Google key (encrypted; requires `AI_CREDENTIALS_KEY`) |
 
 ### Topics & feed API (session cookie)
 
@@ -133,7 +136,7 @@ Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/d
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, `web-ai-advisor-chat`, `web-source-discovery`, `source-podcast`, `source-bluesky`, `source-reddit`, and `ai-cloud-providers` are implemented (auth, sources including Bluesky/Reddit, ingest, topics/feed APIs, Advisor + rank via `createAiProvider` for Ollama/OpenAI/Google, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+Core loop is shipped: auth, multi-source ingest (HN, Substack/RSS, podcasts, Bluesky, Reddit), hybrid rank + Advisor (Ollama / OpenAI / Google, optional BYOK), editorial web UI. Expo feed UI is next per the backlog.
 
 ## License
 

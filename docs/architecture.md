@@ -4,8 +4,8 @@ Personal-first, multi-user-ready feed of stories matched to topics of interest. 
 
 ## Goals
 
-- Hybrid relevance: keyword/tag shortlist, then Ollama ranks, dedupes, and lightly explains matches
-- In-app AI advisor chat for topic/keyword guidance (planned)
+- Hybrid relevance: keyword/tag shortlist, then an `AiProvider` ranks, dedupes, and lightly explains matches
+- In-app AI advisor chat for topic/keyword guidance (via the same `AiProvider`)
 - Elegant Next.js website + Expo (iOS/Android)
 - Same APIs and data model for one user today and many users later
 
@@ -32,9 +32,11 @@ flowchart LR
     BS[Bluesky adapter]
     RD[Reddit adapter]
   end
-  subgraph ai [AI]
-    Provider[AI provider interface]
+  subgraph ai [AiProvider backends]
+    Provider[AiProvider interface]
     Ollama[Ollama]
+    OpenAI[OpenAI]
+    Google[Google Gemini]
   end
   Web --> BFF
   Mobile --> BFF
@@ -47,9 +49,13 @@ flowchart LR
   Workers --> RD
   Workers --> DB
   Workers --> Provider
-  Provider --> Ollama
   BFF --> Provider
+  Provider --> Ollama
+  Provider --> OpenAI
+  Provider --> Google
 ```
+
+**`AiProvider` is the only AI boundary.** Worker rank and the web BFF (`/api/chat`, Rank latest, health) call `complete` / `health` through `packages/ai`. **Ollama is one concrete implementation** (default for local deploys via `AI_PROVIDER=ollama`). OpenAI and Google Gemini are peer implementations behind the same interface (`createAiProvider` / optional per-user BYOK). New vendors plug in as another `AiProvider` without changing rank/advisor prompts. UI never talks to any model host directly.
 
 ## Monorepo layout
 
@@ -68,7 +74,7 @@ flowchart LR
 - **DB:** Postgres + Drizzle
 - **Auth:** Better Auth (email/password first; OAuth later) — user-scoped from day one
 - **Jobs:** Postgres-backed queue (avoid Redis in v1)
-- **AI:** Ollama locally; all calls via `packages/ai` so a hosted model can replace it later
+- **AI:** `AiProvider` in `packages/ai`. Default local backend is **Ollama**; hosted OpenAI/Google (and optional BYOK) are alternate implementations of the same interface — not a special path around it.
 
 ## Data model
 
@@ -86,20 +92,20 @@ Personal mode = one user row. Multi-user = same schema.
 
 1. **Ingest** (~10–15 min): adapters fetch; upsert `articles` by canonical URL.
 2. **Keyword pass:** match title/summary against topic keywords; write `user_article_evaluations` for every checked article (hit or miss). Only hits get a `user_article_scores` row.
-3. **AI pass (Ollama):** batch shortlist; relevance 0–1, near-duplicates, one-line why, and per-article `confirmedTopicIds` (subset of its keyword-matched topics the model believes it's genuinely about — narrows, never adds); update `user_article_scores`. Each user picks a persisted **rank model tier** (`user.rank_model_tier`): `none` skips this step entirely (keyword-only, no AI budget spent), `fast` uses `RANK_MODEL_FAST`/`OLLAMA_MODEL` (default), `standard` uses `RANK_MODEL_STANDARD` (default `llama3.1:8b`, stronger/slower). Settings UI: `GET/PATCH /api/settings/rank-model` (`user-selectable-rank-model`, ADR 005).
+3. **AI pass (`AiProvider`):** batch shortlist; relevance 0–1, near-duplicates, one-line why, and per-article `confirmedTopicIds` (subset of its keyword-matched topics the model believes it's genuinely about — narrows, never adds); update `user_article_scores`. Backend is whatever `createAiProvider` / BYOK resolves (Ollama, OpenAI, or Google — same prompt contract). Each user picks a persisted **rank model tier** (`user.rank_model_tier`): `none` skips this step entirely (keyword-only, no AI budget spent), `fast` / `standard` map to model ids via `RANK_MODEL_*` and provider-aware defaults (ADR 005). Settings: `GET/PATCH /api/settings/rank-model`.
 4. **Feed API:** `GET /api/feed` returns ranked items for the session user, plus pipeline counts `rankedCount` / `evaluatedCount` / `articlesCount` (score rows / keyword checks / distinct articles from enabled sources). Timestamps: `lastIngestAt` is the last completed ingest job; `lastRankedAt` is the last completed **rank job** for that user (so a pass with evaluations but no new score rows still advances “Ranked … ago”), falling back to `max(scored_at)` when no completed rank jobs remain. All three counts use the same age window as article GC (`ARTICLE_TTL_DAYS`, default 90; `0` = off) — feed list and rank candidates share that cutoff via `feedMaxAgeCutoff()`. Ranked is keyword hits (score rows) — AI scoring updates existing rows and does not raise Ranked. After each rank pass, score TTL prune runs per user and **article prune** runs once for the shared corpus (same as `pnpm worker:prune-scores`). The `topic=` filter checks the stored `matched_topic_ids` (AI-narrowed) rather than re-deriving membership from raw keywords; pre-migration rows (`NULL`) fall back to a live keyword re-check (`ai-confirmed-topic-membership`, ADR 004).
 
 **Multi-user retention caveat:** Score prune is per-user (`new`/`seen`/`dismissed` by TTL/top-N; that user’s `saved` kept). Article GC is **shared**: deleting an old article cascades away every user’s scores and evaluations on it unless **any** user has it `saved`. So one user’s rank/prune pass can drop another user’s unranked-or-ranked-but-unsaved rows for that story; pipeline counts and feeds for idle users can jump down without those users ranking. Acceptable for v1 personal/small multi-user; tighter per-user article lifetime (or “keep while any score exists”) stays under `multiuser-harden` if needed.
 
-Never call Ollama from UI code.
+Never call model hosts (Ollama, OpenAI, Google, …) from UI code — only via BFF/worker → `AiProvider`.
 
 **Candidate selection:** Prefer never-evaluated articles, then stale (content `updated_at` newer than evaluation), then recency. Skip fresh keyword misses and fully AI-scored hits. Cap ~200 per user per run so consecutive ranks advance through the corpus. Ingest only bumps article `updated_at` when `content_hash` changes, so re-fetching the same story does not stale evaluations. Preference dirty (topic add/edit/delete) clears **miss** evaluations only and marks the user dirty — scored hits and hit evaluations stay so the feed is not wiped; earlier misses can still become hits under new keywords.
 
-**Scale path (backlog B2):** Keep shared articles + per-user scores (+ evaluation markers). Evolve off “one rank pass walks every user” via `rank-dirty-incremental` (shipped: dirty ∩ active) → `rank-per-user-queue` (shipped: one `jobs` row per `userId`, fair `SKIP LOCKED` dequeue) → `rank-ai-budgets` (shipped: per-run/day AI article caps + keyword-only beyond budget) → `rank-score-retention` (shipped: prune `new`/`seen`/`dismissed` by TTL + top-N; always keep `saved`; also prune shared `articles` older than `ARTICLE_TTL_DAYS` default 90 unless any user saved them; evaluations prune on the same TTL). Cadence: mark users dirty on ingest/preference change; enqueue AI rank for **dirty ∩ active** (recent feed activity, not merely a session cookie); catch-up on feed load when dirty; coalesce **per user** (unique open rank job on `payload.userId`). Hosted OpenAI/Google providers: backlog `ai-cloud-providers` (operator-hosted first; optional BYOK later).
+**Scale path (backlog B2):** Keep shared articles + per-user scores (+ evaluation markers). Evolve off “one rank pass walks every user” via `rank-dirty-incremental` (shipped: dirty ∩ active) → `rank-per-user-queue` (shipped: one `jobs` row per `userId`, fair `SKIP LOCKED` dequeue) → `rank-ai-budgets` (shipped: per-run/day AI article caps + keyword-only beyond budget) → `rank-score-retention` (shipped: prune `new`/`seen`/`dismissed` by TTL + top-N; always keep `saved`; also prune shared `articles` older than `ARTICLE_TTL_DAYS` default 90 unless any user saved them; evaluations prune on the same TTL). Cadence: mark users dirty on ingest/preference change; enqueue AI rank for **dirty ∩ active** (recent feed activity, not merely a session cookie); catch-up on feed load when dirty; coalesce **per user** (unique open rank job on `payload.userId`). Hosted backends are peer `AiProvider`s (`ai-cloud-providers`, shipped); per-user keys via `ai-cloud-providers-byok`.
 
 **Token metering (`ai-token-metering`):** Every `AiProvider.complete` reports usage (Ollama `prompt_eval_count`/`eval_count`, OpenAI `usage`, Google `usageMetadata`, else chars/4 estimated). Daily per-user rollups in `ai_token_daily` by purpose (`rank`/`chat`/`other`). Settings shows used vs `AI_TOKEN_DAILY_LIMIT` (soft warn via `AI_TOKEN_DAILY_SOFT_LIMIT`, default 80%). Shared pool: chat over hard → `429 token_budget_exceeded`; rank skips further AI batches (keyword-only). Article caps from `rank-ai-budgets`: `RANK_AI_MAX_PER_RUN` (default 60, bounds one Rank latest), `RANK_AI_MAX_PER_DAY` (default **0 = unlimited** — daily cost is the token cap), optional `RANK_AI_MAX_GLOBAL_PER_DAY`. `GET /api/ai-usage` exposes both token and article status for the session user.
 
-**Cloud providers (`ai-cloud-providers`):** Operator selects `AI_PROVIDER=ollama|openai|google` (default ollama). Factory `createAiProvider` is shared by worker rank and web BFF (`/api/chat`, Rank latest, `/api/health`). No browser→vendor calls. **BYOK** (`ai-cloud-providers-byok`): optional per-user encrypted OpenAI/Google key in Settings (`AI_CREDENTIALS_KEY`); rank/chat prefer that user’s key when set.
+**Cloud / local backends (`ai-cloud-providers`):** `AI_PROVIDER=ollama|openai|google` selects which **implementation** of `AiProvider` the factory builds (default `ollama`). Same contract for rank and Advisor. **BYOK** (`ai-cloud-providers-byok`): optional per-user encrypted OpenAI/Google key in Settings (`AI_CREDENTIALS_KEY`); rank/chat prefer that user’s provider when set — still through `AiProvider`, never from the browser.
 
 ## Source adapters
 
@@ -125,10 +131,11 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `POST /api/feed/rank` — session; run keyword + AI rank for the current user only (may take minutes)
 - `POST /api/feed/wipe-rankings` — session; delete `new`/`seen` scores (+ orphan evaluations); keep saved/dismissed; clear dirty (no auto re-rank)
 - `GET/PATCH /api/settings/rank-model` — session; get/set the caller's rank model tier (`none` \| `fast` \| `standard`); PATCH marks preferences dirty
+- `GET/PUT/DELETE /api/settings/ai-credentials` — session; optional BYOK OpenAI/Google key (encrypted; `AI_CREDENTIALS_KEY`)
 - `POST /api/feed/:id/seen|saved|dismissed`
 - `GET /api/ai-usage` — session; today’s token rollup vs daily limits
 - `POST /api/chat` — session chat for topic/keyword advice via `AiProvider` (`web-ai-advisor-chat`); may return `tokens` / `aiUsage`; `429 token_budget_exceeded` when over daily hard cap
-- `GET /api/health` — includes Ollama reachability
+- `GET /api/health` — DB + configured `AiProvider` reachability (`checks.ai`; `aiProvider` name)
 
 ## Clients
 
@@ -138,8 +145,8 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Local development
 
-- Docker Compose: Postgres (+ optional Ollama container or host Ollama)
-- Env: `DATABASE_URL`, `OLLAMA_HOST`, model name, Better Auth secrets
+- Docker Compose: Postgres (+ optional Ollama when using the default `AiProvider` backend)
+- Env: `DATABASE_URL`, `AI_PROVIDER` (+ backend keys / `OLLAMA_*`), Better Auth secrets; optional `AI_CREDENTIALS_KEY` for BYOK
 - Seed: first user + example topics + one Substack feed
 
 ## Out of scope (MVP)
@@ -147,4 +154,4 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - Full-text paywalled Substack bodies
 - Social posting
 - Native X without approved API access
-- Heavy ML beyond hybrid keyword + Ollama ranking
+- Heavy ML beyond hybrid keyword + `AiProvider` ranking
