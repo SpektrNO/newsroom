@@ -116,7 +116,10 @@ export type FeedPage = {
   nextCursor: string | null;
   /** ISO time of the last completed ingest job, if any. */
   lastIngestAt?: string | null;
-  /** ISO time of the latest score write for this user, if any. */
+  /**
+   * ISO time of the last completed rank pass for this user (job finished_at),
+   * falling back to latest score write when no completed rank jobs remain.
+   */
   lastRankedAt?: string | null;
   /** Articles matching current topic/source/status/search filters. */
   matchedCount?: number;

@@ -10,7 +10,8 @@ export function tryNormalizeRssUrl(url: string): string | null {
 }
 
 /**
- * True when the user already has a substack subscription for this catalog RSS URL.
+ * True when the user already has an RSS subscription (feed or podcast)
+ * for this catalog URL.
  */
 export function isFeedAlreadyAdded(
   sources: ReadonlyArray<{
@@ -22,7 +23,9 @@ export function isFeedAlreadyAdded(
   const needle = tryNormalizeRssUrl(rssUrl);
   if (!needle) return false;
   for (const source of sources) {
-    if (source.sourceType !== "substack") continue;
+    if (source.sourceType !== "substack" && source.sourceType !== "podcast") {
+      continue;
+    }
     const raw = source.config?.rssUrl;
     if (typeof raw !== "string") continue;
     const normalized = tryNormalizeRssUrl(raw);

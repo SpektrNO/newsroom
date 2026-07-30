@@ -25,9 +25,11 @@ describe("getFeedCatalog", () => {
 });
 
 describe("listCatalogTopicTags", () => {
-  it("dedupes and sorts tags", () => {
+  it("dedupes and sorts tags across domains", () => {
     const tags = listCatalogTopicTags(FEED_CATALOG);
     assert.ok(tags.includes("LLMs & agents"));
+    assert.ok(tags.includes("Climate & energy"));
+    assert.ok(tags.includes("Design & media"));
     assert.deepEqual(tags, [...tags].sort((a, b) => a.localeCompare(b)));
   });
 });
@@ -50,7 +52,20 @@ describe("isFeedAlreadyAdded", () => {
     );
   });
 
-  it("ignores non-substack sources", () => {
+  it("matches podcast RSS the same way", () => {
+    const sources = [
+      {
+        sourceType: "podcast",
+        config: { rssUrl: "https://www.platformer.news/feed/" },
+      },
+    ];
+    assert.equal(
+      isFeedAlreadyAdded(sources, "https://www.platformer.news/feed"),
+      true,
+    );
+  });
+
+  it("ignores non-RSS sources", () => {
     assert.equal(
       isFeedAlreadyAdded(
         [{ sourceType: "hackernews", config: {} }],

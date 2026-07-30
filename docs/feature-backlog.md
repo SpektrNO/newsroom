@@ -193,8 +193,8 @@ Notes for `web-ai-advisor-chat`:
 Notes for `web-source-discovery` (shipped — catalog v1):
 
 - **Problem:** Ranking only filters what you already ingest. HN is a shared firehose (discovery built-in); Substack-style sources previously required the user to **already know** an RSS URL.
-- **Shipped:** Static curated feed catalog (`GET /api/feed-catalog`); Sources **Catalog** with topic-tag filter, Added vs Add feed (confirm → `POST /api/sources`); URL match via `normalizeCanonicalUrl`.
-- **Follow-ups:** Advisor feed suggestions; slug/search resolve; usage-based suggestions.
+- **Shipped:** Static curated feed catalog (`GET /api/feed-catalog`); Sources **Suggested feeds** with search + topic-tag filter; single **Add a source** form (Feed / Podcast / Bluesky + HN); URL match via `normalizeCanonicalUrl`. Catalog is a small multi-domain starter set — not every topic-tree leaf.
+- **Follow-ups:** Advisor feed suggestions; slug/search resolve; usage-based suggestions; podcast entries in the suggested list.
 - **Out of scope (unchanged):** Scraping paywalled bodies; scraping Substack’s entire network; social popularity; auto-subscribe.
 
 ## D. Mobile client

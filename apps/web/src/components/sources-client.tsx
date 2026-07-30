@@ -18,6 +18,8 @@ import { getBrowserApiClient } from "@/lib/api";
 import { isFeedAlreadyAdded } from "@/lib/feed-catalog-match";
 import { listCatalogTopicTags } from "@/lib/feed-catalog";
 
+type AddKind = "feed" | "podcast" | "bluesky";
+
 function configSummary(source: Source): string {
   if (source.sourceType === "hackernews") {
     const mode = source.config.mode === "new" ? "new" : "top";
@@ -58,14 +60,13 @@ export function SourcesClient(): ReactNode {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [catalogNote, setCatalogNote] = useState<string | null>(null);
+  const [addKind, setAddKind] = useState<AddKind>("feed");
   const [rssUrl, setRssUrl] = useState("");
-  const [podcastRssUrl, setPodcastRssUrl] = useState("");
   const [blueskyHandle, setBlueskyHandle] = useState("");
   const [pending, setPending] = useState(false);
-  const [podcastPending, setPodcastPending] = useState(false);
-  const [blueskyPending, setBlueskyPending] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -95,11 +96,24 @@ export function SourcesClient(): ReactNode {
   const hasHn = sources.some((s) => s.sourceType === "hackernews");
   const topicTags = useMemo(() => listCatalogTopicTags(catalog), [catalog]);
   const visibleCatalog = useMemo(() => {
-    if (!tagFilter) return catalog;
-    return catalog.filter((f) =>
-      f.topicTags.some((t) => t.toLowerCase() === tagFilter.toLowerCase()),
-    );
-  }, [catalog, tagFilter]);
+    const q = catalogSearch.trim().toLowerCase();
+    return catalog.filter((f) => {
+      if (
+        tagFilter &&
+        !f.topicTags.some((t) => t.toLowerCase() === tagFilter.toLowerCase())
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      const hay = `${f.label} ${f.blurb} ${f.topicTags.join(" ")}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [catalog, tagFilter, catalogSearch]);
+
+  function selectAddKind(kind: AddKind) {
+    setAddKind(kind);
+    setFormError(null);
+  }
 
   async function addHackerNews() {
     setFormError(null);
@@ -117,62 +131,43 @@ export function SourcesClient(): ReactNode {
     }
   }
 
-  async function addSubstack(event: FormEvent) {
+  async function onAddSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
     setPending(true);
     try {
-      await api.createSource({
-        sourceType: "substack",
-        config: { rssUrl: rssUrl.trim() },
-      });
-      setRssUrl("");
+      if (addKind === "bluesky") {
+        await api.createSource({
+          sourceType: "bluesky",
+          config: { handle: blueskyHandle.trim() },
+        });
+        setBlueskyHandle("");
+      } else if (addKind === "podcast") {
+        await api.createSource({
+          sourceType: "podcast",
+          config: { rssUrl: rssUrl.trim() },
+        });
+        setRssUrl("");
+      } else {
+        await api.createSource({
+          sourceType: "substack",
+          config: { rssUrl: rssUrl.trim() },
+        });
+        setRssUrl("");
+      }
       await refresh();
     } catch (err) {
-      mapSourceError(err, setFormError);
+      mapSourceError(
+        err,
+        setFormError,
+        addKind === "bluesky" ? "Check the Bluesky handle." : "Check the RSS URL.",
+      );
     } finally {
       setPending(false);
     }
   }
 
-  async function addPodcast(event: FormEvent) {
-    event.preventDefault();
-    setFormError(null);
-    setPodcastPending(true);
-    try {
-      await api.createSource({
-        sourceType: "podcast",
-        config: { rssUrl: podcastRssUrl.trim() },
-      });
-      setPodcastRssUrl("");
-      await refresh();
-    } catch (err) {
-      mapSourceError(err, setFormError);
-    } finally {
-      setPodcastPending(false);
-    }
-  }
-
-  async function addBluesky(event: FormEvent) {
-    event.preventDefault();
-    setFormError(null);
-    setBlueskyPending(true);
-    try {
-      await api.createSource({
-        sourceType: "bluesky",
-        config: { handle: blueskyHandle.trim() },
-      });
-      setBlueskyHandle("");
-      await refresh();
-    } catch (err) {
-      mapSourceError(err, setFormError, "Check the Bluesky handle.");
-    } finally {
-      setBlueskyPending(false);
-    }
-  }
-
   async function addCatalogFeed(feed: FeedCatalogEntry) {
-    if (!window.confirm(`Add “${feed.label}” to your sources?`)) return;
     setCatalogNote(null);
     setAddingId(feed.id);
     try {
@@ -214,98 +209,46 @@ export function SourcesClient(): ReactNode {
     }
   }
 
+  const addField =
+    addKind === "bluesky" ? (
+      <label>
+        Handle
+        <input
+          type="text"
+          value={blueskyHandle}
+          onChange={(e) => setBlueskyHandle(e.target.value)}
+          placeholder="jay.bsky.social"
+          required
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+    ) : (
+      <label>
+        RSS URL
+        <input
+          type="url"
+          value={rssUrl}
+          onChange={(e) => setRssUrl(e.target.value)}
+          placeholder={
+            addKind === "podcast"
+              ? "https://feeds.example.com/show.xml"
+              : "https://www.platformer.news/feed"
+          }
+          required
+        />
+      </label>
+    );
+
   return (
     <section className="manage-page">
       <header className="page-header">
         <h1 className="page-title">Sources</h1>
         <p className="page-lede">
-          Connect Hacker News, newsletters, podcasts, and Bluesky accounts that
-          fill your ranked list. Browse the catalog if you don’t already know a
-          newsletter URL.
+          What Newsroom ingests for ranking — feeds, podcasts, Bluesky, and
+          Hacker News.
         </p>
       </header>
-
-      <div className="manage-form panel-soft">
-        <h2 className="form-heading">Add feed</h2>
-        <form className="form" onSubmit={(e) => void addSubstack(e)}>
-          <label>
-            RSS URL
-            <input
-              type="url"
-              value={rssUrl}
-              onChange={(e) => setRssUrl(e.target.value)}
-              placeholder="https://www.platformer.news/feed"
-              required
-            />
-          </label>
-          {formError ? <p className="error">{formError}</p> : null}
-          <div className="form-actions">
-            <button type="submit" disabled={pending || podcastPending || blueskyPending}>
-              {pending ? "Adding…" : "Add feed"}
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              disabled={pending || podcastPending || blueskyPending || hasHn}
-              onClick={() => void addHackerNews()}
-            >
-              Add Hacker News
-            </button>
-          </div>
-          {hasHn ? (
-            <p className="helper">Hacker News is already connected.</p>
-          ) : null}
-        </form>
-      </div>
-
-      <div className="manage-form panel-soft">
-        <h2 className="form-heading">Add podcast</h2>
-        <form className="form" onSubmit={(e) => void addPodcast(e)}>
-          <label>
-            Podcast RSS URL
-            <input
-              type="url"
-              value={podcastRssUrl}
-              onChange={(e) => setPodcastRssUrl(e.target.value)}
-              placeholder="https://feeds.example.com/show.xml"
-              required
-            />
-          </label>
-          <div className="form-actions">
-            <button type="submit" disabled={pending || podcastPending || blueskyPending}>
-              {podcastPending ? "Adding…" : "Add podcast"}
-            </button>
-          </div>
-          {formError ? <p className="error">{formError}</p> : null}
-        </form>
-      </div>
-
-      <div className="manage-form panel-soft">
-        <h2 className="form-heading">Add Bluesky</h2>
-        <form className="form" onSubmit={(e) => void addBluesky(e)}>
-          <label>
-            Handle
-            <input
-              type="text"
-              value={blueskyHandle}
-              onChange={(e) => setBlueskyHandle(e.target.value)}
-              placeholder="jay.bsky.social"
-              required
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-          <div className="form-actions">
-            <button
-              type="submit"
-              disabled={pending || podcastPending || blueskyPending}
-            >
-              {blueskyPending ? "Adding…" : "Add Bluesky"}
-            </button>
-          </div>
-          {formError ? <p className="error">{formError}</p> : null}
-        </form>
-      </div>
 
       {loading ? (
         <p className="feed-placeholder">Loading sources…</p>
@@ -317,8 +260,8 @@ export function SourcesClient(): ReactNode {
             <h2 className="section-heading">Your sources</h2>
             {sources.length === 0 ? (
               <p className="empty-copy">
-                No sources yet. Add Hacker News, paste a newsletter or podcast
-                RSS URL, add a Bluesky handle, or pick from the catalog below.
+                Nothing connected yet. Add a source below, or pick a suggested
+                feed.
               </p>
             ) : (
               <ul className="manage-list">
@@ -355,31 +298,108 @@ export function SourcesClient(): ReactNode {
             )}
           </div>
 
-          <div className="topics-section">
-            <h2 className="section-heading">Catalog</h2>
-            <p className="section-lede">
-              Browse suggested feeds. Add one to start ingesting it into your
-              ranked list.
-            </p>
-            {topicTags.length > 0 ? (
-              <label className="filter-field catalog-tag-filter">
-                <span className="filter-label">Topic tag</span>
-                <select
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
+          <div className="manage-form panel-soft">
+            <h2 className="form-heading">Add a source</h2>
+            <div
+              className="topics-filter-toggle source-kind-toggle"
+              role="group"
+              aria-label="Source type"
+            >
+              {(
+                [
+                  ["feed", "Feed"],
+                  ["podcast", "Podcast"],
+                  ["bluesky", "Bluesky"],
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className={
+                    addKind === kind
+                      ? "topics-filter-btn active"
+                      : "topics-filter-btn"
+                  }
+                  aria-pressed={addKind === kind}
+                  onClick={() => selectAddKind(kind)}
                 >
-                  <option value="">All tags</option>
-                  {topicTags.map((tag) => (
-                    <option key={tag} value={tag}>
-                      {tag}
-                    </option>
-                  ))}
-                </select>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <form className="form" onSubmit={(e) => void onAddSubmit(e)}>
+              {addField}
+              {formError ? <p className="error">{formError}</p> : null}
+              <div className="form-actions">
+                <button type="submit" disabled={pending}>
+                  {pending
+                    ? "Adding…"
+                    : addKind === "podcast"
+                      ? "Add podcast"
+                      : addKind === "bluesky"
+                        ? "Add Bluesky"
+                        : "Add feed"}
+                </button>
+                {!hasHn ? (
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={pending}
+                    onClick={() => void addHackerNews()}
+                  >
+                    Add Hacker News
+                  </button>
+                ) : null}
+              </div>
+              {hasHn ? (
+                <p className="helper">Hacker News is already connected.</p>
+              ) : (
+                <p className="helper">
+                  HN is a shared firehose — one click, no URL needed.
+                </p>
+              )}
+            </form>
+          </div>
+
+          <div className="topics-section">
+            <h2 className="section-heading">Suggested feeds</h2>
+            <p className="section-lede">
+              A small curated starter set across a few topics — not the full
+              catalog of interests. Paste any RSS URL above for everything else.
+            </p>
+            <div className="source-catalog-filters">
+              <label className="filter-field">
+                <span className="filter-label">Search</span>
+                <input
+                  type="search"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Name or topic"
+                  autoComplete="off"
+                />
               </label>
-            ) : null}
+              {topicTags.length > 0 ? (
+                <label className="filter-field catalog-tag-filter">
+                  <span className="filter-label">Topic</span>
+                  <select
+                    value={tagFilter}
+                    onChange={(e) => setTagFilter(e.target.value)}
+                  >
+                    <option value="">All tags</option>
+                    {topicTags.map((tag) => (
+                      <option key={tag} value={tag}>
+                        {tag}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
             {catalogNote ? <p className="helper">{catalogNote}</p> : null}
             {visibleCatalog.length === 0 ? (
-              <p className="empty-copy">No catalog feeds yet.</p>
+              <p className="empty-copy">
+                No suggested feeds match. Clear filters or add an RSS URL above.
+              </p>
             ) : (
               <ul className="manage-list">
                 {visibleCatalog.map((feed) => {
@@ -404,7 +424,7 @@ export function SourcesClient(): ReactNode {
                             disabled={addingId === feed.id}
                             onClick={() => void addCatalogFeed(feed)}
                           >
-                            {addingId === feed.id ? "Adding…" : "Add feed"}
+                            {addingId === feed.id ? "Adding…" : "Add"}
                           </button>
                         )}
                       </div>

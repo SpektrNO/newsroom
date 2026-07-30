@@ -14,18 +14,26 @@ import {
   ApiError,
   type FeedItem,
   type RankFeedLatestResponse,
-  type SourceTypeV1,
   type Topic,
   type TopicTreeNode,
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
 import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
 import { formatEpisodeDuration, feedSourceTypeLabel, splitFeedReason } from "@/lib/feed";
+import {
+  pruneTopicIds,
+  readStoredFeedPrefs,
+  writeStoredFeedPrefs,
+  type FeedSortField,
+  type FeedSortOrder,
+  type FeedSourceFilter,
+  type FeedViewFilter,
+} from "@/lib/feed-prefs";
 
-type SourceFilter = SourceTypeV1;
-type ViewFilter = "feed" | "saved" | "dismissed";
-type SortField = "score" | "date";
-type SortOrder = "asc" | "desc";
+type SourceFilter = FeedSourceFilter;
+type ViewFilter = FeedViewFilter;
+type SortField = FeedSortField;
+type SortOrder = FeedSortOrder;
 
 const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
   { id: "hackernews", label: "Hacker News" },
@@ -206,6 +214,7 @@ export function FeedClient(): ReactNode {
     () => new Set(),
   );
   const [topicsReady, setTopicsReady] = useState(false);
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
   const [view, setView] = useState<ViewFilter>("feed");
   const [sort, setSort] = useState<SortField>("score");
   const [order, setOrder] = useState<SortOrder>("desc");
@@ -225,7 +234,7 @@ export function FeedClient(): ReactNode {
   const [ranking, setRanking] = useState(false);
   const [wiping, setWiping] = useState(false);
   const [rankNote, setRankNote] = useState<string | null>(null);
-  /** Topics chip panel; restored from localStorage after mount. */
+  /** Topics chip panel; restored from feed prefs. */
   const [topicsOpen, setTopicsOpen] = useState(true);
   /** Ignore stale feed responses when filters change mid-flight. */
   const loadGenRef = useRef(0);
@@ -245,28 +254,38 @@ export function FeedClient(): ReactNode {
   }, []);
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem("newsroom.feed.topicsOpen");
-      if (stored === "0") setTopicsOpen(false);
-      if (stored === "1") setTopicsOpen(true);
-    } catch {
-      /* ignore quota / private mode */
-    }
+    const prefs = readStoredFeedPrefs();
+    setView(prefs.view);
+    setSort(prefs.sort);
+    setOrder(prefs.order);
+    setSelectedSources(new Set(prefs.sources));
+    setSelectedTopicIds(new Set(prefs.topicIds));
+    setTopicsOpen(prefs.topicsOpen);
+    setPrefsHydrated(true);
   }, []);
 
-  function toggleTopicsOpen() {
-    setTopicsOpen((open) => {
-      const next = !open;
-      try {
-        window.localStorage.setItem(
-          "newsroom.feed.topicsOpen",
-          next ? "1" : "0",
-        );
-      } catch {
-        /* ignore */
-      }
-      return next;
+  useEffect(() => {
+    if (!prefsHydrated) return;
+    writeStoredFeedPrefs({
+      view,
+      sort,
+      order,
+      sources: [...selectedSources],
+      topicIds: [...selectedTopicIds],
+      topicsOpen,
     });
+  }, [
+    prefsHydrated,
+    view,
+    sort,
+    order,
+    selectedSources,
+    selectedTopicIds,
+    topicsOpen,
+  ]);
+
+  function toggleTopicsOpen() {
+    setTopicsOpen((open) => !open);
   }
 
   const topicGroups = useMemo(
@@ -387,9 +406,9 @@ export function FeedClient(): ReactNode {
     void Promise.all([api.listTopics(), api.listTopicTree()])
       .then(([topicsRes, treeRes]) => {
         if (cancelled) return;
-        setTopics(topicsRes.topics);
+        const loaded = topicsRes.topics;
+        setTopics(loaded);
         setTreeNodes(treeRes.nodes);
-        setSelectedTopicIds(new Set());
         setTopicsReady(true);
       })
       .catch(() => {
@@ -397,7 +416,6 @@ export function FeedClient(): ReactNode {
         const fallback = getTopicTree();
         setTopics([]);
         setTreeNodes(fallback.nodes);
-        setSelectedTopicIds(new Set());
         setTopicsReady(true);
       });
     return () => {
@@ -406,9 +424,23 @@ export function FeedClient(): ReactNode {
   }, [api]);
 
   useEffect(() => {
-    if (!topicsReady) return;
+    if (!prefsHydrated || !topicsReady) return;
+    setSelectedTopicIds((prev) => {
+      const pruned = pruneTopicIds([...prev], allTopicIds);
+      if (
+        pruned.length === prev.size &&
+        pruned.every((id) => prev.has(id))
+      ) {
+        return prev;
+      }
+      return new Set(pruned);
+    });
+  }, [prefsHydrated, topicsReady, allTopicIds]);
+
+  useEffect(() => {
+    if (!topicsReady || !prefsHydrated) return;
     void loadPage();
-  }, [loadPage, topicsReady]);
+  }, [loadPage, topicsReady, prefsHydrated]);
 
   async function updateStatus(
     articleId: string,
@@ -644,7 +676,12 @@ export function FeedClient(): ReactNode {
             <span className="feed-pipeline-sep" aria-hidden>
               ·
             </span>
-            <span title={absoluteTimeTitle(lastRankedAt)}>
+            <span
+              title={
+                absoluteTimeTitle(lastRankedAt) ||
+                "Last time your ranking pass finished"
+              }
+            >
               Ranked {formatPipelineTime(lastRankedAt)}
             </span>
           </span>
@@ -862,7 +899,7 @@ export function FeedClient(): ReactNode {
         </label>
       </div>
 
-      {loading || !topicsReady ? (
+      {loading || !topicsReady || !prefsHydrated ? (
         <div className="feed-state" aria-busy="true">
           <p className="feed-placeholder">Loading your feed…</p>
           <div className="skeleton-lines" aria-hidden>

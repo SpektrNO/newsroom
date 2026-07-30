@@ -158,11 +158,24 @@ async function loadPipelineTimes(userId: string): Promise<{
   lastRankedAt: string | null;
 }> {
   const db = getDb();
-  const [[ingestRow], [rankRow]] = await Promise.all([
+  // Ranked time = last completed rank pass for this user (even if 0 new
+  // score rows). Fall back to max(scored_at) for users with scores but no
+  // completed rank jobs left in `jobs`.
+  const [[ingestRow], [jobRankRow], [scoreRankRow]] = await Promise.all([
     db
       .select({ at: sql<Date | string | null>`max(${jobs.finishedAt})` })
       .from(jobs)
       .where(and(eq(jobs.type, "ingest"), eq(jobs.status, "completed"))),
+    db
+      .select({ at: sql<Date | string | null>`max(${jobs.finishedAt})` })
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.type, "rank"),
+          eq(jobs.status, "completed"),
+          sql`(${jobs.payload}->>'userId') = ${userId}`,
+        ),
+      ),
     db
       .select({
         at: sql<Date | string | null>`max(${userArticleScores.scoredAt})`,
@@ -173,8 +186,23 @@ async function loadPipelineTimes(userId: string): Promise<{
 
   return {
     lastIngestAt: toIsoOrNull(ingestRow?.at ?? null),
-    lastRankedAt: toIsoOrNull(rankRow?.at ?? null),
+    lastRankedAt: toIsoOrNull(
+      laterTimestamp(jobRankRow?.at ?? null, scoreRankRow?.at ?? null),
+    ),
   };
+}
+
+/** Prefer the later of two DB timestamps; nulls ignored. */
+function laterTimestamp(
+  a: Date | string | null,
+  b: Date | string | null,
+): Date | string | null {
+  const ta = a == null ? Number.NaN : new Date(a).getTime();
+  const tb = b == null ? Number.NaN : new Date(b).getTime();
+  if (Number.isNaN(ta) && Number.isNaN(tb)) return null;
+  if (Number.isNaN(ta)) return b;
+  if (Number.isNaN(tb)) return a;
+  return ta >= tb ? a : b;
 }
 
 /** AND of ILIKE token matches across title / summary / reason. */
