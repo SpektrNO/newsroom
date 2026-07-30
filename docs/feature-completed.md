@@ -31,6 +31,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-28 | `ai-confirmed-topic-membership` | AI narrows keyword-matched topics; feed topic filter uses it | — | Lean in-chat implement; fixes "space" matching "workspace"-style false positives in topic filter |
 | 2026-07-29 | `source-bluesky` | Bluesky adapter | #47 | Completed via spec→implement pipeline |
 | 2026-07-30 | `introduce-themes` | User themes (background + density) + tighter controls | #158 | Completed via spec→implement pipeline |
+| 2026-07-30 | `source-reddit` | Reddit adapter (subreddits → ranked feed) | #165 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -74,3 +75,4 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 |----|---------|-----------|------|-------|
 | `source-podcast` | Podcast RSS adapter + episode cards in feed | 2026-07-27 | `docs/architecture.md` | Podcast RSS adapter + episode cards; mobile deferred to mobile-feed-topics |
 | `source-bluesky` | Bluesky adapter | 2026-07-29 | `docs/architecture.md` | Completed via spec→implement pipeline |
+| `source-reddit` | Reddit adapter (subreddits → ranked feed) | 2026-07-30 | `docs/architecture.md` | Completed via spec→implement pipeline |

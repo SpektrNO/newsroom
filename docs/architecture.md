@@ -1,6 +1,6 @@
 # Newsroom architecture
 
-Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, podcasts, Bluesky, and Reddit (planned); X deferred.
+Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, podcasts, Bluesky, and Reddit; X deferred.
 
 ## Goals
 
@@ -30,6 +30,7 @@ flowchart LR
     HN[HN adapter]
     SS[Substack RSS]
     BS[Bluesky adapter]
+    RD[Reddit adapter]
   end
   subgraph ai [AI]
     Provider[AI provider interface]
@@ -43,6 +44,7 @@ flowchart LR
   Workers --> HN
   Workers --> SS
   Workers --> BS
+  Workers --> RD
   Workers --> DB
   Workers --> Provider
   Provider --> Ollama
@@ -59,7 +61,7 @@ flowchart LR
 | `packages/db` | Drizzle schema + migrations |
 | `packages/api-client` | Shared typed fetch client for web + mobile |
 | `packages/ai` | `AiProvider` interface; `OllamaProvider` default |
-| `packages/sources` | Source adapters (HN, Substack, podcasts, Bluesky; later X) |
+| `packages/sources` | Source adapters (HN, Substack, podcasts, Bluesky, Reddit; later X) |
 
 ## Defaults
 
@@ -72,7 +74,7 @@ flowchart LR
 
 - `users`, `sessions` — Better Auth
 - `articles` — canonical URL, title, summary, author, published_at, optional podcast show_title / duration_seconds / enclosure_url, raw payload, content hash
-- `source_subscriptions` — `user_id`, `source_type` (`hackernews` \| `substack` \| `podcast` \| `bluesky` \| …), config JSON, enabled
+- `source_subscriptions` — `user_id`, `source_type` (`hackernews` \| `substack` \| `podcast` \| `bluesky` \| `reddit` \| …), config JSON, enabled
 - `article_sources` — which adapter produced an article
 - `user_article_scores` — per-user keyword_score, ai_score, final_rank, reason, status (`new` \| `seen` \| `saved` \| `dismissed`), matched_topic_ids (topic ids the article belongs to — keyword-matched, then AI-narrowed; `NULL` on pre-migration rows)
 - `user_article_evaluations` — per-user keyword check markers (`hit` true/false); lets rank walk past misses without polluting the feed score table
@@ -105,7 +107,7 @@ Never call Ollama from UI code.
 | Substack | User-added RSS URLs + curated catalog (`web-source-discovery`) | v1 |
 | Podcasts | Podcast RSS/Atom (`source_type: podcast`, `{ rssUrl }`); episodes as feed items with show/duration/enclosure | v1 (`source-podcast`) |
 | Bluesky | Public AppView `getAuthorFeed` (`source_type: bluesky`, `{ handle }`); posts as feed items (no Bluesky auth) | v1 (`source-bluesky`) |
-| Reddit | Subreddit listings → posts as feed items (`source_type: reddit`, `{ subreddit }`); API User-Agent / optional app creds | planned (`source-reddit`) |
+| Reddit | Subreddit `/new` listing (`source_type: reddit`, `{ subreddit }`); `REDDIT_USER_AGENT` + optional app client credentials | v1 (`source-reddit`) |
 | X | Paid API | deferred |
 
 Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`.
@@ -128,7 +130,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 
 ## Clients
 
-**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Sources** (`web-source-discovery` + `source-podcast` + `source-bluesky`): curated newsletter catalog (`GET /api/feed-catalog`) with one-click Add feed alongside manual RSS URL entry; distinct **Add podcast** for `source_type: podcast` RSS/Atom (catalog podcast entries are a follow-up); **Add Bluesky** by handle/DID for `source_type: bluesky` (public AppView author feed; no Bluesky credentials). HN remains the shared firehose. Podcast episodes appear in the ranked feed with show/duration meta and external Play audio (no in-app player). Bluesky posts appear with author meta and open on bsky.app. Feed toolbar **Wipe rankings** (`wipe-rankings`) clears `new`/`seen` scores (keeps Saved/Dismissed; no auto re-rank). **Settings** shows today’s AI token usage vs daily limit (`ai-token-metering`). **Appearance** (`introduce-themes`): Settings background presets (`data-theme`: paper / mist / slate / inkwash) and Comfortable/Compact density (`data-density`) apply on `<html>` via CSS tokens; persisted in browser `localStorage` only (no API/DB); FOUC boot script in root layout — see ADR 003 addendum.
+**Web:** feed home, topics, advisor chat, sources, settings. Calm editorial UI — restrained typography, soft atmospheric background, no dashboard card wall. Topics page (`web-topics-tree` + `web-topics-catalog`): curated topic-tree picker (leaf label stored in `topics.name`); free-text keyword chips (case-insensitive match); in-UI weight help tied to hybrid ranking (ADR 002); Catalog browse of the full curated tree with Following vs Available and one-click Follow (`POST /api/topics` with starter keywords). **Advisor** (`/chat`, `web-ai-advisor-chat`): in-app chat for topic/keyword suggestions via BFF → `AiProvider` (never from the browser); confirm before Follow / Add keywords. **Sources** (`web-source-discovery` + `source-podcast` + `source-bluesky` + `source-reddit`): curated newsletter catalog (`GET /api/feed-catalog`) with one-click Add feed alongside manual RSS URL entry; podcast / Bluesky / Reddit via the unified Add a source control (`rssUrl` / `handle` / `subreddit`); HN remains the shared firehose. Podcast episodes appear in the ranked feed with show/duration meta and external Play audio (no in-app player). Bluesky posts appear with author meta and open on bsky.app. Reddit posts show `r/{sub}` + author and open on reddit.com. Feed toolbar **Wipe rankings** (`wipe-rankings`) clears `new`/`seen` scores (keeps Saved/Dismissed; no auto re-rank). **Settings** shows today’s AI token usage vs daily limit (`ai-token-metering`). **Appearance** (`introduce-themes`): Settings background presets (`data-theme`: paper / mist / slate / inkwash) and Comfortable/Compact density (`data-density`) apply on `<html>` via CSS tokens; persisted in browser `localStorage` only (no API/DB); FOUC boot script in root layout — see ADR 003 addendum.
 
 **Mobile (Expo):** Feed / Topics / Sources tabs; open originals in system or in-app browser; same auth backend.
 

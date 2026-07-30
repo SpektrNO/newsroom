@@ -9,7 +9,12 @@ export type HealthResponse = {
   timestamp: string;
 };
 
-export type SourceTypeV1 = "hackernews" | "substack" | "podcast" | "bluesky";
+export type SourceTypeV1 =
+  | "hackernews"
+  | "substack"
+  | "podcast"
+  | "bluesky"
+  | "reddit";
 
 export type SourceConfig = {
   mode?: "top" | "new";

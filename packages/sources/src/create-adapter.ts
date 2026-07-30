@@ -4,11 +4,13 @@ import { HackerNewsAdapter, type HackerNewsConfig } from "./hackernews.js";
 import { SubstackAdapter, type SubstackConfig } from "./substack.js";
 import { PodcastAdapter, type PodcastConfig } from "./podcast.js";
 import { BlueskyAdapter, type BlueskyConfig } from "./bluesky.js";
+import { RedditAdapter, type RedditConfig } from "./reddit.js";
 
 export type AdapterConfig = HackerNewsConfig &
   Partial<SubstackConfig> &
   Partial<PodcastConfig> &
-  Partial<BlueskyConfig> & {
+  Partial<BlueskyConfig> &
+  Partial<RedditConfig> & {
     [key: string]: unknown;
   };
 
@@ -40,6 +42,11 @@ export function createSourceAdapter(
       const handle = typeof config.handle === "string" ? config.handle : "";
       const did = typeof config.did === "string" ? config.did : undefined;
       return new BlueskyAdapter({ handle, did }, { fetch: options.fetch });
+    }
+    case "reddit": {
+      const subreddit =
+        typeof config.subreddit === "string" ? config.subreddit : "";
+      return new RedditAdapter({ subreddit }, { fetch: options.fetch });
     }
     default:
       return new StubSourceAdapter(sourceType);

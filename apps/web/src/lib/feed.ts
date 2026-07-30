@@ -143,6 +143,7 @@ export const FEED_SOURCE_TYPES = [
   "substack",
   "podcast",
   "bluesky",
+  "reddit",
 ] as const;
 
 export type FeedSourceType = (typeof FEED_SOURCE_TYPES)[number];
@@ -264,6 +265,7 @@ export function feedSourceTypeLabel(sourceType: string): string {
   if (sourceType === "substack") return "Feed";
   if (sourceType === "podcast") return "Podcast";
   if (sourceType === "bluesky") return "Bluesky";
+  if (sourceType === "reddit") return "Reddit";
   return sourceType;
 }
 
@@ -274,6 +276,7 @@ export function feedSourceSubscriptionLabel(
     rssUrl?: unknown;
     handle?: unknown;
     mode?: unknown;
+    subreddit?: unknown;
   } | null | undefined,
 ): string | null {
   if (sourceType === "hackernews") {
@@ -283,6 +286,13 @@ export function feedSourceSubscriptionLabel(
     if (typeof config?.handle !== "string" || !config.handle.trim()) return null;
     const handle = config.handle.trim().replace(/^@/, "");
     return handle ? `@${handle}` : null;
+  }
+  if (sourceType === "reddit") {
+    if (typeof config?.subreddit !== "string" || !config.subreddit.trim()) {
+      return null;
+    }
+    const sub = config.subreddit.trim().replace(/^\/?(r\/)/i, "");
+    return sub ? `r/${sub}` : null;
   }
   if (typeof config?.rssUrl === "string" && config.rssUrl.trim()) {
     try {

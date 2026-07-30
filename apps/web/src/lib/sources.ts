@@ -2,9 +2,15 @@ import type { SourceSubscriptionConfig } from "@newsroom/db";
 import {
   normalizeBlueskyHandle,
   normalizeCanonicalUrl,
+  normalizeSubredditName,
 } from "@newsroom/sources";
 
-export type SourceTypeV1 = "hackernews" | "substack" | "podcast" | "bluesky";
+export type SourceTypeV1 =
+  | "hackernews"
+  | "substack"
+  | "podcast"
+  | "bluesky"
+  | "reddit";
 
 export type SourceJson = {
   id: string;
@@ -68,7 +74,8 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     sourceType !== "hackernews" &&
     sourceType !== "substack" &&
     sourceType !== "podcast" &&
-    sourceType !== "bluesky"
+    sourceType !== "bluesky" &&
+    sourceType !== "reddit"
   ) {
     return { ok: false, error: "unsupported_source_type" };
   }
@@ -95,6 +102,23 @@ export function parseCreateBody(body: unknown): ParsedCreate {
         ok: true,
         sourceType,
         config: { handle: normalizeBlueskyHandle(handleRaw) },
+        enabled,
+      };
+    } catch {
+      return { ok: false, error: "invalid_config" };
+    }
+  }
+
+  if (sourceType === "reddit") {
+    const subRaw = configRaw.subreddit;
+    if (typeof subRaw !== "string" || !subRaw.trim()) {
+      return { ok: false, error: "invalid_config" };
+    }
+    try {
+      return {
+        ok: true,
+        sourceType,
+        config: { subreddit: normalizeSubredditName(subRaw) },
         enabled,
       };
     } catch {
@@ -179,6 +203,16 @@ export function parsePatchBody(
       }
       try {
         result.config = { handle: normalizeBlueskyHandle(handleRaw) };
+      } catch {
+        return { ok: false, error: "invalid_config" };
+      }
+    } else if (currentType === "reddit") {
+      const subRaw = configRaw.subreddit;
+      if (typeof subRaw !== "string" || !subRaw.trim()) {
+        return { ok: false, error: "invalid_config" };
+      }
+      try {
+        result.config = { subreddit: normalizeSubredditName(subRaw) };
       } catch {
         return { ok: false, error: "invalid_config" };
       }

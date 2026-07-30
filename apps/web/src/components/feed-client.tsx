@@ -40,6 +40,7 @@ const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
   { id: "substack", label: "Feed" },
   { id: "podcast", label: "Podcast" },
   { id: "bluesky", label: "Bluesky" },
+  { id: "reddit", label: "Reddit" },
 ];
 
 type TopicGroup = {
@@ -96,7 +97,11 @@ function formatStoryMeta(item: FeedItem): string | null {
     name = item.showTitle.trim();
   }
   const duration = formatEpisodeDuration(item.durationSeconds);
-  const parts = [type, name, duration, date].filter(Boolean);
+  const author =
+    primary.sourceType === "reddit" && item.author?.trim()
+      ? item.author.trim()
+      : null;
+  const parts = [type, name, author, duration, date].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 

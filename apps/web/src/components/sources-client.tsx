@@ -18,7 +18,7 @@ import { getBrowserApiClient } from "@/lib/api";
 import { isFeedAlreadyAdded } from "@/lib/feed-catalog-match";
 import { listCatalogTopicTags } from "@/lib/feed-catalog";
 
-type AddKind = "feed" | "podcast" | "bluesky";
+type AddKind = "feed" | "podcast" | "bluesky" | "reddit";
 
 function configSummary(source: Source): string {
   if (source.sourceType === "hackernews") {
@@ -40,6 +40,13 @@ function configSummary(source: Source): string {
     if (did) return did;
     return "Bluesky account";
   }
+  if (source.sourceType === "reddit") {
+    const sub =
+      typeof source.config.subreddit === "string"
+        ? source.config.subreddit.trim()
+        : "";
+    return sub ? `r/${sub}` : "Subreddit";
+  }
   return "";
 }
 
@@ -48,6 +55,7 @@ function sourceTypeLabel(sourceType: string): string {
   if (sourceType === "podcast") return "Podcast";
   if (sourceType === "substack") return "Feed";
   if (sourceType === "bluesky") return "Bluesky";
+  if (sourceType === "reddit") return "Reddit";
   return sourceType;
 }
 
@@ -63,6 +71,7 @@ export function SourcesClient(): ReactNode {
   const [addKind, setAddKind] = useState<AddKind>("feed");
   const [rssUrl, setRssUrl] = useState("");
   const [blueskyHandle, setBlueskyHandle] = useState("");
+  const [redditSubreddit, setRedditSubreddit] = useState("");
   const [pending, setPending] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState("");
@@ -142,6 +151,12 @@ export function SourcesClient(): ReactNode {
           config: { handle: blueskyHandle.trim() },
         });
         setBlueskyHandle("");
+      } else if (addKind === "reddit") {
+        await api.createSource({
+          sourceType: "reddit",
+          config: { subreddit: redditSubreddit.trim() },
+        });
+        setRedditSubreddit("");
       } else if (addKind === "podcast") {
         await api.createSource({
           sourceType: "podcast",
@@ -160,7 +175,11 @@ export function SourcesClient(): ReactNode {
       mapSourceError(
         err,
         setFormError,
-        addKind === "bluesky" ? "Check the Bluesky handle." : "Check the RSS URL.",
+        addKind === "bluesky"
+          ? "Check the Bluesky handle."
+          : addKind === "reddit"
+            ? "Check the subreddit name."
+            : "Check the RSS URL.",
       );
     } finally {
       setPending(false);
@@ -223,6 +242,19 @@ export function SourcesClient(): ReactNode {
           spellCheck={false}
         />
       </label>
+    ) : addKind === "reddit" ? (
+      <label>
+        Subreddit
+        <input
+          type="text"
+          value={redditSubreddit}
+          onChange={(e) => setRedditSubreddit(e.target.value)}
+          placeholder="programming"
+          required
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
     ) : (
       <label>
         RSS URL
@@ -245,8 +277,8 @@ export function SourcesClient(): ReactNode {
       <header className="page-header">
         <h1 className="page-title">Sources</h1>
         <p className="page-lede">
-          What Newsroom ingests for ranking — feeds, podcasts, Bluesky, and
-          Hacker News.
+          What Newsroom ingests for ranking — feeds, podcasts, Bluesky, Reddit,
+          and Hacker News.
         </p>
       </header>
 
@@ -310,6 +342,7 @@ export function SourcesClient(): ReactNode {
                   ["feed", "Feed"],
                   ["podcast", "Podcast"],
                   ["bluesky", "Bluesky"],
+                  ["reddit", "Reddit"],
                 ] as const
               ).map(([kind, label]) => (
                 <button
@@ -338,7 +371,9 @@ export function SourcesClient(): ReactNode {
                       ? "Add podcast"
                       : addKind === "bluesky"
                         ? "Add Bluesky"
-                        : "Add feed"}
+                        : addKind === "reddit"
+                          ? "Add Reddit"
+                          : "Add feed"}
                 </button>
                 {!hasHn ? (
                   <button

@@ -30,6 +30,14 @@ export {
   type BlueskyConfig,
   type BlueskyAdapterOptions,
 } from "./bluesky.js";
+export { normalizeSubredditName } from "./reddit-subreddit.js";
+export {
+  RedditAdapter,
+  REDDIT_FETCH_LIMIT,
+  DEFAULT_REDDIT_USER_AGENT,
+  type RedditConfig,
+  type RedditAdapterOptions,
+} from "./reddit.js";
 export {
   fetchAndParseRss,
   parseDurationSeconds,
