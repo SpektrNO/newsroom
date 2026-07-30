@@ -1,9 +1,9 @@
 # Handoff: ai-cloud-providers
 
-**Status:** spec  
+**Status:** done  
 **Created:** 2026-07-30  
 **Specifier agent:** lean thin handoff  
-**Developer agent:** pending
+**Developer agent:** complete
 
 ## GitHub tracking
 
@@ -11,9 +11,9 @@
 |-------|-------|
 | Feature id | `ai-cloud-providers` |
 | Parent issue | #175 — https://github.com/SpektrNO/newsroom/issues/175 |
-| Open tasks | `spec` (#176), `db` (#177), `api` (#178), `worker` (#179), `verify` (#180), `docs` (#181) |
-| Closed | — |
-| Backlog | `docs/feature-backlog.md` § B4 — `ai-cloud-providers` |
+| Open tasks | — |
+| Closed | `spec` (#176), `db` (#177 N/A), `api` (#178), `worker` (#179), `verify` (#180), `docs` (#181) |
+| Backlog | `docs/feature-backlog.md` § B4 — `ai-cloud-providers` ✅ |
 
 Task order: `spec` → `db` (N/A) → `api` → `worker` → `verify` → `docs`
 
@@ -48,4 +48,25 @@ BYOK, Anthropic, streaming, Vertex enterprise auth, dollar billing UI, browser�
 
 ## Implementation result
 
-*(Developer fills.)*
+### Changes
+
+- `packages/ai`: `OpenAiProvider`, `GoogleAiProvider`, `createAiProvider` / `resolveAiProviderKind`; provider-aware `resolveModelForTier`; smoke uses factory
+- Web: chat, Rank latest probe, `/api/health` (`checks.ai` + `aiProvider`); Settings AI label
+- Worker: `runRank` uses `createAiProvider`
+- api-client: HealthResponse extended; mobile health text
+- Docs: ADR 006, ops-local, architecture, backlog ✅, `.env.example`s, README
+
+### Verification
+
+- [x] `pnpm --filter @newsroom/ai test` (87 pass, includes cloud mocks)
+- [x] `pnpm --filter @newsroom/worker test` (11 pass)
+- [x] `pnpm --filter @newsroom/web test` (85 pass)
+- [ ] Manual: `AI_PROVIDER=openai` (or google) + Rank latest + Advisor + Settings usage
+
+### Deviations from spec
+
+- None material (`db` closed N/A; no web/mobile GitHub tasks — Settings/mobile health updated under api)
+
+### Follow-ups
+
+- BYOK per-user keys; Anthropic provider; optional Vertex auth

@@ -60,7 +60,7 @@ flowchart LR
 | `apps/worker` | Scheduled ingest + AI ranking jobs |
 | `packages/db` | Drizzle schema + migrations |
 | `packages/api-client` | Shared typed fetch client for web + mobile |
-| `packages/ai` | `AiProvider` interface; `OllamaProvider` default (OpenAI/Google → `ai-cloud-providers`) |
+| `packages/ai` | `AiProvider` interface; `createAiProvider` → Ollama (default) / OpenAI / Google |
 | `packages/sources` | Source adapters (HN, Substack, podcasts, Bluesky, Reddit; later X) |
 
 ## Defaults
@@ -97,7 +97,9 @@ Never call Ollama from UI code.
 
 **Scale path (backlog B2):** Keep shared articles + per-user scores (+ evaluation markers). Evolve off “one rank pass walks every user” via `rank-dirty-incremental` (shipped: dirty ∩ active) → `rank-per-user-queue` (shipped: one `jobs` row per `userId`, fair `SKIP LOCKED` dequeue) → `rank-ai-budgets` (shipped: per-run/day AI article caps + keyword-only beyond budget) → `rank-score-retention` (shipped: prune `new`/`seen`/`dismissed` by TTL + top-N; always keep `saved`; also prune shared `articles` older than `ARTICLE_TTL_DAYS` default 90 unless any user saved them; evaluations prune on the same TTL). Cadence: mark users dirty on ingest/preference change; enqueue AI rank for **dirty ∩ active** (recent feed activity, not merely a session cookie); catch-up on feed load when dirty; coalesce **per user** (unique open rank job on `payload.userId`). Hosted OpenAI/Google providers: backlog `ai-cloud-providers` (operator-hosted first; optional BYOK later).
 
-**Token metering (`ai-token-metering`):** Every `AiProvider.complete` reports usage (Ollama `prompt_eval_count`/`eval_count`, else chars/4 estimated). Daily per-user rollups in `ai_token_daily` by purpose (`rank`/`chat`/`other`). Settings shows used vs `AI_TOKEN_DAILY_LIMIT` (soft warn via `AI_TOKEN_DAILY_SOFT_LIMIT`, default 80%). Shared pool: chat over hard → `429 token_budget_exceeded`; rank skips further AI batches (keyword-only). Article caps from `rank-ai-budgets`: `RANK_AI_MAX_PER_RUN` (default 60, bounds one Rank latest), `RANK_AI_MAX_PER_DAY` (default **0 = unlimited** — daily cost is the token cap), optional `RANK_AI_MAX_GLOBAL_PER_DAY`. `GET /api/ai-usage` exposes both token and article status for the session user.
+**Token metering (`ai-token-metering`):** Every `AiProvider.complete` reports usage (Ollama `prompt_eval_count`/`eval_count`, OpenAI `usage`, Google `usageMetadata`, else chars/4 estimated). Daily per-user rollups in `ai_token_daily` by purpose (`rank`/`chat`/`other`). Settings shows used vs `AI_TOKEN_DAILY_LIMIT` (soft warn via `AI_TOKEN_DAILY_SOFT_LIMIT`, default 80%). Shared pool: chat over hard → `429 token_budget_exceeded`; rank skips further AI batches (keyword-only). Article caps from `rank-ai-budgets`: `RANK_AI_MAX_PER_RUN` (default 60, bounds one Rank latest), `RANK_AI_MAX_PER_DAY` (default **0 = unlimited** — daily cost is the token cap), optional `RANK_AI_MAX_GLOBAL_PER_DAY`. `GET /api/ai-usage` exposes both token and article status for the session user.
+
+**Cloud providers (`ai-cloud-providers`):** Operator selects `AI_PROVIDER=ollama|openai|google` (default ollama). Factory `createAiProvider` is shared by worker rank and web BFF (`/api/chat`, Rank latest, `/api/health`). No browser→vendor calls. Per-user BYOK deferred.
 
 ## Source adapters
 

@@ -118,7 +118,7 @@ Rank and Advisor already go through `AiProvider` (`packages/ai`); today only `Ol
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (+ optional BYOK) | ⬜ | `docs/architecture.md` |
+| `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (+ optional BYOK) | ✅ | `docs/architecture.md` |
 
 Notes for `ai-cloud-providers`:
 
