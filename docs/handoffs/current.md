@@ -1,9 +1,9 @@
 # Handoff: source-reddit
 
-**Status:** implementing  
+**Status:** done  
 **Created:** 2026-07-30  
 **Specifier agent:** lean thin handoff  
-**Developer agent:** in progress
+**Developer agent:** complete
 
 ## GitHub tracking
 
