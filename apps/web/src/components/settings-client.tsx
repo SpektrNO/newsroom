@@ -9,6 +9,21 @@ import type {
 } from "@newsroom/api-client";
 import { authClient } from "@/lib/auth-client";
 import { getBrowserApiClient } from "@/lib/api";
+import {
+  applyAppearance,
+  DENSITIES,
+  DEFAULT_DENSITY,
+  DEFAULT_THEME,
+  parseDensity,
+  parseTheme,
+  readStoredAppearance,
+  THEME_LABELS,
+  THEMES,
+  writeDensity,
+  writeTheme,
+  type AppearanceDensity,
+  type AppearanceTheme,
+} from "@/lib/appearance";
 
 type SettingsClientProps = {
   email: string;
@@ -40,6 +55,15 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
   const [rankModelTier, setRankModelTier] = useState<RankModelTier | null>(null);
   const [rankModelSaving, setRankModelSaving] = useState(false);
   const [rankModelError, setRankModelError] = useState(false);
+  const [theme, setTheme] = useState<AppearanceTheme>(DEFAULT_THEME);
+  const [density, setDensity] = useState<AppearanceDensity>(DEFAULT_DENSITY);
+
+  useEffect(() => {
+    const stored = readStoredAppearance();
+    setTheme(stored.theme);
+    setDensity(stored.density);
+    applyAppearance(stored.theme, stored.density);
+  }, []);
 
   useEffect(() => {
     void api
@@ -73,6 +97,20 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
       });
   }, [api]);
 
+  function onThemeChange(next: AppearanceTheme) {
+    const themeValue = parseTheme(next);
+    setTheme(themeValue);
+    writeTheme(themeValue);
+    applyAppearance(themeValue, density);
+  }
+
+  function onDensityChange(next: AppearanceDensity) {
+    const densityValue = parseDensity(next);
+    setDensity(densityValue);
+    writeDensity(densityValue);
+    applyAppearance(theme, densityValue);
+  }
+
   async function onRankModelTierChange(tier: RankModelTier) {
     const previous = rankModelTier;
     setRankModelTier(tier);
@@ -101,7 +139,9 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
     <section className="manage-page">
       <header className="page-header">
         <h1 className="page-title">Settings</h1>
-        <p className="page-lede">Account and read-only system status.</p>
+        <p className="page-lede">
+          Account, appearance, and read-only system status.
+        </p>
       </header>
 
       <div className="settings-block">
@@ -109,6 +149,70 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
         <button type="button" onClick={() => void onSignOut()} disabled={pending}>
           {pending ? "Signing out…" : "Sign out"}
         </button>
+      </div>
+
+      <div className="settings-block">
+        <h2 className="form-heading">Appearance</h2>
+        <p className="appearance-lede">
+          Background tint and reading density for this browser.
+        </p>
+
+        <div
+          className="appearance-group"
+          role="group"
+          aria-labelledby="appearance-background-label"
+        >
+          <span
+            id="appearance-background-label"
+            className="appearance-group-label"
+          >
+            Background
+          </span>
+          <div className="appearance-swatches">
+            {THEMES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className="appearance-swatch"
+                data-theme-preview={id}
+                aria-label={THEME_LABELS[id]}
+                aria-pressed={theme === id}
+                title={THEME_LABELS[id]}
+                onClick={() => onThemeChange(id)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div
+          className="appearance-group"
+          role="group"
+          aria-labelledby="appearance-density-label"
+        >
+          <span
+            id="appearance-density-label"
+            className="appearance-group-label"
+          >
+            Density
+          </span>
+          <div className="appearance-density">
+            {DENSITIES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className="appearance-density-btn"
+                aria-pressed={density === id}
+                onClick={() => onDensityChange(id)}
+              >
+                {id === "comfortable" ? "Comfortable" : "Compact"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="appearance-note">
+          Saved on this device only. Clearing site data resets appearance.
+        </p>
       </div>
 
       <div className="settings-block">
@@ -180,7 +284,8 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
                   {aiUsage.rankAi.used === 1 ? "" : "s"} today
                   {aiUsage.rankAi.dayLimit > 0
                     ? ` (cap ${formatTokens(aiUsage.rankAi.dayLimit)} / UTC day)`
-                    : " (no daily article cap — token budget above applies)"}.
+                    : " (no daily article cap — token budget above applies)"}
+                  .
                 </p>
                 {aiUsage.rankAi.runLimit > 0 ? (
                   <p>
