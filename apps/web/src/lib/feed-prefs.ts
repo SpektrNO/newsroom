@@ -10,7 +10,13 @@ export type FeedSourceFilter = SourceTypeV1;
 const VIEWS = ["feed", "saved", "dismissed"] as const;
 const SORTS = ["score", "date"] as const;
 const ORDERS = ["asc", "desc"] as const;
-const SOURCES = ["hackernews", "substack", "podcast", "bluesky"] as const;
+const SOURCES = [
+  "hackernews",
+  "substack",
+  "podcast",
+  "bluesky",
+  "reddit",
+] as const;
 
 export type StoredFeedPrefs = {
   view: FeedViewFilter;

@@ -136,6 +136,7 @@ describe("feed query parsers", () => {
     assert.equal(parseFeedSourceFilter("hackernews"), "hackernews");
     assert.equal(parseFeedSourceFilter("podcast"), "podcast");
     assert.equal(parseFeedSourceFilter("bluesky"), "bluesky");
+    assert.equal(parseFeedSourceFilter("reddit"), "reddit");
     assert.equal(parseFeedSourceFilter("nope"), "invalid");
     assert.equal(parseFeedSourceFilter(null), null);
   });
@@ -238,9 +239,14 @@ describe("feed query parsers", () => {
       "@Jay.Bsky.Social",
     );
     assert.equal(
+      feedSourceSubscriptionLabel("reddit", { subreddit: "programming" }),
+      "r/programming",
+    );
+    assert.equal(
       feedSourceSubscriptionLabel("hackernews", { mode: "new" }),
       "New",
     );
+    assert.equal(feedSourceTypeLabel("reddit"), "Reddit");
   });
 });
 

@@ -48,6 +48,24 @@ describe("parseCreateBody", () => {
     });
     assert.deepEqual(parsed, { ok: false, error: "invalid_config" });
   });
+  it("accepts reddit with subreddit and normalizes", () => {
+    const parsed = parseCreateBody({
+      sourceType: "reddit",
+      config: { subreddit: "r/Programming" },
+    });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.sourceType, "reddit");
+    assert.equal(parsed.config.subreddit, "programming");
+  });
+
+  it("rejects reddit without subreddit", () => {
+    const parsed = parseCreateBody({
+      sourceType: "reddit",
+      config: {},
+    });
+    assert.deepEqual(parsed, { ok: false, error: "invalid_config" });
+  });
 });
 
 describe("parsePatchBody", () => {
@@ -69,5 +87,15 @@ describe("parsePatchBody", () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     assert.equal(parsed.config?.handle, "alice.bsky.social");
+  });
+
+  it("accepts reddit subreddit updates", () => {
+    const parsed = parsePatchBody(
+      { config: { subreddit: "r/rust" } },
+      "reddit",
+    );
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.config?.subreddit, "rust");
   });
 });
