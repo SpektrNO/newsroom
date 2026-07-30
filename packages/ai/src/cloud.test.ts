@@ -242,6 +242,12 @@ describe("createAiProvider / resolveAiProviderKind", () => {
     assert.equal(resolveModelForTier("fast"), "gpt-4.1-mini");
   });
 
+  it("resolveModelForTier respects explicit kind over AI_PROVIDER", () => {
+    process.env.AI_PROVIDER = "ollama";
+    assert.equal(resolveModelForTier("fast", "openai"), "gpt-4o-mini");
+    assert.equal(resolveModelForTier("fast", "google"), "gemini-2.0-flash");
+  });
+
   it("resolveModelForTier keeps ollama defaults", () => {
     assert.equal(resolveModelForTier("fast"), "llama3.2");
     assert.equal(resolveModelForTier("standard"), "llama3.1:8b");

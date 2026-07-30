@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
+  AiCredentialsResponse,
+  AiCredentialProvider,
   AiUsageResponse,
   HealthResponse,
   RankModelTier,
 } from "@newsroom/api-client";
+import { ApiError } from "@newsroom/api-client";
 import { authClient } from "@/lib/auth-client";
 import { getBrowserApiClient } from "@/lib/api";
 import {
@@ -55,6 +58,13 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
   const [rankModelTier, setRankModelTier] = useState<RankModelTier | null>(null);
   const [rankModelSaving, setRankModelSaving] = useState(false);
   const [rankModelError, setRankModelError] = useState(false);
+  const [aiCreds, setAiCreds] = useState<AiCredentialsResponse | null>(null);
+  const [aiCredsError, setAiCredsError] = useState(false);
+  const [byokProvider, setByokProvider] =
+    useState<AiCredentialProvider>("openai");
+  const [byokApiKey, setByokApiKey] = useState("");
+  const [byokSaving, setByokSaving] = useState(false);
+  const [byokFormError, setByokFormError] = useState<string | null>(null);
   const [theme, setTheme] = useState<AppearanceTheme>(DEFAULT_THEME);
   const [density, setDensity] = useState<AppearanceDensity>(DEFAULT_DENSITY);
 
@@ -95,6 +105,17 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
       .catch(() => {
         setRankModelError(true);
       });
+    void api
+      .getAiCredentials()
+      .then((res) => {
+        setAiCreds(res);
+        setAiCredsError(false);
+        if (res.provider) setByokProvider(res.provider);
+      })
+      .catch(() => {
+        setAiCreds(null);
+        setAiCredsError(true);
+      });
   }, [api]);
 
   function onThemeChange(next: AppearanceTheme) {
@@ -124,6 +145,42 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
       setRankModelError(true);
     } finally {
       setRankModelSaving(false);
+    }
+  }
+
+  async function onSaveByok(e: FormEvent) {
+    e.preventDefault();
+    setByokSaving(true);
+    setByokFormError(null);
+    try {
+      const res = await api.putAiCredentials({
+        provider: byokProvider,
+        apiKey: byokApiKey,
+      });
+      setAiCreds(res);
+      setByokApiKey("");
+    } catch (err) {
+      setByokFormError(
+        err instanceof ApiError && err.code === "byok_not_configured"
+          ? "BYOK is not enabled on this deploy (set AI_CREDENTIALS_KEY)."
+          : "Couldn’t save the API key. Check the provider and try again.",
+      );
+    } finally {
+      setByokSaving(false);
+    }
+  }
+
+  async function onClearByok() {
+    setByokSaving(true);
+    setByokFormError(null);
+    try {
+      const res = await api.deleteAiCredentials();
+      setAiCreds(res);
+      setByokApiKey("");
+    } catch {
+      setByokFormError("Couldn’t clear the saved key.");
+    } finally {
+      setByokSaving(false);
     }
   }
 
@@ -244,6 +301,79 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
             {rankModelError ? (
               <p className="manage-meta" role="status">
                 Couldn’t save the ranking model setting. Try again.
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className="settings-block">
+        <h2 className="form-heading">Your AI key</h2>
+        {aiCredsError ? (
+          <p className="manage-meta">Couldn’t load AI key settings.</p>
+        ) : !aiCreds ? (
+          <p className="feed-placeholder">Checking…</p>
+        ) : !aiCreds.byokEnabled ? (
+          <p className="manage-meta">
+            This deploy uses the operator-configured AI provider only. Bring
+            your own key is disabled until the operator sets{" "}
+            <code>AI_CREDENTIALS_KEY</code>.
+          </p>
+        ) : (
+          <>
+            <p className="manage-meta">
+              {aiCreds.configured
+                ? `Using your ${aiCreds.provider} key ending in …${aiCreds.keyHint}. Rank and Advisor call that provider for your account.`
+                : "Optional. Leave empty to use the deploy’s AI provider."}
+            </p>
+            <form onSubmit={(e) => void onSaveByok(e)}>
+              <label className="filter-field">
+                <span className="filter-label">Provider</span>
+                <select
+                  value={byokProvider}
+                  disabled={byokSaving}
+                  onChange={(e) =>
+                    setByokProvider(e.target.value as AiCredentialProvider)
+                  }
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="google">Google Gemini</option>
+                </select>
+              </label>
+              <label className="filter-field">
+                <span className="filter-label">API key</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={byokApiKey}
+                  disabled={byokSaving}
+                  placeholder={
+                    aiCreds.configured
+                      ? "Enter a new key to replace"
+                      : "Paste API key"
+                  }
+                  onChange={(e) => setByokApiKey(e.target.value)}
+                  required
+                />
+              </label>
+              <div className="form-actions">
+                <button type="submit" disabled={byokSaving || !byokApiKey.trim()}>
+                  {byokSaving ? "Saving…" : "Save key"}
+                </button>
+                {aiCreds.configured ? (
+                  <button
+                    type="button"
+                    disabled={byokSaving}
+                    onClick={() => void onClearByok()}
+                  >
+                    Clear key
+                  </button>
+                ) : null}
+              </div>
+            </form>
+            {byokFormError ? (
+              <p className="manage-meta" role="status">
+                {byokFormError}
               </p>
             ) : null}
           </>

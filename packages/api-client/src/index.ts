@@ -234,6 +234,20 @@ export type RankModelSettingResponse = {
   tier: RankModelTier;
 };
 
+export type AiCredentialProvider = "openai" | "google";
+
+export type AiCredentialsResponse = {
+  configured: boolean;
+  byokEnabled: boolean;
+  provider: AiCredentialProvider | null;
+  keyHint: string | null;
+};
+
+export type AiCredentialsPutRequest = {
+  provider: AiCredentialProvider;
+  apiKey: string;
+};
+
 export type RankFeedLatestResponse = {
   scored: number;
   evaluated: number;
@@ -436,6 +450,20 @@ export class ApiClient {
     tier: RankModelTier,
   ): Promise<RankModelSettingResponse> {
     return this.requestJson("PATCH", "/api/settings/rank-model", { tier });
+  }
+
+  async getAiCredentials(): Promise<AiCredentialsResponse> {
+    return this.requestJson("GET", "/api/settings/ai-credentials");
+  }
+
+  async putAiCredentials(
+    input: AiCredentialsPutRequest,
+  ): Promise<AiCredentialsResponse> {
+    return this.requestJson("PUT", "/api/settings/ai-credentials", input);
+  }
+
+  async deleteAiCredentials(): Promise<AiCredentialsResponse> {
+    return this.requestJson("DELETE", "/api/settings/ai-credentials");
   }
 
   /** Run keyword + AI rank for the signed-in user (may take minutes). */
