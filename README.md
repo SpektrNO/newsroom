@@ -64,7 +64,7 @@ pnpm --filter @newsroom/worker start
 | `apps/mobile` | Expo Router shell (health via api-client) |
 | `apps/worker` | Postgres job poller + one-shot ingest/rank CLI |
 | `packages/db` | Drizzle schema + migrations (auth, ingest, topics, scores) |
-| `packages/ai` | `AiProvider` + keyword/`rankArticleBatch` helpers |
+| `packages/ai` | `AiProvider` + `createAiProvider` (Ollama / OpenAI / Google) + keyword/`rankArticleBatch` helpers |
 | `packages/sources` | HN + Substack + podcast + Bluesky adapters (`SourceAdapter`) |
 | `packages/api-client` | Typed client (health, sources, topics, topic-tree, feed) |
 
@@ -93,7 +93,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm worker:test` | Ingest + rank integration tests (needs Postgres; AI mocked) |
 | `pnpm web:test` | Topics/feed parsers + session isolation (needs Postgres) |
 | `pnpm --filter @newsroom/ai test` | AI unit tests (offline-safe keyword + rank parse) |
-| `pnpm --filter @newsroom/ai smoke` | Live Ollama smoke (skips if unreachable; `OLLAMA_SMOKE=1` to require it) |
+| `pnpm --filter @newsroom/ai smoke` | Live AI smoke via `AI_PROVIDER` (skips if unreachable; `AI_SMOKE=1` / `OLLAMA_SMOKE=1` to require it) |
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
@@ -153,4 +153,4 @@ See [docs/github-workflow.md](docs/github-workflow.md).
 
 ## Status
 
-`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, `web-ai-advisor-chat`, `web-source-discovery`, `source-podcast`, `source-bluesky`, and `source-reddit` are implemented (auth, sources including Bluesky AppView and Reddit subreddits, ingest, topics/feed APIs, curated Topics + feed catalog, Advisor chat via BFF → Ollama, worker rank, editorial web UI). Expo feed UI is next per the backlog.
+`scaffold-monorepo`, `ingest-hn-substack`, `hybrid-rank-feed`, `web-feed-topics-sources`, `web-topics-tree`, `web-topics-catalog`, `web-ai-advisor-chat`, `web-source-discovery`, `source-podcast`, `source-bluesky`, `source-reddit`, and `ai-cloud-providers` are implemented (auth, sources including Bluesky/Reddit, ingest, topics/feed APIs, Advisor + rank via `createAiProvider` for Ollama/OpenAI/Google, worker rank, editorial web UI). Expo feed UI is next per the backlog.

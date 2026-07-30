@@ -1,8 +1,8 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   combineFinalRank,
+  createAiProvider,
   extractKeywordReason,
-  OllamaProvider,
   rankArticleBatch,
   resolveModelForTier,
   scoreKeywordMatch,
@@ -607,7 +607,7 @@ export async function runRank(
         tier === "none"
           ? null
           : options.provider ??
-            new OllamaProvider({
+            createAiProvider({
               model: resolvedModel ?? undefined,
             });
       const modelLabel = provider?.model ?? resolvedModel ?? "unknown";

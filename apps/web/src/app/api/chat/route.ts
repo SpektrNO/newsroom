@@ -1,6 +1,6 @@
 import {
   adviseTopics,
-  OllamaProvider,
+  createAiProvider,
   topicPathLabels,
 } from "@newsroom/ai";
 import {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     keywords: t.keywords ?? [],
   }));
 
-  const provider = new OllamaProvider();
+  const provider = createAiProvider();
   try {
     const healthy = await provider.health();
     if (!healthy) {

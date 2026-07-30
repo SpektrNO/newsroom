@@ -330,7 +330,9 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
               Database · {healthLabel(health.checks.database)}
             </li>
             <li>
-              Ollama · {healthLabel(health.checks.ollama)}
+              AI
+              {health.aiProvider ? ` (${health.aiProvider})` : ""} ·{" "}
+              {healthLabel(health.checks.ai ?? health.checks.ollama)}
             </li>
           </ul>
         )}

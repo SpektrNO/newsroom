@@ -39,22 +39,6 @@ export function ollamaJsonFormat(
   return undefined;
 }
 
-/**
- * Model name for a user-selectable rank tier. "fast" preserves today's default
- * (OLLAMA_MODEL / llama3.2); "standard" is a stronger, slower alternative.
- * Both are independently configurable via env vars.
- */
-export function resolveModelForTier(tier: "fast" | "standard"): string {
-  if (tier === "standard") {
-    return process.env.RANK_MODEL_STANDARD?.trim() || "llama3.1:8b";
-  }
-  return (
-    process.env.RANK_MODEL_FAST?.trim() ||
-    process.env.OLLAMA_MODEL?.trim() ||
-    "llama3.2"
-  );
-}
-
 function resolveCompleteTimeoutMs(options: OllamaProviderOptions): number {
   if (options.completeTimeoutMs !== undefined) {
     return Math.max(1_000, options.completeTimeoutMs);

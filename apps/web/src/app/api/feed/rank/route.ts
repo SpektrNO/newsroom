@@ -1,4 +1,4 @@
-import { OllamaProvider, resolveModelForTier } from "@newsroom/ai";
+import { createAiProvider, resolveModelForTier } from "@newsroom/ai";
 import { getDb, getUserRankModelTier, topics } from "@newsroom/db";
 import { and, eq } from "drizzle-orm";
 import { runRank } from "@newsroom/worker/rank";
@@ -44,7 +44,9 @@ export async function POST() {
   try {
     const tier = await getUserRankModelTier(db, authResult.userId);
     if (tier !== "none") {
-      const provider = new OllamaProvider({ model: resolveModelForTier(tier) });
+      const provider = createAiProvider({
+        model: resolveModelForTier(tier),
+      });
       const healthy = await provider.health();
       if (!healthy) {
         return Response.json({ error: "ai_unavailable" }, { status: 503 });

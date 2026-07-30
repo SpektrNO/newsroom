@@ -69,7 +69,7 @@ Notes for `rank-dirty-incremental` (do first):
 - **Catch-up:** Feed (or rank-status) path may enqueue/wait for rank when the session user is dirty so returning users get a fresh feed without waiting for the next ingest.
 - **Activity signal:** Record last feed activity (timestamp on user or side table) from authenticated feed reads; used to define **active** for post-ingest enqueue.
 - **CLI:** `pnpm worker:rank` processes dirty users (or drains dirty queue); optional single-user flag and optional `--all-dirty` (ignore activity) for local debug/ops.
-- **Out of scope:** Hosted AI provider swap (see `multiuser-harden`); per-user job rows (`rank-per-user-queue`).
+- **Out of scope:** Hosted AI provider swap (see `ai-cloud-providers`); per-user job rows (`rank-per-user-queue`).
 
 Notes for `rank-per-user-queue`:
 
@@ -84,7 +84,7 @@ Notes for `rank-ai-budgets`:
 - **Budgets:** Per-user (and optionally global) max AI-scored articles per run/day; prefer **active** dirty users (see Cadence policy).
 - **Degrade:** Over budget → keyword-only `final_rank` (existing `combineFinalRank` null-AI path); inactive dirty users skip AI until they return (catch-up on activity).
 - **Depends on:** Dirty/incremental ranking + activity gate so budgets aren’t burned re-scoring everyone every ingest tick.
-- **Related:** `multiuser-harden` (host AI / provider swap); token accounting via `ai-token-metering` (prefer meter before or with this feature).
+- **Related:** `ai-cloud-providers` (OpenAI/Google `AiProvider`); token accounting via `ai-token-metering` (prefer meter before or with this feature).
 
 Notes for `rank-score-retention`:
 
@@ -109,8 +109,30 @@ Notes for `ai-token-metering`:
 - **Persist:** Per-user ledger — at least daily rollups by purpose (`rank` \| `chat` \| `other`); optional append-only event rows for audit. Session user only; never mix users. Schema in `packages/db` (decide tables in spec; no chat transcript required).
 - **Reveal:** Settings (primary) shows used vs limit for today / period (prompt+completion or total — pick one display unit in spec). Optional: Advisor composer footer or chat response meta (`tokens` on `POST /api/chat`); ops/logs for worker rank batches. Absolute timestamps / hover detail allowed; keep UI calm (no dashboard card wall).
 - **Cap:** Configurable per-user (and optional global) token budget per day (env + later settings). Over soft cap → warn in UI; over hard cap → `429` `{ "error": "token_budget_exceeded" }` for chat; rank path **degrades** (keyword-only / skip AI batch) rather than failing the whole job. Align purpose splits so chat spam cannot silently exhaust rank budget unless product chooses a shared pool (default: **shared daily pool** with purpose breakdown in the UI).
-- **Relation to other features:** `rank-ai-budgets` remains **article/batch** caps and active-user priority; this feature is **token** accounting. Advisor v1 message rate limit stays; token cap is the durable budget. Hosted billing/`multiuser-harden` should consume the same meter.
+- **Relation to other features:** `rank-ai-budgets` remains **article/batch** caps and active-user priority; this feature is **token** accounting. Advisor v1 message rate limit stays; token cap is the durable budget. Hosted billing / `ai-cloud-providers` / `multiuser-harden` should consume the same meter.
 - **Out of scope v1:** Dollar pricing UI, per-model price tables, streaming token ticks, admin multi-tenant consoles.
+
+### B4. Cloud AI providers
+
+Rank and Advisor already go through `AiProvider` (`packages/ai`); today only `OllamaProvider` is wired. Add OpenAI- and Google-compatible implementations so deploys (and later users) can leave local Ollama.
+
+| ID | Feature | Status | Spec |
+|----|---------|--------|------|
+| `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (+ optional BYOK) | ✅ | `docs/architecture.md` |
+
+Notes for `ai-cloud-providers`:
+
+- **Goal:** Ship concrete `AiProvider` implementations for **OpenAI** (Chat Completions or Responses API) and **Google** (Gemini generateContent), selectable beside Ollama, without changing rank/advisor prompt contracts.
+- **Interface (locked):** Keep `complete({ prompt, system?, json?, maxTokens? })` → `{ text, model, usage? }` and `health()`. Map `json: "object" | "rank-array" | true` to each vendor’s JSON / schema mode (or strict prompt fallback when unsupported). Propagate real token usage into `ai-token-metering` (no silent drop).
+- **v1 — operator-hosted (required):** Env-selected provider for the whole deploy, e.g. `AI_PROVIDER=ollama|openai|google` plus `OPENAI_API_KEY` / `OPENAI_BASE_URL?` / `OPENAI_MODEL`, `GOOGLE_AI_API_KEY` (or Vertex later) / `GOOGLE_AI_MODEL`. Factory used by worker rank and web BFF (`/api/chat`, Rank latest). Document in `.env.example` + `docs/ops-local.md`. Default remains Ollama when unset.
+- **v1 — model tiers:** Map existing Settings rank tiers (`fast` / `standard` / `none`) onto cloud model ids via env (e.g. `RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` already exist — reuse; add cloud-specific overrides only if needed). `none` stays keyword-only.
+- **v1.5 / follow-up — BYOK (bring your own key):** Optional per-user encrypted API key (and provider choice) in Settings; worker/BFF resolve provider **per user** for that user’s rank/chat. Never expose secrets to the browser after create; encrypt at rest; revoke/clear path. Align storage/threat model with `security-harden`. Skip if operator-hosted is enough for the deploy.
+- **Factory / wiring:** Central `createAiProvider(...)` in `packages/ai` (or thin apps wrappers) so worker + web do not each hardcode Ollama. Health: `/api/health` reports configured provider reachability (not Ollama-only forever).
+- **Cost / abuse:** Reuse `ai-token-metering` + `rank-ai-budgets`; cloud keys make hard caps more important. No browser→OpenAI/Google calls (same AI boundary as today).
+- **Relation to `multiuser-harden`:** That feature stays registration, isolation, rate limits, and product multi-tenancy. **Provider implementations live here**; multiuser-harden may depend on this for “hosted AI” deploys but should not reinvent `AiProvider`.
+- **Out of scope v1:** Anthropic/other vendors (easy follow-on once factory exists), streaming chat, fine-tuning, image/audio models, Vertex-only enterprise auth beyond a simple API key path, dollar billing UI.
+- **Depends on:** Existing `AiProvider` + rank/advisor helpers + token metering. Independent of new source adapters.
+- **Verify:** Unit tests with mocked HTTP for both providers (JSON rank array parse, usage mapping, health fail/ok); one manual path: set `AI_PROVIDER=openai` (or google), Rank latest + Advisor message, Settings usage ticks up.
 
 ## C. Web client
 
@@ -187,7 +209,7 @@ Notes for `web-ai-advisor-chat`:
 - **Primary use cases (v1):** interest → suggested topics + keywords; refine keywords for a followed topic; explain why a keyword is too broad/narrow. **Out of scope v1:** chatting about individual feed articles, multi-turn tool use that mutates DB without confirm, long-term memory across devices beyond short server-side transcript (optional: persist last N turns per user in Postgres — decide in spec; default **ephemeral session transcript** in client + request history window).
 - **Limits:** Per-user message rate limit (v1); token day-caps via `ai-token-metering`. Soft-fail when provider down (same health story as rank).
 - **Privacy:** Session user only; never send other users’ topics or chat history.
-- **Depends on:** Existing topic tree + Follow APIs. Stronger with hosted AI (`multiuser-harden`) for latency/quality; works locally via Ollama. Token reveal/cap → `ai-token-metering`.
+- **Depends on:** Existing topic tree + Follow APIs. Stronger with hosted AI (`ai-cloud-providers`) for latency/quality; works locally via Ollama. Token reveal/cap → `ai-token-metering`.
 - **Does not replace:** Catalog browse / Follow; advisor **suggests**, user still owns Following.
 
 Notes for `web-source-discovery` (shipped — catalog v1):
@@ -207,7 +229,7 @@ Notes for `web-source-discovery` (shipped — catalog v1):
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `multiuser-harden` | Registration, isolation, rate limits, host AI swap | ⬜ | `docs/architecture.md` |
+| `multiuser-harden` | Registration, isolation, rate limits (hosted AI via `ai-cloud-providers`) | ⬜ | `docs/architecture.md` |
 | `security-harden` | Auth hardening, API keys, abuse/misuse controls | ⬜ | `docs/architecture.md` |
 | `source-bluesky` | Bluesky adapter | ✅ | `docs/architecture.md` |
 | `source-podcast` | Podcast RSS adapter + episode cards in feed | ✅ | `docs/architecture.md` |
@@ -220,7 +242,7 @@ Notes for `security-harden`:
 - **API keys (machine clients):** Session cookies are fine for the browser; mobile and any CLI/automation need a first-class, **revocable** credential. Spec should cover: create/list/revoke keys in Settings; scoped permissions (e.g. read feed vs mutate topics vs trigger rank); hashed-at-rest storage; last-used metadata; never return the secret after create. Prefer Bearer keys on `/api/*` alongside existing session auth — do not invent a parallel API surface.
 - **Misuse / abuse:** Expand beyond today’s ad-hoc per-route limits (chat, Rank latest) to a coherent abuse story: per-user and per-IP rate limits on expensive routes (`/api/feed/rank`, `/api/chat`, auth endpoints, source create); backoff on auth failures; optional global kill-switches/env caps for rank and chat; ensure AI token/article budgets (`ai-token-metering`, `rank-ai-budgets`) cannot be bypassed by spawning accounts or hammering catch-up rank. Log/alert enough to diagnose abuse without storing sensitive payloads.
 - **Isolation audit:** Reconfirm every mutating and list endpoint is session-/key-scoped to the caller (topics, sources, feed scores, settings, AI usage) — regression tests for cross-user IDOR.
-- **Relation to `multiuser-harden`:** That feature is product multi-tenancy (open registration policy, stronger isolation defaults, hosted AI provider swap). This feature is the **threat/abuse** pass (credentials, keys, rate/misuse). Spec either together or land `security-harden` first if running a semi-public deploy before full multi-user polish.
+- **Relation to `multiuser-harden`:** That feature is product multi-tenancy (open registration policy, stronger isolation defaults). Hosted / BYOK model backends are `ai-cloud-providers`. This feature is the **threat/abuse** pass (credentials, keys, rate/misuse). Spec either together or land `security-harden` first if running a semi-public deploy before full multi-user polish.
 - **Out of scope v1:** OAuth social login, SSO/SAML, fine-grained admin RBAC consoles, WAF/CDN productization, penetration-test remediation beyond issues found in this pass.
 
 Notes for `source-podcast`:

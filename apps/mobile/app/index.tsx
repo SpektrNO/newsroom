@@ -48,8 +48,9 @@ export default function HomeScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {health ? (
           <Text style={styles.meta}>
-            Health: {health.status} · db {health.checks.database} · ollama{" "}
-            {health.checks.ollama}
+            Health: {health.status} · db {health.checks.database} · ai{" "}
+            {health.checks.ai ?? health.checks.ollama}
+            {health.aiProvider ? ` (${health.aiProvider})` : ""}
           </Text>
         ) : null}
 

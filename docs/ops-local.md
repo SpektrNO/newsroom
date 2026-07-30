@@ -32,7 +32,7 @@ cp apps/web/.env.example apps/web/.env.local
 | Variable group | Root `.env` | `apps/web/.env.local` |
 |----------------|:-----------:|:---------------------:|
 | `DATABASE_URL`, Better Auth URLs/secret | yes | yes (required for web) |
-| `OLLAMA_*`, `RANK_MODEL_*`, `RANK_BATCH_SIZE`, `OLLAMA_TIMEOUT_MS` | yes (worker rank) | yes (**Rank latest** / chat) |
+| `OLLAMA_*`, `AI_PROVIDER`, `OPENAI_*`, `GOOGLE_AI_*`, `RANK_MODEL_*`, `RANK_BATCH_SIZE`, timeouts | yes (worker rank) | yes (**Rank latest** / chat / health) |
 | `AI_TOKEN_*`, `RANK_AI_MAX_*`, score/article TTL | yes (worker) | yes (Rank latest + Settings usage) |
 | `BLUESKY_APPVIEW_URL` | yes (worker ingest) | only if a web path ever fetches Bluesky (ingest is worker) |
 | `REDDIT_USER_AGENT`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | yes (worker ingest) | no — Reddit fetch is worker-only |
@@ -101,27 +101,46 @@ Unauthenticated JSON:
   "status": "ok" | "degraded" | "error",
   "checks": {
     "database": "ok" | "error",
+    "ai": "ok" | "error",
     "ollama": "ok" | "error"
   },
+  "aiProvider": "ollama" | "openai" | "google",
   "timestamp": "<ISO-8601>"
 }
 ```
 
+`checks.ai` is the configured provider (`AI_PROVIDER`). `checks.ollama` is a **legacy alias** of `ai` (same value) for older clients.
+
 | `status` | Meaning |
 |----------|---------|
-| `ok` | DB and Ollama both reachable |
+| `ok` | DB and AI provider both reachable |
 | `degraded` | App up; at least one dependency failed (HTTP 200) |
-| `error` | Both DB and Ollama failed (HTTP 503) |
+| `error` | Both DB and AI failed (HTTP 503) |
 
-Ollama down must not crash the process — report `checks.ollama: "error"`.
+AI down must not crash the process — report `checks.ai: "error"`.
 
 ## AI smoke
 
 ```bash
-pnpm --filter @newsroom/ai test          # always offline-safe
-pnpm --filter @newsroom/ai smoke         # skips if Ollama unreachable
-OLLAMA_SMOKE=1 pnpm --filter @newsroom/ai smoke   # fail if unreachable
+pnpm --filter @newsroom/ai test          # always offline-safe (includes OpenAI/Google mocks)
+pnpm --filter @newsroom/ai smoke         # skips if configured provider unreachable
+AI_SMOKE=1 pnpm --filter @newsroom/ai smoke       # fail if unreachable
+OLLAMA_SMOKE=1 pnpm --filter @newsroom/ai smoke   # same (legacy alias)
 ```
+
+## Cloud AI providers (`AI_PROVIDER`)
+
+Rank and Advisor use `createAiProvider()` from `packages/ai`. Default remains local Ollama.
+
+| `AI_PROVIDER` | Required env | Default models (fast / standard) |
+|---------------|--------------|----------------------------------|
+| `ollama` (default) | `OLLAMA_HOST`, `OLLAMA_MODEL` | `llama3.2` / `llama3.1:8b` |
+| `openai` | `OPENAI_API_KEY`; optional `OPENAI_BASE_URL`, `OPENAI_MODEL` | `gpt-4o-mini` / `gpt-4o` |
+| `google` | `GOOGLE_AI_API_KEY`; optional `GOOGLE_AI_MODEL` | `gemini-2.0-flash` |
+
+`RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` override those defaults when set. Put the same `AI_PROVIDER` + keys in **root `.env` and `apps/web/.env.local`**. No browser→vendor calls — only worker and Next BFF.
+
+BYOK (per-user keys) is deferred; see backlog `ai-cloud-providers` notes.
 
 ## Ingest (HN + Substack) and rank
 
@@ -131,9 +150,9 @@ pnpm db:seed                 # demo@example.com / newsroom-demo + HN + Platforme
 # Or: SEED_USER_ID=<better-auth-user-id> pnpm db:seed
 # Then ingest + rank so that user gets feed rows:
 
-pnpm worker:ingest           # one-shot ingest; enqueues pending rank (does not wait on Ollama)
+pnpm worker:ingest           # one-shot ingest; enqueues pending rank (does not wait on AI)
 pnpm worker:rank             # one-shot keyword + AI rank → user_article_scores
-# Or: Feed UI → Rank latest (current user only; requires Ollama)
+# Or: Feed UI → Rank latest (current user only; requires configured AI provider)
 pnpm --filter @newsroom/worker start   # poll Postgres jobs (ingest ~12 min + rank)
 # Recovers stale `running` jobs (~45m) left by Ctrl+C/crash; otherwise a stuck
 # ingest blocks scheduling the next pass and the feed shows "Ingested … ago" forever.
@@ -141,11 +160,11 @@ pnpm --filter @newsroom/worker start   # poll Postgres jobs (ingest ~12 min + ra
 pnpm sources:test            # mocked adapter fixtures
 pnpm worker:test             # ingest + rank (mocked AI) + real Postgres
 pnpm web:test                # topics/feed parsers + session isolation
-pnpm --filter @newsroom/ai test   # keyword formula + rank JSON parse (no live Ollama)
+pnpm --filter @newsroom/ai test   # keyword + rank parse + cloud provider mocks
 ```
 
 - HN: Firebase `topstories`/`newstories` + item hydrate, ≤100 per fetch (see [001](./decisions/001-ingest-url-and-hn.md)).
-- Ranking formulas / batch size: [002](./decisions/002-hybrid-ranking.md). Optional `RANK_BATCH_SIZE` (20–50, default 30). Generate calls use `OLLAMA_TIMEOUT_MS` (default **5 minutes**) — the old 10s cap was too short for CPU ranking batches.
+- Ranking formulas / batch size: [002](./decisions/002-hybrid-ranking.md). Optional `RANK_BATCH_SIZE` (20–50, default 30). Generate calls use provider timeouts (`OLLAMA_TIMEOUT_MS` / `OPENAI_TIMEOUT_MS` / `GOOGLE_AI_TIMEOUT_MS`, default **5 minutes**).
 - Sources API (session cookie): `GET/POST /api/sources`, `PATCH/DELETE /api/sources/:id`.
 - Topics / feed API: `GET/POST /api/topics`, `PATCH/DELETE /api/topics/:id`, `GET /api/feed`, `POST /api/feed/:articleId/seen|saved|dismissed`.
 - Jobs: `type=ingest` and `type=rank`; successful ingest enqueues rank if none open.
@@ -154,7 +173,7 @@ pnpm --filter @newsroom/ai test   # keyword formula + rank JSON parse (no live O
 
 ## Ollama
 
-Newsroom talks to Ollama over HTTP (`OLLAMA_HOST`, default `http://localhost:11434`). Which process serves that port is up to you.
+Newsroom talks to Ollama over HTTP (`OLLAMA_HOST`, default `http://localhost:11434`) when `AI_PROVIDER=ollama` (default). Which process serves that port is up to you.
 
 | Approach | When to use |
 |----------|-------------|
@@ -172,11 +191,11 @@ Newsroom defaults (see `.env.example`):
 | `RANK_MODEL_FAST` | *(unset → `OLLAMA_MODEL` → `llama3.2`)* | Model when Settings ranking tier is **Fast** |
 | `RANK_MODEL_STANDARD` | *(unset → `llama3.1:8b`)* | Model when Settings ranking tier is **Standard** |
 
-Without Ollama: auth, ingest, topics, and keyword-only ranking still work; health is `degraded` (`checks.ollama: "error"`). AI scores, AI “why” reasons, and near-dup hints are missing until a model is reachable. Users on the **None** ranking tier never call Ollama.
+Without a reachable AI provider: auth, ingest, topics, and keyword-only ranking still work; health is `degraded` (`checks.ai: "error"`). AI scores, AI “why” reasons, and near-dup hints are missing until a model is reachable. Users on the **None** ranking tier never call the provider.
 
 ### Ranking model tiers
 
-Each signed-in user picks a ranking model tier in **Settings** (`none` \| `fast` \| `standard`; see [ADR 005](./decisions/005-user-selectable-rank-model.md)). Env vars `RANK_MODEL_FAST` and `RANK_MODEL_STANDARD` map those tiers to Ollama model names. The worker resolves the model per user:
+Each signed-in user picks a ranking model tier in **Settings** (`none` \| `fast` \| `standard`; see [ADR 005](./decisions/005-user-selectable-rank-model.md)). Env vars `RANK_MODEL_FAST` and `RANK_MODEL_STANDARD` map those tiers to model ids (Ollama tags or cloud model names). The worker resolves the model per user:
 
 | User tier | Model resolution |
 |-----------|------------------|
