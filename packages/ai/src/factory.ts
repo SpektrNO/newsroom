@@ -62,16 +62,43 @@ function defaultStandardModel(kind: AiProviderKind): string {
 /**
  * Model name for a user-selectable rank tier.
  * `RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` always win when set;
- * otherwise defaults depend on `AI_PROVIDER`.
+ * otherwise defaults depend on `kind` (BYOK provider) or deploy `AI_PROVIDER`.
  */
-export function resolveModelForTier(tier: "fast" | "standard"): string {
-  const kind = resolveAiProviderKind();
+export function resolveModelForTier(
+  tier: "fast" | "standard",
+  kind: AiProviderKind = resolveAiProviderKind(),
+): string {
   if (tier === "standard") {
     return (
       process.env.RANK_MODEL_STANDARD?.trim() || defaultStandardModel(kind)
     );
   }
   return process.env.RANK_MODEL_FAST?.trim() || defaultFastModel(kind);
+}
+
+/**
+ * Build a provider for a session user: BYOK cloud key when present, else deploy env.
+ */
+export function createAiProviderForUser(options: {
+  byok?: { provider: "openai" | "google"; apiKey: string } | null;
+  model?: string;
+  timeoutMs?: number;
+  completeTimeoutMs?: number;
+}): AiProvider {
+  if (options.byok) {
+    return createAiProvider({
+      kind: options.byok.provider,
+      apiKey: options.byok.apiKey,
+      model: options.model,
+      timeoutMs: options.timeoutMs,
+      completeTimeoutMs: options.completeTimeoutMs,
+    });
+  }
+  return createAiProvider({
+    model: options.model,
+    timeoutMs: options.timeoutMs,
+    completeTimeoutMs: options.completeTimeoutMs,
+  });
 }
 
 /**

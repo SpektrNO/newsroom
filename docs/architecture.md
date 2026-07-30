@@ -99,7 +99,7 @@ Never call Ollama from UI code.
 
 **Token metering (`ai-token-metering`):** Every `AiProvider.complete` reports usage (Ollama `prompt_eval_count`/`eval_count`, OpenAI `usage`, Google `usageMetadata`, else chars/4 estimated). Daily per-user rollups in `ai_token_daily` by purpose (`rank`/`chat`/`other`). Settings shows used vs `AI_TOKEN_DAILY_LIMIT` (soft warn via `AI_TOKEN_DAILY_SOFT_LIMIT`, default 80%). Shared pool: chat over hard → `429 token_budget_exceeded`; rank skips further AI batches (keyword-only). Article caps from `rank-ai-budgets`: `RANK_AI_MAX_PER_RUN` (default 60, bounds one Rank latest), `RANK_AI_MAX_PER_DAY` (default **0 = unlimited** — daily cost is the token cap), optional `RANK_AI_MAX_GLOBAL_PER_DAY`. `GET /api/ai-usage` exposes both token and article status for the session user.
 
-**Cloud providers (`ai-cloud-providers`):** Operator selects `AI_PROVIDER=ollama|openai|google` (default ollama). Factory `createAiProvider` is shared by worker rank and web BFF (`/api/chat`, Rank latest, `/api/health`). No browser→vendor calls. Per-user BYOK deferred.
+**Cloud providers (`ai-cloud-providers`):** Operator selects `AI_PROVIDER=ollama|openai|google` (default ollama). Factory `createAiProvider` is shared by worker rank and web BFF (`/api/chat`, Rank latest, `/api/health`). No browser→vendor calls. **BYOK** (`ai-cloud-providers-byok`): optional per-user encrypted OpenAI/Google key in Settings (`AI_CREDENTIALS_KEY`); rank/chat prefer that user’s key when set.
 
 ## Source adapters
 

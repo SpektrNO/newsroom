@@ -112,7 +112,8 @@ Rank and Advisor already go through `AiProvider` (`packages/ai`); today only `Ol
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (+ optional BYOK) | ✅ | `docs/architecture.md` |
+| `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (operator-hosted) | ✅ | `docs/architecture.md` |
+| `ai-cloud-providers-byok` | Per-user encrypted OpenAI/Google keys (BYOK) | ✅ | `docs/architecture.md` |
 
 Notes for `ai-cloud-providers`:
 
@@ -120,13 +121,20 @@ Notes for `ai-cloud-providers`:
 - **Interface (locked):** Keep `complete({ prompt, system?, json?, maxTokens? })` → `{ text, model, usage? }` and `health()`. Map `json: "object" | "rank-array" | true` to each vendor’s JSON / schema mode (or strict prompt fallback when unsupported). Propagate real token usage into `ai-token-metering` (no silent drop).
 - **v1 — operator-hosted (required):** Env-selected provider for the whole deploy, e.g. `AI_PROVIDER=ollama|openai|google` plus `OPENAI_API_KEY` / `OPENAI_BASE_URL?` / `OPENAI_MODEL`, `GOOGLE_AI_API_KEY` (or Vertex later) / `GOOGLE_AI_MODEL`. Factory used by worker rank and web BFF (`/api/chat`, Rank latest). Document in `.env.example` + `docs/ops-local.md`. Default remains Ollama when unset.
 - **v1 — model tiers:** Map existing Settings rank tiers (`fast` / `standard` / `none`) onto cloud model ids via env (e.g. `RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` already exist — reuse; add cloud-specific overrides only if needed). `none` stays keyword-only.
-- **v1.5 / follow-up — BYOK (bring your own key):** Optional per-user encrypted API key (and provider choice) in Settings; worker/BFF resolve provider **per user** for that user’s rank/chat. Never expose secrets to the browser after create; encrypt at rest; revoke/clear path. Align storage/threat model with `security-harden`. Skip if operator-hosted is enough for the deploy.
 - **Factory / wiring:** Central `createAiProvider(...)` in `packages/ai` (or thin apps wrappers) so worker + web do not each hardcode Ollama. Health: `/api/health` reports configured provider reachability (not Ollama-only forever).
 - **Cost / abuse:** Reuse `ai-token-metering` + `rank-ai-budgets`; cloud keys make hard caps more important. No browser→OpenAI/Google calls (same AI boundary as today).
 - **Relation to `multiuser-harden`:** That feature stays registration, isolation, rate limits, and product multi-tenancy. **Provider implementations live here**; multiuser-harden may depend on this for “hosted AI” deploys but should not reinvent `AiProvider`.
-- **Out of scope v1:** Anthropic/other vendors (easy follow-on once factory exists), streaming chat, fine-tuning, image/audio models, Vertex-only enterprise auth beyond a simple API key path, dollar billing UI.
+- **Out of scope v1:** Anthropic/other vendors (easy follow-on once factory exists), streaming chat, fine-tuning, image/audio models, Vertex-only enterprise auth beyond a simple API key path, dollar billing UI, BYOK (see `ai-cloud-providers-byok`).
 - **Depends on:** Existing `AiProvider` + rank/advisor helpers + token metering. Independent of new source adapters.
 - **Verify:** Unit tests with mocked HTTP for both providers (JSON rank array parse, usage mapping, health fail/ok); one manual path: set `AI_PROVIDER=openai` (or google), Rank latest + Advisor message, Settings usage ticks up.
+
+Notes for `ai-cloud-providers-byok`:
+
+- **Goal:** Optional per-user encrypted API key + provider (`openai` \| `google`) in Settings; worker/BFF resolve provider **per user** for that user’s rank/chat; else fall back to operator `AI_PROVIDER`.
+- **Storage:** `user_ai_credentials` (1:1 with user); AES-256-GCM with `AI_CREDENTIALS_KEY` (64 hex chars). If key unset → BYOK API `503 byok_not_configured`.
+- **API:** Never return plaintext after save; GET returns configured + last-4 hint + provider; PUT set; DELETE clear.
+- **Out of scope:** Ollama BYOK, Anthropic, key rotation UI, mobile Settings, per-user model id overrides beyond rank tiers.
+- **Depends on:** Shipped `ai-cloud-providers`. Align threat model later with `security-harden`.
 
 ## C. Web client
 

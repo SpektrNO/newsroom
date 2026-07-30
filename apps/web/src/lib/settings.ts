@@ -1,4 +1,9 @@
-import { RANK_MODEL_TIERS, type RankModelTier } from "@newsroom/db";
+import {
+  RANK_MODEL_TIERS,
+  parseUserAiCredentialProvider,
+  type RankModelTier,
+  type UserAiCredentialProvider,
+} from "@newsroom/db";
 
 export type ParsedRankModelTierBody =
   | { ok: true; tier: RankModelTier }
@@ -13,4 +18,21 @@ export function parseRankModelTierBody(body: unknown): ParsedRankModelTierBody {
     return { ok: false, error: "invalid_tier" };
   }
   return { ok: true, tier: tier as RankModelTier };
+}
+
+export type ParsedAiCredentialsBody =
+  | { ok: true; provider: UserAiCredentialProvider; apiKey: string }
+  | { ok: false; error: "invalid_credentials" };
+
+export function parseAiCredentialsBody(body: unknown): ParsedAiCredentialsBody {
+  if (!body || typeof body !== "object") {
+    return { ok: false, error: "invalid_credentials" };
+  }
+  const rec = body as Record<string, unknown>;
+  const provider = parseUserAiCredentialProvider(rec.provider);
+  const apiKey = typeof rec.apiKey === "string" ? rec.apiKey.trim() : "";
+  if (!provider || !apiKey) {
+    return { ok: false, error: "invalid_credentials" };
+  }
+  return { ok: true, provider, apiKey };
 }

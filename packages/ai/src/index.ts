@@ -21,6 +21,7 @@ export {
 } from "./google.js";
 export {
   createAiProvider,
+  createAiProviderForUser,
   resolveAiProviderKind,
   resolveModelForTier,
   type AiProviderKind,

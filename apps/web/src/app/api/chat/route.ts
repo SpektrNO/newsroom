@@ -1,12 +1,13 @@
 import {
   adviseTopics,
-  createAiProvider,
+  createAiProviderForUser,
   topicPathLabels,
 } from "@newsroom/ai";
 import {
   canSpendAiTokens,
   getDb,
   getAiTokenUsageForDay,
+  loadUserAiCredentialSecret,
   recordAiTokenUsage,
 } from "@newsroom/db";
 import { requireSessionUserId } from "@/lib/session";
@@ -67,7 +68,8 @@ export async function POST(request: Request) {
     keywords: t.keywords ?? [],
   }));
 
-  const provider = createAiProvider();
+  const byok = await loadUserAiCredentialSecret(db, authResult.userId);
+  const provider = createAiProviderForUser({ byok });
   try {
     const healthy = await provider.health();
     if (!healthy) {

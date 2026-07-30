@@ -32,7 +32,7 @@ cp apps/web/.env.example apps/web/.env.local
 | Variable group | Root `.env` | `apps/web/.env.local` |
 |----------------|:-----------:|:---------------------:|
 | `DATABASE_URL`, Better Auth URLs/secret | yes | yes (required for web) |
-| `OLLAMA_*`, `AI_PROVIDER`, `OPENAI_*`, `GOOGLE_AI_*`, `RANK_MODEL_*`, `RANK_BATCH_SIZE`, timeouts | yes (worker rank) | yes (**Rank latest** / chat / health) |
+| `OLLAMA_*`, `AI_PROVIDER`, `OPENAI_*`, `GOOGLE_AI_*`, `AI_CREDENTIALS_KEY`, `RANK_MODEL_*`, `RANK_BATCH_SIZE`, timeouts | yes (worker rank) | yes (**Rank latest** / chat / health / BYOK) |
 | `AI_TOKEN_*`, `RANK_AI_MAX_*`, score/article TTL | yes (worker) | yes (Rank latest + Settings usage) |
 | `BLUESKY_APPVIEW_URL` | yes (worker ingest) | only if a web path ever fetches Bluesky (ingest is worker) |
 | `REDDIT_USER_AGENT`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | yes (worker ingest) | no — Reddit fetch is worker-only |
@@ -140,7 +140,7 @@ Rank and Advisor use `createAiProvider()` from `packages/ai`. Default remains lo
 
 `RANK_MODEL_FAST` / `RANK_MODEL_STANDARD` override those defaults when set. Put the same `AI_PROVIDER` + keys in **root `.env` and `apps/web/.env.local`**. No browser→vendor calls — only worker and Next BFF.
 
-BYOK (per-user keys) is deferred; see backlog `ai-cloud-providers` notes.
+BYOK (per-user OpenAI/Google keys): set the same 64-hex `AI_CREDENTIALS_KEY` in root `.env` and `apps/web/.env.local`, then save a key under Settings → Your AI key. See [ADR 007](./decisions/007-ai-byok.md). If unset, BYOK stays disabled and the deploy uses operator `AI_PROVIDER` only.
 
 ## Ingest (HN + Substack) and rank
 

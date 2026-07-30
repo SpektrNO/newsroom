@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   combineFinalRank,
-  createAiProvider,
+  createAiProviderForUser,
   extractKeywordReason,
   rankArticleBatch,
   resolveModelForTier,
@@ -18,6 +18,7 @@ import {
   feedMaxAgeCutoff,
   getUserRankModelTier,
   jobs,
+  loadUserAiCredentialSecret,
   listDirtyRankUserIds,
   pruneUserArticleScores,
   pruneOldArticles,
@@ -599,15 +600,23 @@ export async function runRank(
 
       // "none" tier forces keyword-only ranking: skip AI entirely, no budget spent.
       const tier = await getUserRankModelTier(db, userId);
+      const byok =
+        tier === "none"
+          ? null
+          : await loadUserAiCredentialSecret(db, userId);
       const resolvedModel =
         tier === "none"
           ? null
-          : resolveModelForTier(tier === "standard" ? "standard" : "fast");
+          : resolveModelForTier(
+              tier === "standard" ? "standard" : "fast",
+              byok?.provider,
+            );
       const provider: AiProvider | null =
         tier === "none"
           ? null
           : options.provider ??
-            createAiProvider({
+            createAiProviderForUser({
+              byok,
               model: resolvedModel ?? undefined,
             });
       const modelLabel = provider?.model ?? resolvedModel ?? "unknown";

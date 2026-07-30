@@ -1,5 +1,10 @@
-import { createAiProvider, resolveModelForTier } from "@newsroom/ai";
-import { getDb, getUserRankModelTier, topics } from "@newsroom/db";
+import { createAiProviderForUser, resolveModelForTier } from "@newsroom/ai";
+import {
+  getDb,
+  getUserRankModelTier,
+  loadUserAiCredentialSecret,
+  topics,
+} from "@newsroom/db";
 import { and, eq } from "drizzle-orm";
 import { runRank } from "@newsroom/worker/rank";
 import { requireSessionUserId } from "@/lib/session";
@@ -44,8 +49,10 @@ export async function POST() {
   try {
     const tier = await getUserRankModelTier(db, authResult.userId);
     if (tier !== "none") {
-      const provider = createAiProvider({
-        model: resolveModelForTier(tier),
+      const byok = await loadUserAiCredentialSecret(db, authResult.userId);
+      const provider = createAiProviderForUser({
+        byok,
+        model: resolveModelForTier(tier, byok?.provider),
       });
       const healthy = await provider.health();
       if (!healthy) {
