@@ -1,7 +1,7 @@
-# Handoff: Bluesky AT Proto adapter + account posts in feed
+# Handoff: introduce-themes
 
 **Status:** done  
-**Created:** 2026-07-29  
+**Created:** 2026-07-30  
 **Specifier agent:** spec complete  
 **Developer agent:** complete
 
@@ -9,152 +9,182 @@
 
 | Field | Value |
 |-------|-------|
-| Feature id | `source-bluesky` |
-| Parent issue | #47 — https://github.com/SpektrNO/newsroom/issues/47 |
-| Open tasks | *(none — all closed; parent #47 stays open for PR)* |
-| Closed tasks | `spec` (#48), `db` (#49), `api` (#50), `worker` (#51), `web` (#52), `mobile` (#53 deferred), `verify` (#54), `docs` (#55) |
-| Phase-1 closed | `spec` (#48) |
-| Backlog | `docs/feature-backlog.md` § E — `source-bluesky` ✅ |
-| Pattern ref | Shipped sibling `source-podcast` — `docs/handoffs/archive/2026-07-27-source-podcast.md` |
+| Feature id | `introduce-themes` |
+| Parent issue | #158 — https://github.com/SpektrNO/newsroom/issues/158 |
+| Open tasks | _(none — ready for Phase 3 PR)_ |
+| Closed / Phase-1 | `spec` (#159); `api` (#160, N/A); `web` (#161); `verify` (#162); `docs` (#163) |
+| Implementer note — `api` | **Skip / close #160 as not-applicable.** Persistence is `localStorage` only (no Postgres columns, no `/api/settings/*` appearance endpoints). Close with a short rationale comment when starting Phase 2. Do **not** invent a DB/API unless product revisits under `multiuser-harden`. |
 
-Task order: `spec` → `db` → `api` → `worker` → `web` → ~~`mobile`~~ (defer) → `verify` → `docs`
+Task order: `audit` → `spec` → `db` → `api` → `worker` → `web` → `mobile` → `verify` → `docs`  
+(This feature has no `audit`, `db`, `worker`, or `mobile` tasks.)
 
 ## Intent
 
-Signed-in users subscribe to Bluesky **accounts** by handle (or DID) and see that account’s recent **posts** in the same hybrid-ranked feed as HN / Substack / podcast items — with author handle and an external open link to the post on bsky.app. No Bluesky login, no in-app Bluesky client.
-
-## Decisions (locked)
-
-| Topic | Decision | Rationale |
-|-------|----------|-----------|
-| `source_type` | **`"bluesky"`** (already reserved in `packages/sources` / architecture) | Distinct filter label, uniqueness index, and UX; stub adapter exists today |
-| Subscribe model | **Per-account author feed** (many accounts per user) | Mirrors Substack/podcast “follow this publisher”; architecture: AT Proto public endpoints — not personal timeline or firehose |
-| Subscribe config | `{ handle: string }` after normalize; optional resolved `did?: string` may be stored later by ingest | Handle is what users type; DID is stable if handle moves — v1 may store handle only and resolve each fetch |
-| Handle normalize | Trim; strip leading `@`; lowercase ASCII; keep DID strings as-is (`did:plc:…` / `did:web:…`) | Deterministic uniqueness + API actor param |
-| Auth / credentials | **None.** Call Bluesky **public AppView** `https://public.api.bsky.app` unauthenticated | Architecture: “AT Proto public endpoints”; no app passwords, OAuth, or session secrets in Newsroom |
-| Primary XRPC | `GET …/xrpc/app.bsky.feed.getAuthorFeed?actor=…&limit=…&filter=posts_no_replies` | Public, no auth; skips reply noise. Paginate with `cursor` only if needed to fill cap |
-| Post set | **Original posts + quote posts**; **exclude pure reposts** (`reason` = `app.bsky.feed.defs#reasonRepost`) | Rank on the account’s own text; reposts are noise for topic matching |
-| Skip empty | Skip posts with no usable text (after trim); skip deleted/missing `post` | Need ranking haystack |
-| Canonical URL | `https://bsky.app/profile/{handleOrDid}/post/{rkey}` derived from AT URI `at://{did}/app.bsky.feed.post/{rkey}` Prefer handle in path when known | Browser-friendly open; upsert key = normalized URL |
-| `externalId` | Full AT URI (`at://…`) | Stable across handle changes; maps to `article_sources.external_id` |
-| Title / summary | **Title:** first line of post text, truncated ~120 chars if needed. **Summary:** full post text (may equal title for short posts) | Fits existing `NormalizedArticle` / feed cards without new columns |
-| External link embeds | **Do not** replace canonical URL with embed URI; text-only for ranking | Post is the unit; open on Bluesky (v1). Link-as-article is a follow-up |
-| Media / images | No first-class media columns; no image gallery in feed cards | Podcast already owns enclosure fields; Bluesky images out of scope |
-| Ranking text | Same hybrid keyword + AI path; haystack = **title + summary** (post text). Author is display meta (not required in scorer for v1) | Matches HN/Substack text ranking; avoid podcast-style extra columns |
-| Discovery v1 | **Manual handle/DID entry only** | Same as podcast RSS-first; no Bluesky catalog |
-| AppView host | Default `https://public.api.bsky.app`; optional env override `BLUESKY_APPVIEW_URL` (no trailing slash) if useful for tests/mirrors | Document in README only if the env var ships |
-| Fetch cap | Default **~50** posts per subscription per `fetchRecent()` (test-overridable); stay ≤ AppView `limit` max (100) | Align with HN-style batch caps; keep ingest bounded |
-| Mobile (#53) | **Out of scope** this feature — defer to `mobile-feed-topics` (Expo still stub) | Same as `source-podcast` #106; keep API types mobile-safe |
-| Duplicate policy | Same user + same normalized handle + `bluesky` → `duplicate` (409) | Partial unique index like podcast RSS |
+Signed-in users pick a light page atmosphere and Comfortable vs Compact density in Settings → Appearance; choices apply live via `data-theme` / `data-density` and persist in the browser, while buttons/selects/chips hug their content more tightly.
 
 ## User-facing spec
 
 | Field | Value |
 |-------|-------|
-| Trigger | User adds a Bluesky account on Sources; worker ingest runs; rank includes new articles |
-| Surfaces | `packages/sources` adapter · `packages/db` uniqueness · Next.js `/api/sources*` + `GET /api/feed?source=` · worker ingest · web Sources + Feed · docs |
-| Copy | Sources section **Add Bluesky**; label **Handle**; placeholder e.g. `jay.bsky.social`; button **Add Bluesky**; list type label **Bluesky**; feed filter option **Bluesky**; errors: duplicate → “That source is already added.”; invalid handle → “Check the Bluesky handle.”; unsupported remains unused for bluesky once shipped |
-| Acceptance | See criteria below |
+| Trigger | User opens **Settings** and changes Appearance controls; choices apply immediately across the authenticated shell and survive reload in the same browser. |
+| Surfaces | **Web only** — authenticated shell (Feed, Topics, Advisor, Sources, Settings). Shared `globals.css` tokens also affect landing/auth pages’ control sizing (tighten is global); atmosphere presets apply wherever `data-theme` is set on `<html>` (root layout). No worker, API, or Expo work. |
+| Copy | See **Copy** below. |
+| Acceptance | See **Acceptance criteria** below. |
+
+### Design decisions (locked)
+
+Depends on tokens from `web-elegant-refresh` / ADR [`docs/decisions/003-web-design-tokens.md`](../decisions/003-web-design-tokens.md). Keep `--accent` / `--accent-hover` teal; do **not** invent per-theme brand palettes. Avoid purple gradients, cream+terracotta pairings, and broadsheet hairline layouts.
+
+#### 1. Atmosphere presets (`data-theme`)
+
+Exactly **four** presets. Attribute on `<html>`: `data-theme="<id>"`. Default when missing/invalid: `paper` (today’s look).
+
+| `data-theme` | Label (UI) | Intent | Token overrides (locked enough to implement) |
+|---|---|---|---|
+| `paper` | Paper | Current default — warm paper + teal/amber washes | Keep today’s `:root` / `body` values as the baseline (`--paper`, `--panel`, `--surface`, `--border`, `--hairline`, body radial + linear gradients). Selecting Paper restores these. |
+| `mist` | Mist | Cooler, quieter gray-green atmosphere | Cooler `--paper` / body gradient stops (soft sage–gray); slightly cooler `--surface` / `--panel`; softer amber wash (reduce warm radial opacity or drop it); **unchanged** `--accent`, `--ink`, `--muted`. |
+| `slate` | Slate | Neutral cool stone, minimal color wash | Cool gray `--paper` and body gradient; muted/low-chroma radials (teal wash only, no amber); `--surface` near white-cool; **unchanged** accent. |
+| `inkwash` | Inkwash | Soft blue-teal tint, still light | Cool blue-teal paper/gradient; keep light overall (not dark mode); accent stays editorial teal. |
+
+Rules:
+
+- Presets **only** retune atmosphere tokens used by `body` background and related soft surfaces: at minimum `--paper`, `--panel`, `--surface`, `--border` / `--hairline` (if needed for contrast), and the `body { background: … }` gradient stops. Prefer CSS like `html[data-theme="mist"] { … }` and `html[data-theme="mist"] body { … }` (or equivalent) rather than duplicating the whole stylesheet.
+- **Do not** change `--accent`, `--accent-hover`, `--accent-warm`, `--danger`, fonts, or radius scale per theme.
+- **No** color pickers, custom CSS, or user-uploaded backgrounds.
+- Swatches in Settings: small clickable samples showing each preset’s background tint (not cards-as-decoration — they are the interaction control). Selected swatch must be obvious (e.g. accent outline / `aria-pressed` / `aria-checked`).
+
+#### 2. Density (`data-density`)
+
+Attribute on `<html>`: `data-density="comfortable" | "compact"`. Default: `comfortable` (current spacing).
+
+| Mode | Behavior |
+|---|---|
+| `comfortable` | Today’s spacing — no net change vs post–`web-elegant-refresh` layout when density is default. |
+| `compact` | Tighter **feed item** vertical padding (`.story-row`), **filter** row gaps (`.feed-filters`, `.feed-view-sort`, topic/source filter gaps), **pipeline / status** row spacing (`.feed-pipeline-row` and related), and modestly tighter list/manage row padding where the same tokens apply. Do **not** shrink type below readable sizes; do **not** hide Rank latest / Wipe. |
+
+Implement density via CSS variables preferred, e.g. `--space-row`, `--space-filter-gap` set under `:root` / `html[data-density="compact"]`, consumed by the rules above — avoid one-off magic numbers scattered without tokens.
+
+Density is **orthogonal** to `data-theme`.
+
+#### 3. Tighten controls (required, same feature)
+
+Always-on improvement (not gated on Compact): chrome that currently oversizes must hug content.
+
+| Target | Change |
+|---|---|
+| Primary `button` | Reduce default padding from `0.75rem 1rem` toward ~`0.5rem 0.85rem` (exact values implementer-tuned); keep hierarchy from ADR 003. |
+| `.ghost` / `.danger-text` / `.linkish` | Already tighter; ensure they stay consistent with any new shared control-height token. |
+| Shared `input, select` | Slightly reduce padding (today `0.7rem 0.8rem`); keep chevron reserve on `select`. |
+| Feed View / Sort / Sources selects | Ensure `.filter-field` / `.filter-field-view` / `.feed-sort-controls select` **do not** force oversized `min-width` — hug content; search field may stay wider (`.feed-search-field` max-width OK). |
+| Chips (`.topic-filter-chip`, keyword chips) | Slightly reduce horizontal/vertical padding so chip rows pack tighter; keep `--radius-sm`. |
+| Shared control height | Introduce something like `--control-pad-y` / `--control-pad-x` (or one `--control-height` guidance) in `:root` and use it on buttons/inputs/selects where practical — prefer tokens over one-offs. |
+
+Landing/auth primary CTAs may slim slightly as a consequence of shared `button` rules — acceptable; do not special-case a third button variant.
+
+#### 4. Settings → Appearance
+
+Add a **settings-block** on `/settings` **above** Ranking model (after account/sign-out block is fine; Appearance should be easy to find — prefer immediately after the account block, before Ranking model).
+
+Structure:
+
+1. Heading: **Appearance**
+2. Lede (one line): see Copy
+3. **Background** — labeled swatch group (fieldset/radiogroup semantics)
+4. **Density** — two-option control: Comfortable | Compact (segmented buttons or radio group; not a native `<select>` unless swatches already cover the only visual need — prefer explicit dual control matching the two modes)
+5. Persistence note (muted): see Copy
+
+Apply changes **live** (no Save button): updating theme/density updates `data-*` on `<html>` and writes `localStorage` in the same turn.
+
+#### 5. Persistence (v1) — `localStorage` only
+
+| Key | Values | Default |
+|---|---|---|
+| `newsroom.appearance.theme` | `paper` \| `mist` \| `slate` \| `inkwash` | `paper` |
+| `newsroom.appearance.density` | `comfortable` \| `compact` | `comfortable` |
+
+Rationale: simplest v1; no schema/API; clearing site data resets appearance. Cross-device sync is a follow-up under `multiuser-harden` (optional `user` columns later) — **out of scope**.
+
+**FOUC:** Root layout must set attributes before first paint when possible — e.g. a tiny inline `<script>` in `apps/web/src/app/layout.tsx` that reads the two keys and sets `document.documentElement.dataset.theme` / `dataset.density` (with validation against the allowlists). Client Settings UI and any appearance provider must stay in sync with the same keys/allowlists.
+
+Invalid or missing values → defaults (`paper`, `comfortable`).
+
+Appearance is **per browser profile**, not per signed-in user account (document in Settings note). No migration of old keys (none exist).
+
+#### 6. Application surface for attributes
+
+- Prefer `data-theme` and `data-density` on `<html>` (already the SSR root in `layout.tsx`) so CSS selectors are global and masthead/`body` atmosphere can follow.
+- Authenticated pages use `AppShell`; Settings client owns the controls; a small shared helper module (e.g. `apps/web/src/lib/appearance.ts`) should own key names, allowlists, `parse`/`apply`/`read`/`write` so layout script logic and React stay aligned (inline script may duplicate the allowlist literals minimally — keep them identical).
+
+### Copy
+
+| Location | String |
+|---|---|
+| Section heading | `Appearance` |
+| Section lede | `Background tint and reading density for this browser.` |
+| Background group label | `Background` |
+| Preset labels | `Paper`, `Mist`, `Slate`, `Inkwash` |
+| Density group label | `Density` |
+| Density options | `Comfortable`, `Compact` |
+| Persistence note | `Saved on this device only. Clearing site data resets appearance.` |
+| Page lede update (Settings header) | Change from `Account and read-only system status.` → `Account, appearance, and read-only system status.` |
+
+Accessibility: swatch buttons need accessible names (the preset labels). Density control needs a group label. Announce selection via `aria-pressed` or proper radio semantics.
 
 ### Acceptance criteria
 
-1. **Subscribe:** Signed-in `POST /api/sources` with `{ sourceType: "bluesky", config: { handle } }` creates a subscription; empty/invalid handle shape → `invalid_config` (400); duplicate same user + same normalized handle + `bluesky` → `duplicate` (409); signed out → 401. Previously `unsupported_source_type` for bluesky is **removed** (bluesky becomes a supported v1 type alongside HN/Substack/podcast).
-2. **List/filter sources:** `GET /api/sources` returns bluesky rows; Sources UI lists them as **Bluesky** with the handle (and DID if stored); user can enable/disable/delete like other sources. `PATCH` may update `enabled` and/or `config.handle` (re-normalize; uniqueness applies).
-3. **Ingest:** Worker `createSourceAdapter("bluesky", config)` calls public AppView `getAuthorFeed` (no Bluesky credentials). Maps posts → `NormalizedArticle` with `url`, `title`, `summary`, `publishedAt`, optional `author` (display name or handle), `externalId` (AT URI), optional `raw`. Excludes pure reposts and empty-text posts. Uses `filter=posts_no_replies`. No HTML scrape of bsky.app pages.
-4. **Persist:** Articles upsert on canonical bsky.app post URL; `article_sources.source_type = 'bluesky'`; link to originating `source_subscription_id`. No new article columns required for v1.
-5. **Rank:** Same hybrid keyword + AI path as other sources on title + summary. Topic-matching posts appear in the ranked feed.
-6. **Feed filter:** `GET /api/feed?source=bluesky` returns only bluesky-sourced items; invalid `source` values still 400; web filter includes **Bluesky**.
-7. **Feed UX (v1):** Cards show source label **Bluesky** and author when known; open via `canonicalUrl` (external). No embed widget, no like/repost actions, no image carousel.
-8. **Manual discovery:** Sources page supports adding by handle/DID without a catalog.
-9. **Auth/config:** No Bluesky app password, OAuth, or per-user AT Proto session in Newsroom settings. Better Auth remains the only identity. Optional `BLUESKY_APPVIEW_URL` for the AppView base only.
-10. **Tests:** Adapter unit tests with fixture `getAuthorFeed` JSON (original post, quote post, pure repost skipped, empty text skipped); API allowlist/filter tests for `bluesky`; Sources UI + feed filter coverage consistent with podcast patterns.
-11. **Docs (task `docs`):** Update `docs/architecture.md` Bluesky row → v1 / this feature; backlog status; README only if new env/commands appear.
-12. **Mobile (#53):** Close as deferred → `mobile-feed-topics` (no Expo Sources/Feed work in this feature).
+1. **Appearance section** exists on Settings with Background swatches + Density control and the copy above.
+2. Choosing a preset sets `data-theme` on `<html>` immediately; page atmosphere (body background / paper tint) visibly changes; teal accent unchanged.
+3. Choosing Compact sets `data-density="compact"`; feed story rows, filter gaps, and pipeline row are visibly tighter than Comfortable; Rank latest and Wipe remain visible and usable (no layout jump that clips or covers them).
+4. Comfortable matches pre-feature spacing intent (aside from the always-on control tighten in #5).
+5. **Tighten controls:** Feed View/Sort/Sources controls and chips/buttons visibly hug content more than before; search may remain wider; no new component library.
+6. **Reload persistence:** reload keeps the last theme + density from `localStorage` keys above; invalid stored values fall back to defaults.
+7. **FOUC:** hard-reload with a non-default theme stored does not flash the Paper atmosphere for a noticeable beat (inline boot script or equivalent).
+8. **Scope:** no dark mode, no API/DB appearance endpoints, no Expo changes, no ranking behavior changes.
+9. **`api` task:** implementer closes #160 as N/A with rationale (localStorage-only).
+10. **Docs task:** short note in architecture Clients/web (or ADR addendum) that appearance is client-only `data-theme` / `data-density` + localStorage; README only if a user-facing ops note is needed (likely architecture + optional ADR 003 addendum / new thin ADR — implementer chooses one focused doc, not both essays).
 
-## API / DB contract
+## API / DB contract (if any)
 
-### Config / types
+**None for v1.** No Postgres fields, no Better Auth hooks, no BFF routes.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `source_type` | `"bluesky"` | On `source_subscriptions` and `article_sources` |
-| `config.handle` | string | Required; normalized as above before insert/uniqueness |
-| `config.did` | string? | Optional; may be filled after successful resolve — not required for create |
-| `SourceTypeV1` | include `"bluesky"` | `apps/web` + `packages/api-client` (today excludes bluesky) |
-| `SourceSubscriptionConfig` | add `handle?`, `did?` | Keep `rssUrl` / `mode` for other types |
+| Field / Endpoint | Type | Source | Notes |
+|------------------|------|--------|-------|
+| — | — | — | Close `api` (#160) as skipped / not-applicable. |
 
-### DB
+Client contract (not HTTP):
 
-| Change | Detail |
-|--------|--------|
-| Unique index | Partial unique on `(user_id, (config->>'handle'))` where `source_type = 'bluesky'` (name e.g. `source_subscriptions_user_bluesky_handle_uidx`) |
-| Articles | **No** new columns for v1 (reuse title/summary/author/url/raw) |
-| Migrations | New Drizzle migration for the unique index only (unless implementer stores DID and needs nothing else) |
+| Storage key | Type | Notes |
+|-------------|------|-------|
+| `newsroom.appearance.theme` | string enum | `paper` \| `mist` \| `slate` \| `inkwash` |
+| `newsroom.appearance.density` | string enum | `comfortable` \| `compact` |
 
-### `NormalizedArticle` mapping (Bluesky)
+DOM:
 
-| Field | Required | Source |
-|-------|----------|--------|
-| `url` | yes | `https://bsky.app/profile/{handle\|did}/post/{rkey}` |
-| `title` | yes | First line / truncated post text |
-| `summary` | no | Full post text |
-| `author` | no | `post.author.displayName` or handle |
-| `publishedAt` | no | `post.record.createdAt` |
-| `externalId` | yes (prefer) | AT URI |
-| `raw` | no | Feed view item or post view (debug) |
-| `showTitle` / `durationSeconds` / `enclosureUrl` | unused | Leave unset |
-
-### HTTP API
-
-All existing Better Auth session rules apply.
-
-| Endpoint | Change |
-|----------|--------|
-| `POST /api/sources` | Accept `sourceType: "bluesky"` + `{ handle }`; stop returning `unsupported_source_type` for bluesky |
-| `GET /api/sources` | Return bluesky rows in list |
-| `PATCH /api/sources/:id` | Allow `enabled` / `config.handle` for bluesky rows |
-| `DELETE /api/sources/:id` | Unchanged (ownership-scoped) |
-| `GET /api/feed?source=bluesky` | Allow `bluesky` in source filter parser |
-| `GET /api/feed-catalog` | **No** Bluesky entries required |
-
-**Errors (unchanged codes):** `401`, `400` `{ "error": "invalid_config" }`, `409` `{ "error": "duplicate" }`, `400` `{ "error": "unsupported_source_type" }` only for truly unknown types.
-
-### Adapter factory
-
-Replace `StubSourceAdapter("bluesky")` with `BlueskyAdapter` in `createSourceAdapter`. Inject `fetch` for tests. Default AppView base as above.
-
-### Worker
-
-No new job type. Existing `ingest` loads enabled subscriptions including `bluesky`, calls adapter, upserts articles + `article_sources`. One subscription failure must not fail the whole job (same partial-success rules as today).
+| Attribute | On | Values |
+|-----------|-----|--------|
+| `data-theme` | `<html>` | same as theme enum |
+| `data-density` | `<html>` | same as density enum |
 
 ## Touchpoints
 
-- `packages/sources` — `BlueskyAdapter`, tests/fixtures; `create-adapter.ts`; export types/config
-- `packages/db` — migration + `SourceSubscriptionConfig`; seed optional example handle (nice-to-have, not required)
-- `apps/web/src/lib/sources.ts` + routes — allowlist bluesky; parse handle
-- `apps/web/src/lib/feed.ts` — `parseFeedSourceFilter` + feed projection if needed
-- `packages/api-client` — `SourceTypeV1` + create helpers
-- `apps/worker` — no special-case beyond factory (confirm ingest uses `createSourceAdapter`)
-- `apps/web` Sources + Feed UI — Add Bluesky form; filter option; labels
-- `docs/architecture.md`, `docs/feature-backlog.md` — status (docs task)
-- Must not contradict architecture: Bluesky via AT Proto **public** endpoints; X remains deferred
+- `apps/web/src/app/globals.css` — theme overrides, density tokens, control padding tighten
+- `apps/web/src/app/layout.tsx` — FOUC boot script; ensure `<html>` can receive `data-*`
+- `apps/web/src/components/settings-client.tsx` — Appearance block
+- `apps/web/src/lib/appearance.ts` (new, suggested) — keys, parse, apply, storage
+- Possibly tiny test for parse/allowlist helpers (`appearance.test.ts`)
+- `docs/architecture.md` (Clients / web paragraph) and/or `docs/decisions/` — document client-only appearance
+- Must not contradict `docs/architecture.md` ranking/API model; this is presentation-only
+- **Must not** change feed ranking, wipe, or settings rank-model API
 
 ## Out of scope
 
-- Bluesky OAuth, app passwords, posting, likes, follows, DMs, or storing user AT Proto credentials
-- Personal “Following” timeline / custom feeds / starter packs as subscription types
-- Firehose / Jetstream realtime ingest
-- `app.bsky.feed.searchPosts` (requires auth) or keyword search across Bluesky
-- Curated Bluesky account catalog
-- In-app Bluesky embed, image gallery, video, or thread UI
-- Using external link embeds as the article canonical URL
-- Changing HN / Substack / podcast adapters or ranking formulas beyond allowing bluesky-sourced text through the existing path
-- **Mobile Expo UI** (`#53`): defer entirely to `mobile-feed-topics`
-- X / Twitter adapter
-
-## Open questions (non-blocking)
-
-None product-blocking. Implementer may choose whether to persist resolved `did` on first successful fetch; if yes, prefer DID as `actor` on subsequent fetches when present, keep `handle` for UI.
+- Full dark mode / high-contrast a11y theme pack
+- Custom CSS, color pickers, wallpapers, per-route themes
+- Persisting appearance on `user` / syncing across devices (`multiuser-harden` follow-up)
+- Mobile / Expo
+- New component libraries (Radix themes, Tailwind theme plugins, etc.)
+- Changing brand accent per preset
+- Worker / ingest / rank behavior
 
 ---
 
@@ -162,37 +192,34 @@ None product-blocking. Implementer may choose whether to persist resolved `did` 
 
 ### Changes
 
-- **db:** `SourceSubscriptionConfig.handle` / `did`; migration `0011` partial unique `source_subscriptions_user_bluesky_handle_uidx`
-- **api:** `SourceTypeV1` includes `bluesky`; create/patch parse + normalize handle; `parseFeedSourceFilter` allows `bluesky`; `packages/api-client` types; `normalizeBlueskyHandle` in `@newsroom/sources`
-- **worker:** `BlueskyAdapter` (public AppView `getAuthorFeed`, skip reposts/empty); wired in `createSourceAdapter` (ingest unchanged)
-- **web:** Sources **Add Bluesky** form; list labels; feed filter option **Bluesky**
-- **mobile:** Deferred (`#53` closed → `mobile-feed-topics`)
-- **docs:** architecture Bluesky → v1; backlog ✅; README / `.env.example` `BLUESKY_APPVIEW_URL`
+- `apps/web/src/lib/appearance.ts` (+ test) — theme/density allowlists, localStorage keys, parse/apply/read/write, FOUC boot script string
+- `apps/web/src/app/layout.tsx` — inline boot script before paint
+- `apps/web/src/app/globals.css` — four `data-theme` atmospheres, `data-density=compact` spacing tokens, `--control-pad-*` tighten for buttons/inputs/selects/chips, filter fields hug content
+- `apps/web/src/components/settings-client.tsx` — Appearance block (swatches + density) above Ranking model; updated page lede
+- `docs/architecture.md` — Clients/web Appearance note
+- `docs/decisions/003-web-design-tokens.md` — addendum for client-only appearance
+- `#160` closed N/A (no API/DB)
 
 ### Verification
 
-- [x] `pnpm --filter @newsroom/sources test` (BlueskyAdapter fixtures + handle normalize)
-- [x] `apps/web` `sources.test.ts` + `feed.test.ts` unit tests
-- [x] typecheck: sources, web, api-client, db
-- [ ] Worker/web DB integration tests + live ingest — need local Postgres / migrate `0011` (manual)
+- [x] How tested: `appearance.test.ts` (4/4); `tsc --noEmit` clean; static acceptance checklist (copy, tokens, FOUC script, keys, no per-theme accent, no appearance API)
+- [ ] What remains manual: browser — switch presets/density, confirm Compact + Rank latest/Wipe, hard-reload FOUC with non-default theme
 
 ### Deviations from spec
 
-- Resolved `did` is accepted on adapter config and preferred as AppView `actor` when present, but ingest does **not** write `did` back onto `source_subscriptions.config` after fetch (handle-only storage in v1).
+- None
 
 ### Follow-ups
 
-- Bluesky account catalog / discovery polish
-- Optional: promote external link embeds to optional “open linked URL” affordance
-- Mobile Sources/Feed parity under `mobile-feed-topics`
-- Persist resolved DID on subscription after first successful fetch
-- Authenticated AppView features (search) only if product later requires them — would need credential story
+- Optional cross-device sync under `multiuser-harden`
+- Manual FOUC / visual QA in browser before merge
 
 ---
 
-## Handoff summary (for developer)
+## Handoff summary
 
-- Ship `source_type: "bluesky"` end-to-end: subscribe by normalized **handle/DID**, ingest via **unauthenticated** public AppView `getAuthorFeed` (`posts_no_replies`, skip pure reposts), upsert posts as articles with bsky.app canonical URLs.
-- Mirror **podcast** patterns for API allowlist, uniqueness index, Sources “Add …” UI, and feed `?source=` filter — without podcast media columns.
-- No Bluesky auth in Newsroom; Better Auth only. Defer Expo (`#53`) like podcast mobile.
-- Acceptance is observable: create/list/filter sources, ingest fixtures → ranked feed cards that open on Bluesky, tests + architecture/backlog docs on the `docs` task.
+- **Settings → Appearance:** four light atmospheres (`paper` / `mist` / `slate` / `inkwash`) + Comfortable/Compact density; live apply via `data-theme` / `data-density` on `<html>`.
+- **Persist v1:** `localStorage` keys `newsroom.appearance.theme` / `newsroom.appearance.density` only; FOUC boot script in root layout; **close `api` (#160) as N/A**.
+- **Tighten chrome:** reduce default button/input/select/chip padding and oversized filter `min-width`s (token-first); search may stay wider.
+- **Keep teal accent + ADR 003 button/radius rules;** presets only retune paper/surface/gradient atmosphere.
+- **Verify:** switch presets + density, reload keeps choice, controls tighter on Feed filters, Rank latest / Wipe stay usable; then docs note client-only appearance.

@@ -42,3 +42,17 @@ The product direction (`docs/feature-backlog.md` § C) asked for a more consider
 - `--surface` is defined, so `var(--surface, #fff)` fallbacks are gone; changing the input background is now a one-line token change.
 - New UI must pick primary or `.ghost`. Anything that needs a third weight should change this record rather than add a class.
 - Dark mode remains unimplemented; when it lands, `--surface`, `--accent-warm` and the radius scale are the override points.
+
+## Addendum: client appearance (`introduce-themes`, 2026-07-30)
+
+**Decision.** Light atmosphere presets and reading density are client-only presentation:
+
+- Attributes on `<html>`: `data-theme` (`paper` | `mist` | `slate` | `inkwash`) and `data-density` (`comfortable` | `compact`).
+- Persistence: `localStorage` keys `newsroom.appearance.theme` / `newsroom.appearance.density` only — no Postgres columns or BFF routes.
+- Presets retune `--paper` / `--panel` / `--surface` / borders and `body` gradient stops only. `--accent`, fonts, and the radius scale stay fixed (ADR decisions above).
+- Density overrides spacing tokens (`--space-row`, `--space-filter-gap`, etc.); control tighten uses `--control-pad-y` / `--control-pad-x` always-on.
+- FOUC: inline boot script in `apps/web/src/app/layout.tsx` reads the same keys/allowlists before paint.
+
+**Alternatives rejected for v1.** Server-synced user preference columns (defer to optional `multiuser-harden`); dark mode / custom CSS / per-route themes (out of scope).
+
+**Consequence.** Clearing site data resets appearance; settings do not sync across devices or browsers.
