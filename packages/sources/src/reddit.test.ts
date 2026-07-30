@@ -94,7 +94,7 @@ describe("mapListingChild", () => {
     const link = mapListingChild(SAMPLE_LISTING.data.children[0]!, "programming");
     assert.ok(link);
     assert.equal(link.title, "Interesting link post");
-    assert.equal(link.author, "u/alice · r/programming");
+    assert.equal(link.author, "u/alice");
     assert.equal(link.externalId, "t3_abc123");
     assert.ok(link.url.includes("reddit.com"));
     assert.ok(link.summary?.includes("example.com"));

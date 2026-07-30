@@ -219,9 +219,7 @@ export function mapListingChild(
   }
 
   const summary = buildSummary(selftext, data.url, data.domain);
-  const author = authorRaw
-    ? `u/${authorRaw} · r/${subreddit}`
-    : `r/${subreddit}`;
+  const author = authorRaw ? `u/${authorRaw}` : undefined;
   const publishedAt =
     typeof data.created_utc === "number" && Number.isFinite(data.created_utc)
       ? new Date(data.created_utc * 1000)
