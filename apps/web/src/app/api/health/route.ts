@@ -1,5 +1,8 @@
 import { sql } from "drizzle-orm";
-import { OllamaProvider } from "@newsroom/ai";
+import {
+  createAiProvider,
+  resolveAiProviderKind,
+} from "@newsroom/ai";
 import { getDb } from "@newsroom/db";
 import type { HealthResponse } from "@newsroom/api-client";
 
@@ -15,9 +18,9 @@ async function checkDatabase(): Promise<"ok" | "error"> {
   }
 }
 
-async function checkOllama(): Promise<"ok" | "error"> {
+async function checkAi(): Promise<"ok" | "error"> {
   try {
-    const provider = new OllamaProvider({ timeoutMs: 3_000 });
+    const provider = createAiProvider({ timeoutMs: 3_000 });
     return (await provider.health()) ? "ok" : "error";
   } catch {
     return "error";
@@ -25,18 +28,19 @@ async function checkOllama(): Promise<"ok" | "error"> {
 }
 
 export async function GET() {
-  const [database, ollama] = await Promise.all([checkDatabase(), checkOllama()]);
+  const [database, ai] = await Promise.all([checkDatabase(), checkAi()]);
 
   let status: HealthResponse["status"] = "ok";
-  if (database === "error" && ollama === "error") {
+  if (database === "error" && ai === "error") {
     status = "error";
-  } else if (database === "error" || ollama === "error") {
+  } else if (database === "error" || ai === "error") {
     status = "degraded";
   }
 
   const body: HealthResponse = {
     status,
-    checks: { database, ollama },
+    checks: { database, ai, ollama: ai },
+    aiProvider: resolveAiProviderKind(),
     timestamp: new Date().toISOString(),
   };
 

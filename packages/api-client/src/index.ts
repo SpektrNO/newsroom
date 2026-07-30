@@ -4,8 +4,16 @@ export type HealthResponse = {
   status: "ok" | "degraded" | "error";
   checks: {
     database: HealthCheckStatus;
+    /** Configured AI provider reachability (`AI_PROVIDER`). */
+    ai: HealthCheckStatus;
+    /**
+     * Legacy alias of `ai` (same value). Kept for older clients that still
+     * read `checks.ollama`.
+     */
     ollama: HealthCheckStatus;
   };
+  /** Operator-selected backend: ollama | openai | google */
+  aiProvider?: "ollama" | "openai" | "google";
   timestamp: string;
 };
 

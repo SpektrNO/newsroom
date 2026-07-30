@@ -6,9 +6,26 @@ export {
 export {
   OllamaProvider,
   ollamaJsonFormat,
-  resolveModelForTier,
   type OllamaProviderOptions,
 } from "./ollama.js";
+export {
+  OpenAiProvider,
+  openAiResponseFormat,
+  unwrapRankItemsPayload,
+  type OpenAiProviderOptions,
+} from "./openai.js";
+export {
+  GoogleAiProvider,
+  googleResponseSchema,
+  type GoogleAiProviderOptions,
+} from "./google.js";
+export {
+  createAiProvider,
+  resolveAiProviderKind,
+  resolveModelForTier,
+  type AiProviderKind,
+  type CreateAiProviderOptions,
+} from "./factory.js";
 export {
   scoreKeywordMatch,
   articleMatchesTopicKeywords,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { OllamaProvider, ollamaJsonFormat, resolveModelForTier } from "./ollama.js";
+import { OllamaProvider, ollamaJsonFormat } from "./ollama.js";
+import { resolveModelForTier } from "./factory.js";
 
 describe("ollamaJsonFormat", () => {
   it("uses rank-array schema only for ranking", () => {
