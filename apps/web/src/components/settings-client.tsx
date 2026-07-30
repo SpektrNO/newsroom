@@ -175,11 +175,14 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
                 type="button"
                 className="appearance-swatch"
                 data-theme-preview={id}
-                aria-label={THEME_LABELS[id]}
                 aria-pressed={theme === id}
-                title={THEME_LABELS[id]}
                 onClick={() => onThemeChange(id)}
-              />
+              >
+                <span className="appearance-swatch-preview" aria-hidden />
+                <span className="appearance-swatch-label">
+                  {THEME_LABELS[id]}
+                </span>
+              </button>
             ))}
           </div>
         </div>

@@ -1,9 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  APPEARANCE_BOOT_SCRIPT,
-  DEFAULT_DENSITY,
-  DEFAULT_THEME,
-} from "@/lib/appearance";
+import { APPEARANCE_BOOT_SCRIPT } from "@/lib/appearance";
 import "./globals.css";
 
 export default function RootLayout({
@@ -11,13 +7,11 @@ export default function RootLayout({
 }: {
   children: ReactNode;
 }): ReactNode {
+  // Do not set data-theme / data-density as React props — they would reset to
+  // defaults on hydrate/navigation and fight localStorage + Settings. The boot
+  // script (and applyAppearance) own those attributes.
   return (
-    <html
-      lang="en"
-      data-theme={DEFAULT_THEME}
-      data-density={DEFAULT_DENSITY}
-      suppressHydrationWarning
-    >
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: APPEARANCE_BOOT_SCRIPT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

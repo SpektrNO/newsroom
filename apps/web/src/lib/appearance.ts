@@ -39,8 +39,8 @@ export function applyAppearance(
   density: AppearanceDensity,
   root: HTMLElement = document.documentElement,
 ): void {
-  root.dataset.theme = theme;
-  root.dataset.density = density;
+  root.setAttribute("data-theme", theme);
+  root.setAttribute("data-density", density);
 }
 
 export function readStoredAppearance(): {
