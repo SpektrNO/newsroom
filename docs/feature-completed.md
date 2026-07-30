@@ -33,6 +33,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-30 | `introduce-themes` | User themes (background + density) + tighter controls | #158 | Completed via spec→implement pipeline |
 | 2026-07-30 | `source-reddit` | Reddit adapter (subreddits → ranked feed) | #165 | Completed via spec→implement pipeline |
 | 2026-07-30 | `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (+ optional BYOK) | #175 | Completed via spec→implement pipeline |
+| 2026-07-30 | `ai-cloud-providers-byok` | Per-user encrypted OpenAI/Google keys (BYOK) | #183 | Completed via spec→implement pipeline |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -49,6 +50,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `hybrid-rank-feed` | Keyword shortlist, Ollama rank, feed API | 2026-07-24 | `docs/architecture.md` | topics/feed APIs + worker rank; no UI polish |
 | `ai-confirmed-topic-membership` | AI narrows keyword-matched topics; feed topic filter uses it | 2026-07-28 | `docs/decisions/004-ai-confirmed-topic-membership.md` | Lean in-chat implement |
 | `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (+ optional BYOK) | 2026-07-30 | `docs/architecture.md` | Completed via spec→implement pipeline |
+| `ai-cloud-providers-byok` | Per-user encrypted OpenAI/Google keys (BYOK) | 2026-07-30 | `docs/architecture.md` | Completed via spec→implement pipeline |
 ## C. Web client
 
 | ID | Feature | Completed | Spec | Notes |
