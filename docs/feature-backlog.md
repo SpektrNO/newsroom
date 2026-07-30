@@ -123,6 +123,7 @@ Notes for `ai-token-metering`:
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
 | `web-elegant-refresh` | Elegant visual/UX polish across web client | ✅ | `docs/architecture.md` |
+| `introduce-themes` | User themes (background + density) + tighter controls | ⬜ | `docs/architecture.md` |
 
 Notes for `wipe-rankings`:
 
@@ -145,6 +146,18 @@ Notes for `web-elegant-refresh`:
 - **Tokens:** define `--surface` (currently referenced but undefined); add `--radius-sm` / `--radius-md` / `--radius-lg` reused consistently for inputs, chips, buttons, panels.
 - **Orphan classes:** give `.feed-page` / `.chat-page` / `.manage-main` real layout rules or remove from JSX if redundant — decide per-case, note in handoff.
 - **Docs:** short `docs/decisions/00N-web-design-tokens.md` capturing the button/radius/select/chip conventions for future UI consistency.
+
+Notes for `introduce-themes`:
+
+- **Goal:** Signed-in users pick a light **atmosphere** (background / page tint) and a slight **view density**, and the chrome (buttons, selects, chips) stops wasting horizontal/vertical space — calmer personalization without a full theme engine.
+- **Background:** A small fixed set of presets (e.g. 3–5) that only retune CSS variables already used for body atmosphere (`--bg`, gradient stops, maybe `--surface` / `--border` soft variants). **Not** arbitrary color pickers. Keep the editorial teal accent; do not invent a parallel brand palette per theme. Avoid the usual AI-theme traps (purple gradients, cream+terracotta, broadsheet hairlines) already called out in design rules.
+- **View-mode:** One compact toggle — **Comfortable** (current) vs **Compact** (tighter feed item padding, filter gaps, pipeline row). Density is orthogonal to background preset.
+- **Tighten controls (required in same feature):** Shrink default padding/min-width on ghost buttons, native `<select>`s, filter fields, and chip rows so View/Sort/Sources controls hug their content; search field can stay slightly wider. No new component library. Prefer token tweaks (`--radius-*`, shared control height) over one-off overrides.
+- **Surface:** Settings section **Appearance** (or **Theme**) with preset swatches + density control; apply live via `data-theme` / `data-density` on `<html>` or app shell. Optional: tiny shortcut later — Settings is enough for v1.
+- **Persist (v1):** `localStorage` per browser (simplest). Document that clearing site data resets appearance. Follow-up under `multiuser-harden` if we want `user` columns / API so theme follows login across devices.
+- **Scope:** Authenticated web shell (Feed, Topics, Sources, Advisor, Settings). **Out of scope v1:** full dark mode, custom CSS, per-route themes, mobile/Expo, user-uploaded wallpapers, high-contrast a11y theme beyond what presets naturally provide.
+- **Depends on:** Tokens from `web-elegant-refresh`. No ranking/API changes.
+- **Verify:** Switch presets + density; reload keeps choice; controls visibly tighter on Feed filters; no layout jump that hides Rank latest / Wipe.
 
 Notes for `web-topics-tree` (shipped):
 
