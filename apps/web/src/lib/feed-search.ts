@@ -105,7 +105,6 @@ export function candidateFeedUrls(domain: string): string[] {
     `https://${d}/atom.xml`,
     `https://www.${d}/feed`,
     `https://www.${d}/atom.xml`,
-    `https://www.${d}/toppsaker.rss`,
   ];
 }
 
