@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import {
   ApiError,
   type FeedCatalogEntry,
+  type FeedSearchHit,
   type Source,
   type SourceCategoryV1,
 } from "@newsroom/api-client";
@@ -147,6 +148,13 @@ export function SourcesClient(): ReactNode {
   const [suggestedTab, setSuggestedTab] =
     useState<FeedCatalogCategory>("websites");
   const [meOpen, setMeOpen] = useState(false);
+  const [feedSearchQuery, setFeedSearchQuery] = useState("");
+  const [feedSearchResults, setFeedSearchResults] = useState<FeedSearchHit[]>(
+    [],
+  );
+  const [feedSearchNote, setFeedSearchNote] = useState<string | null>(null);
+  const [feedSearching, setFeedSearching] = useState(false);
+  const [addingFeedUrl, setAddingFeedUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -217,9 +225,79 @@ export function SourcesClient(): ReactNode {
     });
   }, [catalog, sources, suggestedTab, tagFilter, catalogSearch]);
 
+  function clearFeedSearch() {
+    setFeedSearchResults([]);
+    setFeedSearchNote(null);
+    setFeedSearchQuery("");
+  }
+
   function selectAddKind(kind: AddKind) {
     setAddKind(kind);
     setFormError(null);
+    clearFeedSearch();
+  }
+
+  const showFeedSearch =
+    addKind === "website" ||
+    addKind === "newsletter" ||
+    addKind === "podcast" ||
+    (addKind === "community" && communityMode === "rss");
+
+  async function onFeedSearch() {
+    setFeedSearchNote(null);
+    setFeedSearchResults([]);
+    const q = feedSearchQuery.trim();
+    if (!q) {
+      setFeedSearchNote("Enter a site or name to search.");
+      return;
+    }
+    setFeedSearching(true);
+    try {
+      const res = await api.searchFeeds({ query: q });
+      setFeedSearchResults(res.results);
+      if (res.results.length === 0) {
+        setFeedSearchNote("No feed-like URLs found — try another query or paste a URL.");
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.push("/sign-in?callbackUrl=%2Fsources");
+        return;
+      }
+      if (
+        err instanceof ApiError &&
+        err.code === "feed_search_not_configured"
+      ) {
+        setFeedSearchNote("Feed search isn’t configured on this deploy.");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 502) {
+        setFeedSearchNote("Search unavailable — try again or paste a URL.");
+        return;
+      }
+      setFeedSearchNote("Couldn't search — try again.");
+    } finally {
+      setFeedSearching(false);
+    }
+  }
+
+  async function addSearchedFeed(hit: FeedSearchHit) {
+    setFormError(null);
+    setFeedSearchNote(null);
+    setAddingFeedUrl(hit.url);
+    try {
+      const res = await api.createSource({
+        category: addKind,
+        adapter: "rss",
+        config: { rssUrl: hit.url },
+      });
+      rememberSource(res.source);
+      setRssUrl("");
+      setMeOpen(true);
+    } catch (err) {
+      mapSourceError(err, setFormError);
+    } finally {
+      setAddingFeedUrl(null);
+    }
   }
 
   async function addHackerNews() {
@@ -623,11 +701,77 @@ export function SourcesClient(): ReactNode {
                         : "topics-filter-btn"
                     }
                     aria-pressed={communityMode === mode}
-                    onClick={() => setCommunityMode(mode)}
+                    onClick={() => {
+                      setCommunityMode(mode);
+                      clearFeedSearch();
+                      setFormError(null);
+                    }}
                   >
                     {label}
                   </button>
                 ))}
+              </div>
+            ) : null}
+            {showFeedSearch ? (
+              <div className="source-feed-search">
+                <label className="filter-field">
+                  <span className="filter-label">Find a feed</span>
+                  <input
+                    type="search"
+                    value={feedSearchQuery}
+                    onChange={(e) => setFeedSearchQuery(e.target.value)}
+                    placeholder="Site or name (e.g. nrk.no)"
+                    autoComplete="off"
+                    disabled={feedSearching || pending}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void onFeedSearch();
+                      }
+                    }}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={feedSearching || pending}
+                    onClick={() => void onFeedSearch()}
+                  >
+                    {feedSearching ? "Searching…" : "Search"}
+                  </button>
+                </div>
+                {feedSearchNote ? (
+                  <p className="helper">{feedSearchNote}</p>
+                ) : null}
+                {feedSearchResults.length > 0 ? (
+                  <ul className="manage-list source-feed-search-results">
+                    {feedSearchResults.map((hit) => (
+                      <li key={hit.url} className="manage-row">
+                        <div className="manage-main">
+                          <p className="manage-title">{hit.title}</p>
+                          <p className="manage-meta">{hit.url}</p>
+                          {hit.snippet ? (
+                            <p className="helper">{hit.snippet}</p>
+                          ) : null}
+                        </div>
+                        <div className="manage-actions">
+                          <button
+                            type="button"
+                            disabled={
+                              pending ||
+                              addingFeedUrl !== null ||
+                              feedSearching
+                            }
+                            onClick={() => void addSearchedFeed(hit)}
+                          >
+                            {addingFeedUrl === hit.url ? "Adding…" : "Add"}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             ) : null}
             <form className="form" onSubmit={(e) => void onAddSubmit(e)}>
@@ -675,7 +819,8 @@ export function SourcesClient(): ReactNode {
                 </p>
               ) : addKind === "website" ? (
                 <p className="helper">
-                  Magazines, newspapers, and independent blogs.
+                  Magazines, newspapers, and independent blogs. Search finds
+                  RSS/Atom URLs, or paste one below.
                 </p>
               ) : null}
             </form>
