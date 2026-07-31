@@ -15,6 +15,7 @@ import {
   parseFeedSort,
   parseFeedSourceFilter,
   parseFeedSourceFilters,
+  parseFeedSourceId,
   parseFeedStatusFilter,
   parseFeedTopicIds,
   passesSearchFilter,
@@ -162,6 +163,16 @@ describe("feed query parsers", () => {
     );
   });
 
+  it("validates sourceId as a UUID", () => {
+    assert.equal(parseFeedSourceId(null), null);
+    assert.equal(parseFeedSourceId(""), null);
+    assert.equal(
+      parseFeedSourceId("550e8400-e29b-41d4-a716-446655440000"),
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+    assert.equal(parseFeedSourceId("not-a-uuid"), "invalid");
+  });
+
   it("matches articles against multi source allow-list", () => {
     const types = new Set(["community", "social_media"]);
     assert.equal(passesSourceFilter(types, ["podcast"]), false);
@@ -247,7 +258,11 @@ describe("feed query parsers", () => {
     );
     assert.equal(
       feedSourceSubscriptionLabel("hackernews", { mode: "new" }),
-      "New",
+      "Hacker News",
+    );
+    assert.equal(
+      feedSourceSubscriptionLabel("hackernews", { mode: "top" }),
+      "Hacker News",
     );
   });
 });

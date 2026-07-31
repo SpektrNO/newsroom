@@ -124,7 +124,7 @@ Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environmen
 | `GET` | `/api/topic-tree` | Curated catalog `{ version, nodes[] }` (selectable leaves for topic names) |
 | `GET/POST` | `/api/topics` | List / create (caller’s topics only; `name` = catalog leaf label) |
 | `PATCH/DELETE` | `/api/topics/:id` | Update / delete own topic |
-| `GET` | `/api/feed?cursor=&topic=&source=&status=&limit=` | Ranked scores; default excludes `dismissed`; `status=saved` (etc.) filters to that status; returns `rankedCount` / `evaluatedCount` / `articlesCount` pipeline counters |
+| `GET` | `/api/feed?cursor=&topic=&source=&status=&limit=` | Ranked scores; default is `new`/`seen` only; `status=saved` (etc.) filters to that status; returns `rankedCount` / `evaluatedCount` / `articlesCount` pipeline counters |
 | `POST` | `/api/feed/:articleId/seen\|saved\|dismissed` | Update status; `404` if no score row |
 
 Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md). Health, seed, Compose: [docs/ops-local.md](docs/ops-local.md).

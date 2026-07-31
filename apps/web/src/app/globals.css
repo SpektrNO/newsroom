@@ -535,6 +535,15 @@ button.danger-text:hover {
   gap: 0.4rem;
 }
 
+.source-subscription-filter {
+  margin-top: 0.25rem;
+  max-width: 22rem;
+}
+
+.source-subscription-filter select {
+  width: 100%;
+}
+
 .feed-view-sort {
   flex: 1 1 100%;
   display: flex;

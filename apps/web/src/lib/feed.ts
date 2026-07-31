@@ -189,6 +189,19 @@ export function parseFeedSourceFilters(
   return out;
 }
 
+const SOURCE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Single subscription id from `sourceId` (UUID). Empty = all subscriptions. */
+export function parseFeedSourceId(
+  raw: string | null,
+): string | null | "invalid" {
+  if (raw === null || raw === "") return null;
+  const id = raw.trim();
+  if (!SOURCE_ID_RE.test(id)) return "invalid";
+  return id;
+}
+
 /** True when the article has at least one of the allowed source categories. */
 export function passesSourceFilter(
   articleCategories: Set<string> | undefined,
@@ -202,7 +215,7 @@ export function passesSourceFilter(
   return false;
 }
 
-/** When omitted, feed excludes dismissed. When set, only that status. */
+/** When omitted, feed shows `new`/`seen` only. When set, only that status. */
 export function parseFeedStatusFilter(
   raw: string | null,
 ): UserArticleScoreStatus | null | "invalid" {
@@ -281,7 +294,7 @@ export function feedSourceSubscriptionLabel(
   } | null | undefined,
 ): string | null {
   if (adapter === "hackernews") {
-    return config?.mode === "new" ? "New" : "Top";
+    return "Hacker News";
   }
   if (adapter === "bluesky") {
     if (typeof config?.handle !== "string" || !config.handle.trim()) return null;
@@ -304,6 +317,23 @@ export function feedSourceSubscriptionLabel(
     }
   }
   return null;
+}
+
+/** Display title for a subscription in filters / lists. */
+export function sourceSubscriptionTitle(source: {
+  adapter: string;
+  category: string;
+  config: {
+    rssUrl?: unknown;
+    handle?: unknown;
+    mode?: unknown;
+    subreddit?: unknown;
+  } | null | undefined;
+}): string {
+  return (
+    feedSourceSubscriptionLabel(source.adapter, source.config) ??
+    feedSourceTypeLabel(source.category)
+  );
 }
 
 /**

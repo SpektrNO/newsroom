@@ -81,6 +81,12 @@ describe("isFeedLikeUrl", () => {
   it("rejects non-feed pages", () => {
     assert.equal(isFeedLikeUrl("https://www.wired.com/"), false);
     assert.equal(isFeedLikeUrl("https://nrk.no/nyheter"), false);
+    assert.equal(
+      isFeedLikeUrl(
+        "https://static.nrk.no/publisering/kurator-visning/assets/browserconfig.xml",
+      ),
+      false,
+    );
   });
 });
 
@@ -115,6 +121,23 @@ describe("extractAlternateFeedLinks", () => {
     );
     assert.ok(urls.includes("https://www.wired.com/feed/rss"));
     assert.ok(urls.includes("https://www.wired.com/atom.xml"));
+  });
+
+  it("reads multiline NRK-style alternate link tags", () => {
+    const html = `
+      <link
+        rel="alternate"
+        type="application/rss+xml"
+        title="Toppsaker fra nrk.no"
+        href="https://www.nrk.no/toppsaker.rss"
+      />
+    `;
+    const urls = extractAlternateFeedLinks(
+      html,
+      "https://www.nrk.no/",
+      "nrk.no",
+    );
+    assert.deepEqual(urls, ["https://www.nrk.no/toppsaker.rss"]);
   });
 });
 
@@ -243,5 +266,76 @@ describe("searchFeedsViaLangSearch", () => {
       fetchImpl: async () => new Response("nope", { status: 500 }),
     });
     assert.deepEqual(result, { ok: false, error: "upstream" });
+  });
+
+  it("finds NRK toppsaker from homepage alternate without soft-probing", async () => {
+    const fetched: string[] = [];
+    const result = await searchFeedsViaLangSearch({
+      query: "nrk.no feed",
+      domainHint: "nrk.no",
+      apiKey: "test-key",
+      fetchImpl: async (input) => {
+        const url = String(input);
+        fetched.push(url);
+        if (url.includes("langsearch.com")) {
+          return new Response(
+            JSON.stringify({ code: 200, data: { webPages: { value: [] } } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url === "https://www.nrk.no/" || url === "https://nrk.no/") {
+          return new Response(
+            `<link
+              rel="alternate"
+              type="application/rss+xml"
+              href="https://www.nrk.no/toppsaker.rss"
+            />`,
+            { status: 200, headers: { "content-type": "text/html" } },
+          );
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.ok(
+      result.results.some((h) => h.url === "https://www.nrk.no/toppsaker.rss"),
+    );
+    assert.ok(!fetched.some((u) => u.includes("/rss")));
+  });
+
+  it("soft-probes /rss when homepage has no feeds", async () => {
+    const result = await searchFeedsViaLangSearch({
+      query: "example.com feed",
+      domainHint: "example.com",
+      apiKey: "test-key",
+      fetchImpl: async (input) => {
+        const url = String(input);
+        if (url.includes("langsearch.com")) {
+          return new Response(
+            JSON.stringify({ code: 200, data: { webPages: { value: [] } } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.endsWith("example.com/") || url.endsWith("example.com")) {
+          return new Response("<html><body>no feeds</body></html>", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          });
+        }
+        if (url.includes("/rss")) {
+          return new Response(
+            `<a href="https://www.example.com/news.rss">News</a>`,
+            { status: 200, headers: { "content-type": "text/html" } },
+          );
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.ok(
+      result.results.some((h) => h.url === "https://www.example.com/news.rss"),
+    );
   });
 });

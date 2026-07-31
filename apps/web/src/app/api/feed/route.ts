@@ -11,7 +11,6 @@ import {
   isNotNull,
   isNull,
   lt,
-  ne,
   or,
   sql,
   type SQL,
@@ -46,6 +45,7 @@ import {
   parseFeedSearchQuery,
   parseFeedSort,
   parseFeedSourceFilters,
+  parseFeedSourceId,
   parseFeedStatusFilter,
   parseFeedTopicIds,
   passesTopicFilter,
@@ -84,6 +84,26 @@ function articleHasSourceCategories(userId: string, categories: string[]): SQL {
             isNull(sourceSubscriptions.userId),
             eq(sourceSubscriptions.userId, userId),
           ),
+        ),
+      ),
+  );
+}
+
+/** Article is linked to a specific subscription owned by this user. */
+function articleHasSourceSubscription(userId: string, sourceId: string): SQL {
+  return exists(
+    getDb()
+      .select({ id: articleSources.id })
+      .from(articleSources)
+      .innerJoin(
+        sourceSubscriptions,
+        eq(sourceSubscriptions.id, articleSources.sourceSubscriptionId),
+      )
+      .where(
+        and(
+          eq(articleSources.articleId, userArticleScores.articleId),
+          eq(articleSources.sourceSubscriptionId, sourceId),
+          eq(sourceSubscriptions.userId, userId),
         ),
       ),
   );
@@ -224,6 +244,7 @@ async function loadFeedCounts(args: {
   topicKeywords: string[] | null;
   topicInheritedKeywords: string[] | null;
   sourceFilter: string[] | null;
+  sourceId: string | null;
   searchQuery: string | null;
 }): Promise<{
   matchedCount: number;
@@ -236,7 +257,7 @@ async function loadFeedCounts(args: {
   const statusCondition =
     args.statusFilter !== null
       ? eq(userArticleScores.status, args.statusFilter)
-      : ne(userArticleScores.status, "dismissed");
+      : inArray(userArticleScores.status, ["new", "seen"]);
   const baseWhere = and(
     eq(userArticleScores.userId, args.userId),
     statusCondition,
@@ -264,11 +285,16 @@ async function loadFeedCounts(args: {
     args.sourceFilter !== null && args.sourceFilter.length > 0
       ? articleHasSourceCategories(args.userId, args.sourceFilter)
       : null;
+  const sourceIdCond =
+    args.sourceId !== null
+      ? articleHasSourceSubscription(args.userId, args.sourceId)
+      : null;
   const scoredWhere = and(
     baseWhere,
     ...(recency ? [recency] : []),
     ...searchConds,
     ...(sourceCond ? [sourceCond] : []),
+    ...(sourceIdCond ? [sourceIdCond] : []),
   )!;
 
   // Recency (+ search/source) are SQL; topic still needs an app scan.
@@ -345,6 +371,7 @@ export async function GET(request: Request) {
   const cursorRaw = url.searchParams.get("cursor");
   const topicIds = parseFeedTopicIds(url);
   const sourceFilters = parseFeedSourceFilters(url);
+  const sourceIdRaw = parseFeedSourceId(url.searchParams.get("sourceId"));
   const statusFilter = parseFeedStatusFilter(url.searchParams.get("status"));
   const searchQuery = parseFeedSearchQuery(url.searchParams.get("q"));
   const sort = parseFeedSort(url.searchParams.get("sort"));
@@ -353,6 +380,7 @@ export async function GET(request: Request) {
   if (
     topicIds === "invalid" ||
     sourceFilters === "invalid" ||
+    sourceIdRaw === "invalid" ||
     statusFilter === "invalid" ||
     searchQuery === "invalid" ||
     sort === "invalid" ||
@@ -365,6 +393,22 @@ export async function GET(request: Request) {
   const feedSort: FeedSort = sort;
   const feedOrder: FeedOrder = order;
   const sourceFilter = sourceFilters.length > 0 ? sourceFilters : null;
+  let sourceId: string | null = sourceIdRaw;
+  if (sourceId !== null) {
+    const [owned] = await getDb()
+      .select({ id: sourceSubscriptions.id })
+      .from(sourceSubscriptions)
+      .where(
+        and(
+          eq(sourceSubscriptions.id, sourceId),
+          eq(sourceSubscriptions.userId, authResult.userId),
+        ),
+      )
+      .limit(1);
+    if (!owned) {
+      return Response.json({ error: "invalid_filter" }, { status: 400 });
+    }
+  }
 
   let cursor: FeedCursor | null = null;
   if (cursorRaw) {
@@ -418,7 +462,7 @@ export async function GET(request: Request) {
     eq(userArticleScores.userId, authResult.userId),
     statusFilter !== null
       ? eq(userArticleScores.status, statusFilter)
-      : ne(userArticleScores.status, "dismissed"),
+      : inArray(userArticleScores.status, ["new", "seen"]),
   ];
   const listRecency = feedRecencyCondition();
   if (listRecency) conditions.push(listRecency);
@@ -431,6 +475,9 @@ export async function GET(request: Request) {
   // they sit below the previous top-N over-fetch window.
   if (sourceFilter !== null) {
     conditions.push(articleHasSourceCategories(authResult.userId, sourceFilter));
+  }
+  if (sourceId !== null) {
+    conditions.push(articleHasSourceSubscription(authResult.userId, sourceId));
   }
 
   // Topic filter still needs an app-layer pass (matchedTopicIds + legacy keyword).
@@ -465,6 +512,7 @@ export async function GET(request: Request) {
       topicKeywords,
       topicInheritedKeywords,
       sourceFilter,
+      sourceId,
       searchQuery,
     }),
   ]);

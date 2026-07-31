@@ -22,8 +22,10 @@ export type StoredFeedPrefs = {
   view: FeedViewFilter;
   sort: FeedSortField;
   order: FeedSortOrder;
-  /** Empty = all sources. */
+  /** Empty = all source types. */
   sources: FeedSourceFilter[];
+  /** Specific subscription id, or null = all sources. */
+  sourceId: string | null;
   /** Empty = all topics. */
   topicIds: string[];
   topicsOpen: boolean;
@@ -34,6 +36,7 @@ export const DEFAULT_FEED_PREFS: StoredFeedPrefs = {
   sort: "score",
   order: "desc",
   sources: [],
+  sourceId: null,
   topicIds: [],
   topicsOpen: true,
 };
@@ -89,6 +92,12 @@ function parseTopicIds(value: unknown): string[] {
   return out;
 }
 
+function parseSourceId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const id = value.trim();
+  return id || null;
+}
+
 /** Drop topic ids that are no longer in the user's following list. */
 export function pruneTopicIds(
   topicIds: string[],
@@ -96,6 +105,16 @@ export function pruneTopicIds(
 ): string[] {
   const valid = new Set(validIds);
   return topicIds.filter((id) => valid.has(id));
+}
+
+/** Keep sourceId only when it still exists in the user's subscriptions. */
+export function pruneSourceId(
+  sourceId: string | null,
+  validIds: Iterable<string>,
+): string | null {
+  if (!sourceId) return null;
+  const valid = new Set(validIds);
+  return valid.has(sourceId) ? sourceId : null;
 }
 
 export function readStoredFeedPrefs(): StoredFeedPrefs {
@@ -122,6 +141,7 @@ export function readStoredFeedPrefs(): StoredFeedPrefs {
       sort: parseSort(obj.sort),
       order: parseOrder(obj.order),
       sources: parseSources(obj.sources),
+      sourceId: parseSourceId(obj.sourceId),
       topicIds: parseTopicIds(obj.topicIds),
       topicsOpen:
         typeof obj.topicsOpen === "boolean"

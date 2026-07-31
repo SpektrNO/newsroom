@@ -172,9 +172,11 @@ export type ListFeedOptions = {
   topics?: string[];
   /** Single source category (legacy). Prefer `sources` for multi-select. */
   source?: SourceCategoryV1;
-  /** Source categories to include (OR). Omitted / empty = all sources. */
+  /** Source categories to include (OR). Omitted / empty = all source types. */
   sources?: SourceCategoryV1[];
-  /** When set, only items with this status. When omitted, API excludes dismissed. */
+  /** Single subscription id. Omitted / empty = all sources. */
+  sourceId?: string;
+  /** When set, only items with this status. When omitted, API returns `new`/`seen` only (not saved/dismissed). */
   status?: FeedItemStatus;
   /** Free-text find-in-feed (title / summary / reason). */
   q?: string;
@@ -444,6 +446,9 @@ export class ApiClient {
     ].filter(Boolean);
     for (const category of sourceCategories) {
       params.append("source", category);
+    }
+    if (options.sourceId?.trim()) {
+      params.set("sourceId", options.sourceId.trim());
     }
     if (options.status) params.set("status", options.status);
     if (options.q?.trim()) params.set("q", options.q.trim());

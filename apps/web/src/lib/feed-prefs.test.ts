@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   DEFAULT_FEED_PREFS,
+  pruneSourceId,
   pruneTopicIds,
   readStoredFeedPrefs,
   writeStoredFeedPrefs,
@@ -31,6 +32,7 @@ describe("feed-prefs", () => {
         sort: "date",
         order: "asc",
         sources: ["podcast", "community", "podcast"],
+        sourceId: "sub-1",
         topicIds: ["a", "b", "a"],
         topicsOpen: false,
       });
@@ -39,6 +41,7 @@ describe("feed-prefs", () => {
         sort: "date",
         order: "asc",
         sources: ["podcast", "community"],
+        sourceId: "sub-1",
         topicIds: ["a", "b"],
         topicsOpen: false,
       });
@@ -87,11 +90,18 @@ describe("feed-prefs", () => {
         sort: "score",
         order: "desc",
         sources: ["social_media"],
+        sourceId: null,
         topicIds: ["ok"],
         topicsOpen: true,
       });
     } finally {
       g.localStorage = prev;
     }
+  });
+
+  it("prunes sourceId when the subscription is gone", () => {
+    assert.equal(pruneSourceId("keep", ["keep", "other"]), "keep");
+    assert.equal(pruneSourceId("gone", ["keep"]), null);
+    assert.equal(pruneSourceId(null, ["keep"]), null);
   });
 });

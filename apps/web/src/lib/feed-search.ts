@@ -7,11 +7,19 @@ export type FeedSearchHit = {
 };
 
 const LANGSEARCH_URL = "https://api.langsearch.com/v1/web-search";
-const FETCH_TIMEOUT_MS = 4_000;
+/** Publisher HTML can be slow (e.g. nrk.no ~12s); keep under BFF patience. */
+const FETCH_TIMEOUT_MS = 20_000;
+
+/** Soft-probe these paths only — never invent concrete feed URLs. */
+const WELL_KNOWN_FEED_INDEX_PATHS = [
+  "/rss",
+  "/feeds",
+  "/about/rss-feeds/",
+] as const;
 
 /** Path/query heuristics for likely RSS/Atom feed URLs (filter only — never invent). */
 const FEED_LIKE =
-  /(?:^|\/)(?:feed|feeds|rss|atom)(?:\/|$|\.)|\.(?:rss|xml|atom)(?:$|\?)|\/rss\.|\/atom\.|rss[-_]?feeds?|[?&](?:format|type)=(?:rss|atom|xml)/i;
+  /(?:^|\/)(?:feed|feeds|rss|atom)(?:\/|$|\.)|\.(?:rss|atom)(?:$|\?)|\/rss\.|\/atom\.|rss[-_]?feeds?|[?&](?:format|type)=(?:rss|atom|xml)/i;
 
 /** Hostname-like token with a TLD (e.g. nrk.no, www.bbc.co.uk). */
 const DOMAIN_TOKEN =
@@ -240,31 +248,45 @@ async function fetchText(
   fetchImpl: typeof fetch,
   timeoutMs: number,
 ): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchImpl(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        Accept: "text/html, application/xhtml+xml, */*;q=0.8",
-        "User-Agent": "NewsroomFeedSearch/1.0",
-      },
-    });
-    if (!res.ok) return null;
-    return await res.text();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+  const attempt = async (): Promise<string | null> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(url, {
+        method: "GET",
+        redirect: "follow",
+        signal: controller.signal,
+        headers: {
+          Accept: "text/html, application/xhtml+xml, */*;q=0.8",
+          "User-Agent":
+            "Mozilla/5.0 (compatible; NewsroomFeedSearch/1.0; +https://github.com/SpektrNO/newsroom)",
+        },
+      });
+      if (!res.ok) return null;
+      return await res.text();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const started = Date.now();
+  const first = await attempt();
+  if (first !== null) return first;
+  // Retry only on fast failures (connection reset), not full timeouts.
+  if (Date.now() - started >= timeoutMs - 250) return null;
+  return attempt();
 }
 
 /**
  * Discover feeds the standard way: publisher homepage
- * `<link rel="alternate" type="application/rss+xml">`, then expand any
- * RSS directory pages linked from that homepage.
+ * `<link rel="alternate" type="application/rss+xml">`, expand linked RSS
+ * directories, and soft-probe common index paths only when the homepage
+ * yielded nothing (never invent concrete feed URLs).
+ *
+ * Fetches are sequential on purpose: parallel (and sometimes back-to-back)
+ * GETs to the same host (e.g. nrk.no) often fail with undici "fetch failed".
  */
 export async function discoverFeedsFromPublisherSite(opts: {
   domain: string;
@@ -276,26 +298,59 @@ export async function discoverFeedsFromPublisherSite(opts: {
   const d = stripWww(opts.domain);
   const out: FeedSearchHit[] = [];
   const seen = new Set<string>();
-  const indexUrls = new Set<string>();
+  const origins = [`https://www.${d}/`, `https://${d}/`];
+  const fetchedIndexes = new Set<string>();
 
-  for (const origin of [`https://www.${d}/`, `https://${d}/`]) {
+  const absorbIndexPage = (indexUrl: string, html: string): boolean => {
+    const feeds = extractFeedUrlsFromText(html, indexUrl, d);
+    const alternates = extractAlternateFeedLinks(html, indexUrl, d);
+    // Soft-probed / empty pages must list feeds — don't invent hits.
+    if (feeds.length === 0 && alternates.length === 0) return false;
+    pushHit(out, seen, indexUrl, indexUrl, "Publisher RSS index");
+    for (const url of feeds) {
+      pushHit(out, seen, url, url, `From ${indexUrl}`);
+    }
+    for (const url of alternates) {
+      pushHit(out, seen, url, url, `From ${indexUrl}`);
+    }
+    return true;
+  };
+
+  const linkedIndexes = new Set<string>();
+
+  for (const origin of origins) {
     const html = await fetchText(origin, fetchImpl, timeoutMs);
     if (!html) continue;
-
     for (const url of extractAlternateFeedLinks(html, origin, d)) {
       pushHit(out, seen, url, url, `From ${origin}`);
     }
     for (const indexUrl of extractFeedIndexLinks(html, origin, d)) {
-      indexUrls.add(indexUrl);
+      linkedIndexes.add(indexUrl);
     }
+    // One working homepage is enough; skip apex redirect twin.
+    if (out.length > 0 || linkedIndexes.size > 0) break;
   }
 
-  for (const indexUrl of indexUrls) {
+  for (const indexUrl of linkedIndexes) {
+    if (fetchedIndexes.has(indexUrl)) continue;
+    fetchedIndexes.add(indexUrl);
     const html = await fetchText(indexUrl, fetchImpl, timeoutMs);
     if (!html) continue;
-    pushHit(out, seen, indexUrl, indexUrl, "Publisher RSS index");
-    for (const url of extractFeedUrlsFromText(html, indexUrl, d)) {
-      pushHit(out, seen, url, url, `From ${indexUrl}`);
+    absorbIndexPage(indexUrl, html);
+  }
+
+  // Soft-probe only when homepage discovery found nothing — avoids a second
+  // request to rate-limited publishers that already exposed rel=alternate.
+  if (out.length === 0) {
+    for (const path of WELL_KNOWN_FEED_INDEX_PATHS) {
+      const indexUrl = canonicalizeUrl(
+        new URL(path, `https://www.${d}/`).toString(),
+      );
+      if (!indexUrl || fetchedIndexes.has(indexUrl)) continue;
+      fetchedIndexes.add(indexUrl);
+      const html = await fetchText(indexUrl, fetchImpl, timeoutMs);
+      if (!html) continue;
+      if (absorbIndexPage(indexUrl, html)) break;
     }
   }
 

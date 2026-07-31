@@ -14,13 +14,20 @@ import {
   ApiError,
   type FeedItem,
   type RankFeedLatestResponse,
+  type Source,
   type Topic,
   type TopicTreeNode,
 } from "@newsroom/api-client";
 import { getBrowserApiClient } from "@/lib/api";
 import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
-import { formatEpisodeDuration, feedSourceTypeLabel, splitFeedReason } from "@/lib/feed";
 import {
+  formatEpisodeDuration,
+  feedSourceTypeLabel,
+  sourceSubscriptionTitle,
+  splitFeedReason,
+} from "@/lib/feed";
+import {
+  pruneSourceId,
   pruneTopicIds,
   readStoredFeedPrefs,
   writeStoredFeedPrefs,
@@ -214,10 +221,13 @@ export function FeedClient(): ReactNode {
   const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(
     () => new Set(),
   );
-  /** Empty set = show all sources (no source filter). */
+  /** Empty set = show all source types (no type filter). */
   const [selectedSources, setSelectedSources] = useState<Set<SourceFilter>>(
     () => new Set(),
   );
+  /** null = all individual sources. */
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [subscriptions, setSubscriptions] = useState<Source[]>([]);
   const [topicsReady, setTopicsReady] = useState(false);
   const [prefsHydrated, setPrefsHydrated] = useState(false);
   const [view, setView] = useState<ViewFilter>("feed");
@@ -264,6 +274,7 @@ export function FeedClient(): ReactNode {
     setSort(prefs.sort);
     setOrder(prefs.order);
     setSelectedSources(new Set(prefs.sources));
+    setSelectedSourceId(prefs.sourceId);
     setSelectedTopicIds(new Set(prefs.topicIds));
     setTopicsOpen(prefs.topicsOpen);
     setPrefsHydrated(true);
@@ -276,6 +287,7 @@ export function FeedClient(): ReactNode {
       sort,
       order,
       sources: [...selectedSources],
+      sourceId: selectedSourceId,
       topicIds: [...selectedTopicIds],
       topicsOpen,
     });
@@ -285,6 +297,7 @@ export function FeedClient(): ReactNode {
     sort,
     order,
     selectedSources,
+    selectedSourceId,
     selectedTopicIds,
     topicsOpen,
   ]);
@@ -302,8 +315,17 @@ export function FeedClient(): ReactNode {
 
   // Empty selection = all topics (no API filter). Any selection narrows the feed.
   const topicFilterActive = selectedTopicIds.size > 0;
-  // Empty selection = all sources. Any selection includes only those types.
+  // Empty selection = all source types. Any selection includes only those types.
   const sourceFilterActive = selectedSources.size > 0;
+
+  const sourceOptions = useMemo(() => {
+    const filtered = sourceFilterActive
+      ? subscriptions.filter((s) => selectedSources.has(s.category))
+      : subscriptions;
+    return [...filtered].sort((a, b) =>
+      sourceSubscriptionTitle(a).localeCompare(sourceSubscriptionTitle(b)),
+    );
+  }, [subscriptions, selectedSources, sourceFilterActive]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -329,6 +351,7 @@ export function FeedClient(): ReactNode {
           cursor,
           topics: topicFilterActive ? [...selectedTopicIds] : undefined,
           sources: sourceFilterActive ? [...selectedSources] : undefined,
+          sourceId: selectedSourceId || undefined,
           status:
             view === "saved"
               ? "saved"
@@ -401,19 +424,36 @@ export function FeedClient(): ReactNode {
         }
       }
     },
-    [api, router, search, selectedTopicIds, selectedSources, topicFilterActive, sourceFilterActive, view, sort, order],
+    [
+      api,
+      router,
+      search,
+      selectedTopicIds,
+      selectedSources,
+      selectedSourceId,
+      topicFilterActive,
+      sourceFilterActive,
+      view,
+      sort,
+      order,
+    ],
   );
 
   loadPageRef.current = loadPage;
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([api.listTopics(), api.listTopicTree()])
-      .then(([topicsRes, treeRes]) => {
+    void Promise.all([
+      api.listTopics(),
+      api.listTopicTree(),
+      api.listSources(),
+    ])
+      .then(([topicsRes, treeRes, sourcesRes]) => {
         if (cancelled) return;
         const loaded = topicsRes.topics;
         setTopics(loaded);
         setTreeNodes(treeRes.nodes);
+        setSubscriptions(sourcesRes.sources);
         setTopicsReady(true);
       })
       .catch(() => {
@@ -421,6 +461,7 @@ export function FeedClient(): ReactNode {
         const fallback = getTopicTree();
         setTopics([]);
         setTreeNodes(fallback.nodes);
+        setSubscriptions([]);
         setTopicsReady(true);
       });
     return () => {
@@ -440,7 +481,19 @@ export function FeedClient(): ReactNode {
       }
       return new Set(pruned);
     });
-  }, [prefsHydrated, topicsReady, allTopicIds]);
+    setSelectedSourceId((prev) =>
+      pruneSourceId(
+        prev,
+        subscriptions.map((s) => s.id),
+      ),
+    );
+  }, [prefsHydrated, topicsReady, allTopicIds, subscriptions]);
+
+  useEffect(() => {
+    if (!selectedSourceId) return;
+    if (sourceOptions.some((s) => s.id === selectedSourceId)) return;
+    setSelectedSourceId(null);
+  }, [selectedSourceId, sourceOptions]);
 
   useEffect(() => {
     if (!topicsReady || !prefsHydrated) return;
@@ -463,6 +516,7 @@ export function FeedClient(): ReactNode {
 
       if (
         action === "dismissed" ||
+        action === "saved" ||
         (view === "saved" && action === "seen") ||
         (view === "dismissed" && (action === "seen" || action === "saved"))
       ) {
@@ -512,11 +566,6 @@ export function FeedClient(): ReactNode {
     });
   }
 
-  function selectAllTopics() {
-    // "All" = no topic filter (full feed). Chips stay unselected.
-    setSelectedTopicIds(new Set());
-  }
-
   function toggleSource(id: SourceFilter) {
     setSelectedSources((prev) => {
       const next = new Set(prev);
@@ -524,10 +573,6 @@ export function FeedClient(): ReactNode {
       else next.add(id);
       return next;
     });
-  }
-
-  function selectAllSources() {
-    setSelectedSources(new Set());
   }
 
   async function onRankLatest() {
@@ -635,6 +680,7 @@ export function FeedClient(): ReactNode {
   const hasFilters = Boolean(
     topicFilterActive ||
       sourceFilterActive ||
+      selectedSourceId ||
       view === "saved" ||
       view === "dismissed" ||
       search,
@@ -721,18 +767,8 @@ export function FeedClient(): ReactNode {
         </p>
       ) : null}
       <div className="feed-filters" role="group" aria-label="Feed filters">
-        <div className="source-filter" role="group" aria-label="Sources">
-          <div className="source-filter-header">
-            <span className="filter-label">Sources</span>
-            <button
-              type="button"
-              className="ghost topic-filter-link"
-              aria-pressed={!sourceFilterActive}
-              onClick={selectAllSources}
-            >
-              All
-            </button>
-          </div>
+        <div className="source-filter" role="group" aria-label="Source types">
+          <span className="filter-label">Source types</span>
           <div className="topic-filter-chips">
             {SOURCE_OPTIONS.map((opt) => {
               const on = selectedSources.has(opt.id);
@@ -749,6 +785,22 @@ export function FeedClient(): ReactNode {
               );
             })}
           </div>
+          <label className="filter-field source-subscription-filter">
+            <span className="filter-label">Source</span>
+            <select
+              value={selectedSourceId ?? ""}
+              onChange={(e) =>
+                setSelectedSourceId(e.target.value ? e.target.value : null)
+              }
+            >
+              <option value="">All</option>
+              {sourceOptions.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {sourceSubscriptionTitle(source)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="topic-filter" role="group" aria-label="Topics">
@@ -765,18 +817,6 @@ export function FeedClient(): ReactNode {
               </span>
               <span className="filter-label">Topics</span>
             </button>
-            {topics.length > 0 ? (
-              <span className="topic-filter-actions">
-                <button
-                  type="button"
-                  className="ghost topic-filter-link"
-                  aria-pressed={!topicFilterActive}
-                  onClick={selectAllTopics}
-                >
-                  All
-                </button>
-              </span>
-            ) : null}
           </div>
           {topicsOpen ? (
             <div id="feed-topic-filter-body">
@@ -929,8 +969,9 @@ export function FeedClient(): ReactNode {
                 type="button"
                 className="ghost"
                 onClick={() => {
-                  selectAllTopics();
-                  selectAllSources();
+                  setSelectedTopicIds(new Set());
+                  setSelectedSources(new Set());
+                  setSelectedSourceId(null);
                   setView("feed");
                   setSearchDraft("");
                   setSearch("");
