@@ -17,24 +17,35 @@ export type HealthResponse = {
   timestamp: string;
 };
 
-export type SourceTypeV1 =
-  | "hackernews"
-  | "substack"
+export type SourceCategoryV1 =
   | "podcast"
+  | "website"
+  | "social_media"
+  | "community"
+  | "newsletter";
+
+export type SourceAdapterV1 =
+  | "hackernews"
+  | "rss"
   | "bluesky"
   | "reddit";
+
+/** @deprecated Use SourceCategoryV1 / SourceAdapterV1. */
+export type SourceTypeV1 = SourceAdapterV1 | "substack" | "podcast";
 
 export type SourceConfig = {
   mode?: "top" | "new";
   rssUrl?: string;
   handle?: string;
   did?: string;
+  subreddit?: string;
   [key: string]: unknown;
 };
 
 export type Source = {
   id: string;
-  sourceType: SourceTypeV1;
+  category: SourceCategoryV1;
+  adapter: SourceAdapterV1;
   config: SourceConfig;
   enabled: boolean;
   createdAt: string;
@@ -45,7 +56,8 @@ export type SourcesListResponse = { sources: Source[] };
 export type SourceResponse = { source: Source };
 
 export type CreateSourceInput = {
-  sourceType: SourceTypeV1 | string;
+  category: SourceCategoryV1 | string;
+  adapter: SourceAdapterV1 | string;
   config?: SourceConfig;
   enabled?: boolean;
 };
@@ -98,7 +110,8 @@ export type PatchTopicInput = {
 export type FeedItemStatus = "new" | "seen" | "saved" | "dismissed";
 
 export type FeedSource = {
-  sourceType: string;
+  category: string;
+  adapter?: string;
   externalId: string | null;
   /** Short subscription identity (host, handle, HN mode, …). */
   label?: string | null;
@@ -157,10 +170,10 @@ export type ListFeedOptions = {
   topic?: string;
   /** Topic ids to include (OR). Omitted / empty = all topics. */
   topics?: string[];
-  /** Single source type (legacy). Prefer `sources` for multi-select. */
-  source?: SourceTypeV1;
-  /** Source types to include (OR). Omitted / empty = all sources. */
-  sources?: SourceTypeV1[];
+  /** Single source category (legacy). Prefer `sources` for multi-select. */
+  source?: SourceCategoryV1;
+  /** Source categories to include (OR). Omitted / empty = all sources. */
+  sources?: SourceCategoryV1[];
   /** When set, only items with this status. When omitted, API excludes dismissed. */
   status?: FeedItemStatus;
   /** Free-text find-in-feed (title / summary / reason). */
@@ -265,14 +278,23 @@ export type WipeFeedRankingsResponse = {
   evaluationsDeleted: number;
 };
 
+export type FeedCatalogCategory =
+  | "websites"
+  | "communities"
+  | "newsletters"
+  | "podcasts"
+  | "social_media";
+
 export type FeedCatalogEntry = {
   id: string;
   label: string;
   blurb: string;
+  category: FeedCatalogCategory;
   topicTags: string[];
-  kind?: "feed" | "reddit";
+  kind?: "feed" | "reddit" | "podcast" | "bluesky";
   rssUrl?: string;
   subreddit?: string;
+  handle?: string;
 };
 
 export type FeedCatalogResponse = {
@@ -397,12 +419,12 @@ export class ApiClient {
     for (const id of topicIds) {
       params.append("topic", id);
     }
-    const sourceTypes = [
+    const sourceCategories = [
       ...(options.sources ?? []),
       ...(options.source ? [options.source] : []),
     ].filter(Boolean);
-    for (const type of sourceTypes) {
-      params.append("source", type);
+    for (const category of sourceCategories) {
+      params.append("source", category);
     }
     if (options.status) params.set("status", options.status);
     if (options.q?.trim()) params.set("q", options.q.trim());

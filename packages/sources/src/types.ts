@@ -1,9 +1,20 @@
-export type SourceType =
-  | "hackernews"
-  | "substack"
+/** Product / UX category (feed filters, Sources tabs). */
+export type SourceCategory =
   | "podcast"
+  | "website"
+  | "social_media"
+  | "community"
+  | "newsletter";
+
+/** Ingest adapter identity (createSourceAdapter switch). */
+export type SourceAdapterId =
+  | "hackernews"
+  | "rss"
   | "bluesky"
   | "reddit";
+
+/** @deprecated Use SourceAdapterId — kept during transition in a few call sites. */
+export type SourceType = SourceAdapterId;
 
 /** Canonical article shape produced by adapters. */
 export type NormalizedArticle = {
@@ -25,6 +36,6 @@ export type NormalizedArticle = {
 };
 
 export interface SourceAdapter {
-  readonly type: SourceType;
+  readonly type: SourceAdapterId;
   fetchRecent(): Promise<NormalizedArticle[]>;
 }

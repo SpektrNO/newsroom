@@ -1186,6 +1186,40 @@ button.danger-text:hover {
   margin-bottom: 0.15rem;
 }
 
+.source-community-mode {
+  margin: 0.35rem 0 0.5rem;
+}
+
+.source-catalog-tabs {
+  margin: 0.5rem 0 0.25rem;
+  flex-wrap: wrap;
+  overflow: visible;
+  row-gap: 0;
+}
+
+.sources-me-section {
+  margin-top: 0.5rem;
+}
+
+.sources-me-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.sources-me-toggle .sources-me-heading {
+  margin: 0;
+  font-size: inherit;
+}
+
 .source-catalog-filters {
   display: flex;
   flex-wrap: wrap;

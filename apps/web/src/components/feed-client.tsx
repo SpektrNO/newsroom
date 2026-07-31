@@ -36,11 +36,11 @@ type SortField = FeedSortField;
 type SortOrder = FeedSortOrder;
 
 const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
-  { id: "hackernews", label: "Hacker News" },
-  { id: "substack", label: "Feed" },
+  { id: "website", label: "Website" },
+  { id: "community", label: "Community" },
+  { id: "newsletter", label: "Newsletter" },
   { id: "podcast", label: "Podcast" },
-  { id: "bluesky", label: "Bluesky" },
-  { id: "reddit", label: "Reddit" },
+  { id: "social_media", label: "Social" },
 ];
 
 type TopicGroup = {
@@ -91,14 +91,14 @@ function formatStoryMeta(item: FeedItem): string | null {
   const primary = item.sources[0];
   if (!primary) return date;
 
-  const type = feedSourceTypeLabel(primary.sourceType);
+  const type = feedSourceTypeLabel(primary.category);
   let name = primary.label?.trim() || null;
-  if (!name && primary.sourceType === "podcast" && item.showTitle?.trim()) {
+  if (!name && primary.category === "podcast" && item.showTitle?.trim()) {
     name = item.showTitle.trim();
   }
   const duration = formatEpisodeDuration(item.durationSeconds);
   const author =
-    primary.sourceType === "reddit" && item.author?.trim()
+    primary.adapter === "reddit" && item.author?.trim()
       ? item.author.trim()
       : null;
   const parts = [type, name, author, duration, date].filter(Boolean);

@@ -39,7 +39,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ error: "invalid_config" }, { status: 400 });
   }
 
-  const parsed = parsePatchBody(body, existing.sourceType);
+  const parsed = parsePatchBody(body, existing.adapter);
   if (!parsed.ok) {
     return Response.json({ error: parsed.error }, { status: 400 });
   }
@@ -78,7 +78,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({
       source: toSourceJson({
         id: row.id,
-        sourceType: row.sourceType,
+        category: row.category,
+        adapter: row.adapter,
         config: row.config ?? {},
         enabled: row.enabled,
         createdAt: row.createdAt,

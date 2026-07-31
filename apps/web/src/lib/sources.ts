@@ -3,18 +3,17 @@ import {
   normalizeBlueskyHandle,
   normalizeCanonicalUrl,
   normalizeSubredditName,
+  type SourceAdapterId,
+  type SourceCategory,
 } from "@newsroom/sources";
 
-export type SourceTypeV1 =
-  | "hackernews"
-  | "substack"
-  | "podcast"
-  | "bluesky"
-  | "reddit";
+export type SourceCategoryV1 = SourceCategory;
+export type SourceAdapterV1 = SourceAdapterId;
 
 export type SourceJson = {
   id: string;
-  sourceType: SourceTypeV1;
+  category: SourceCategoryV1;
+  adapter: SourceAdapterV1;
   config: SourceSubscriptionConfig;
   enabled: boolean;
   createdAt: string;
@@ -23,7 +22,8 @@ export type SourceJson = {
 
 export type SourceRow = {
   id: string;
-  sourceType: string;
+  category: string;
+  adapter: string;
   config: SourceSubscriptionConfig;
   enabled: boolean;
   createdAt: Date;
@@ -33,7 +33,8 @@ export type SourceRow = {
 export function toSourceJson(row: SourceRow): SourceJson {
   return {
     id: row.id,
-    sourceType: row.sourceType as SourceTypeV1,
+    category: row.category as SourceCategoryV1,
+    adapter: row.adapter as SourceAdapterV1,
     config: row.config ?? {},
     enabled: row.enabled,
     createdAt: row.createdAt.toISOString(),
@@ -41,10 +42,52 @@ export function toSourceJson(row: SourceRow): SourceJson {
   };
 }
 
+const CATEGORIES: readonly SourceCategoryV1[] = [
+  "podcast",
+  "website",
+  "social_media",
+  "community",
+  "newsletter",
+];
+
+const ADAPTERS: readonly SourceAdapterV1[] = [
+  "hackernews",
+  "rss",
+  "bluesky",
+  "reddit",
+];
+
+function isCategory(v: unknown): v is SourceCategoryV1 {
+  return typeof v === "string" && (CATEGORIES as readonly string[]).includes(v);
+}
+
+function isAdapter(v: unknown): v is SourceAdapterV1 {
+  return typeof v === "string" && (ADAPTERS as readonly string[]).includes(v);
+}
+
+function pairAllowed(
+  category: SourceCategoryV1,
+  adapter: SourceAdapterV1,
+): boolean {
+  if (adapter === "hackernews") return category === "community";
+  if (adapter === "reddit") return category === "community";
+  if (adapter === "bluesky") return category === "social_media";
+  if (adapter === "rss") {
+    return (
+      category === "podcast" ||
+      category === "website" ||
+      category === "community" ||
+      category === "newsletter"
+    );
+  }
+  return false;
+}
+
 export type ParsedCreate =
   | {
       ok: true;
-      sourceType: SourceTypeV1;
+      category: SourceCategoryV1;
+      adapter: SourceAdapterV1;
       config: SourceSubscriptionConfig;
       enabled: boolean;
     }
@@ -56,7 +99,6 @@ export function parseCreateBody(body: unknown): ParsedCreate {
   }
 
   const record = body as Record<string, unknown>;
-  const sourceType = record.sourceType;
   const enabled =
     record.enabled === undefined ? true : Boolean(record.enabled);
   const configRaw =
@@ -70,17 +112,40 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     return { ok: false, error: "invalid_config" };
   }
 
+  let category = record.category;
+  let adapter = record.adapter;
+
+  // Legacy clients: sourceType → category + adapter
   if (
-    sourceType !== "hackernews" &&
-    sourceType !== "substack" &&
-    sourceType !== "podcast" &&
-    sourceType !== "bluesky" &&
-    sourceType !== "reddit"
+    !isCategory(category) &&
+    !isAdapter(adapter) &&
+    typeof record.sourceType === "string"
   ) {
+    const legacy: Record<
+      string,
+      { category: SourceCategoryV1; adapter: SourceAdapterV1 }
+    > = {
+      hackernews: { category: "community", adapter: "hackernews" },
+      substack: { category: "community", adapter: "rss" },
+      podcast: { category: "podcast", adapter: "rss" },
+      bluesky: { category: "social_media", adapter: "bluesky" },
+      reddit: { category: "community", adapter: "reddit" },
+    };
+    const mapped = legacy[record.sourceType];
+    if (!mapped) return { ok: false, error: "unsupported_source_type" };
+    category = mapped.category;
+    adapter = mapped.adapter;
+  }
+
+  if (!isCategory(category) || !isAdapter(adapter)) {
     return { ok: false, error: "unsupported_source_type" };
   }
 
-  if (sourceType === "hackernews") {
+  if (!pairAllowed(category, adapter)) {
+    return { ok: false, error: "unsupported_source_type" };
+  }
+
+  if (adapter === "hackernews") {
     const mode = configRaw.mode;
     if (mode !== undefined && mode !== "top" && mode !== "new") {
       return { ok: false, error: "invalid_config" };
@@ -89,10 +154,10 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     if (mode === "top" || mode === "new") {
       config.mode = mode;
     }
-    return { ok: true, sourceType, config, enabled };
+    return { ok: true, category, adapter, config, enabled };
   }
 
-  if (sourceType === "bluesky") {
+  if (adapter === "bluesky") {
     const handleRaw = configRaw.handle;
     if (typeof handleRaw !== "string" || !handleRaw.trim()) {
       return { ok: false, error: "invalid_config" };
@@ -100,7 +165,8 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     try {
       return {
         ok: true,
-        sourceType,
+        category,
+        adapter,
         config: { handle: normalizeBlueskyHandle(handleRaw) },
         enabled,
       };
@@ -109,7 +175,7 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     }
   }
 
-  if (sourceType === "reddit") {
+  if (adapter === "reddit") {
     const subRaw = configRaw.subreddit;
     if (typeof subRaw !== "string" || !subRaw.trim()) {
       return { ok: false, error: "invalid_config" };
@@ -117,7 +183,8 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     try {
       return {
         ok: true,
-        sourceType,
+        category,
+        adapter,
         config: { subreddit: normalizeSubredditName(subRaw) },
         enabled,
       };
@@ -135,7 +202,8 @@ export function parseCreateBody(body: unknown): ParsedCreate {
     const rssUrl = normalizeCanonicalUrl(rssUrlRaw);
     return {
       ok: true,
-      sourceType,
+      category,
+      adapter,
       config: { rssUrl },
       enabled,
     };
@@ -154,7 +222,7 @@ export type ParsedPatch =
 
 export function parsePatchBody(
   body: unknown,
-  currentType: string,
+  currentAdapter: string,
 ): ParsedPatch {
   if (!body || typeof body !== "object") {
     return { ok: false, error: "invalid_config" };
@@ -176,7 +244,7 @@ export function parsePatchBody(
     }
     const configRaw = record.config as Record<string, unknown>;
 
-    if (currentType === "hackernews") {
+    if (currentAdapter === "hackernews") {
       const mode = configRaw.mode;
       if (mode !== undefined && mode !== "top" && mode !== "new") {
         return { ok: false, error: "invalid_config" };
@@ -186,7 +254,7 @@ export function parsePatchBody(
         config.mode = mode;
       }
       result.config = config;
-    } else if (currentType === "substack" || currentType === "podcast") {
+    } else if (currentAdapter === "rss") {
       const rssUrlRaw = configRaw.rssUrl;
       if (typeof rssUrlRaw !== "string" || !rssUrlRaw.trim()) {
         return { ok: false, error: "invalid_config" };
@@ -196,7 +264,7 @@ export function parsePatchBody(
       } catch {
         return { ok: false, error: "invalid_config" };
       }
-    } else if (currentType === "bluesky") {
+    } else if (currentAdapter === "bluesky") {
       const handleRaw = configRaw.handle;
       if (typeof handleRaw !== "string" || !handleRaw.trim()) {
         return { ok: false, error: "invalid_config" };
@@ -206,7 +274,7 @@ export function parsePatchBody(
       } catch {
         return { ok: false, error: "invalid_config" };
       }
-    } else if (currentType === "reddit") {
+    } else if (currentAdapter === "reddit") {
       const subRaw = configRaw.subreddit;
       if (typeof subRaw !== "string" || !subRaw.trim()) {
         return { ok: false, error: "invalid_config" };

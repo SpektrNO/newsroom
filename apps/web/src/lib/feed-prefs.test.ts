@@ -30,7 +30,7 @@ describe("feed-prefs", () => {
         view: "saved",
         sort: "date",
         order: "asc",
-        sources: ["podcast", "hackernews", "podcast"],
+        sources: ["podcast", "community", "podcast"],
         topicIds: ["a", "b", "a"],
         topicsOpen: false,
       });
@@ -38,7 +38,7 @@ describe("feed-prefs", () => {
         view: "saved",
         sort: "date",
         order: "asc",
-        sources: ["podcast", "hackernews"],
+        sources: ["podcast", "community"],
         topicIds: ["a", "b"],
         topicsOpen: false,
       });
@@ -77,7 +77,7 @@ describe("feed-prefs", () => {
           view: "nope",
           sort: "rank",
           order: "sideways",
-          sources: ["twitter", "bluesky"],
+          sources: ["twitter", "social_media", "bluesky"],
           topicIds: [1, "ok"],
           topicsOpen: "yes",
         }),
@@ -86,7 +86,7 @@ describe("feed-prefs", () => {
         view: "feed",
         sort: "score",
         order: "desc",
-        sources: ["bluesky"],
+        sources: ["social_media"],
         topicIds: ["ok"],
         topicsOpen: true,
       });

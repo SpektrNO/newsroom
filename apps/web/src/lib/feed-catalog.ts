@@ -1,25 +1,39 @@
 /**
- * Curated source catalog (newsletters + subreddits).
+ * Curated source catalog (websites, newsletters, communities, podcasts, social).
  * Browser-safe — no Node-only imports.
  *
  * Intentionally a small starter set — not every topic-tree leaf. Users paste
- * arbitrary RSS / subreddit names via Add a source for everything else.
+ * arbitrary RSS / handles / subreddit names via Add a source for everything else.
+ *
+ * Catalog `category` is a Suggested-tab shelf id aligned with persisted
+ * subscription categories (newsletters → newsletter, websites → website, …).
  */
 
-export type FeedCatalogKind = "feed" | "reddit";
+export type FeedCatalogCategory =
+  | "websites"
+  | "communities"
+  | "newsletters"
+  | "podcasts"
+  | "social_media";
+
+/** Ingest shape used when adding from the catalog. */
+export type FeedCatalogKind = "feed" | "reddit" | "podcast" | "bluesky";
 
 export type FeedCatalogEntry = {
   id: string;
   label: string;
   blurb: string;
+  category: FeedCatalogCategory;
   /** Optional topic-tree leaf labels for display / filter. */
   topicTags: string[];
   /** Defaults to `feed` when omitted (legacy RSS rows). */
   kind?: FeedCatalogKind;
-  /** Newsletter / blog RSS — required when kind is `feed`. */
+  /** Newsletter / blog / podcast RSS — required for feed & podcast. */
   rssUrl?: string;
   /** Subreddit without r/ — required when kind is `reddit`. */
   subreddit?: string;
+  /** Bluesky handle — required when kind is `bluesky`. */
+  handle?: string;
 };
 
 export type FeedCatalogResponse = {
@@ -27,15 +41,28 @@ export type FeedCatalogResponse = {
   feeds: FeedCatalogEntry[];
 };
 
-export const FEED_CATALOG_VERSION = 2;
+export const FEED_CATALOG_VERSION = 8;
+
+export const FEED_CATALOG_CATEGORIES: readonly {
+  id: FeedCatalogCategory;
+  label: string;
+}[] = [
+  { id: "websites", label: "Websites" },
+  { id: "communities", label: "Communities" },
+  { id: "newsletters", label: "Newsletters" },
+  { id: "podcasts", label: "Podcasts" },
+  { id: "social_media", label: "Social" },
+];
 
 /**
- * Editorial starter set — public RSS + a few high-signal subreddits
+ * Editorial starter set — public RSS, subreddits, podcasts, and Bluesky
  * spanning tech, science, security, and culture leaves from the topic tree.
  */
 export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
+  // --- Newsletters ---
   {
     id: "platformer",
+    category: "newsletters",
     label: "Platformer",
     rssUrl: "https://www.platformer.news/feed",
     blurb: "Casey Newton on platforms, policy, and the information business.",
@@ -43,13 +70,15 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "import-ai",
+    category: "communities",
     label: "Import AI",
     rssUrl: "https://importai.substack.com/feed",
-    blurb: "Jack Clark’s weekly AI research and industry roundup.",
+    blurb: "Jack Clark’s weekly AI research and industry roundup (Substack).",
     topicTags: ["AI & infra", "LLMs & agents"],
   },
   {
     id: "latent-space",
+    category: "newsletters",
     label: "Latent Space",
     rssUrl: "https://www.latent.space/feed",
     blurb: "AI engineers — agents, evals, and production LLM systems.",
@@ -57,20 +86,15 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "pragmatic-engineer",
+    category: "newsletters",
     label: "The Pragmatic Engineer",
     rssUrl: "https://newsletter.pragmaticengineer.com/feed",
     blurb: "Gergely Orosz on software engineering careers and big tech.",
     topicTags: ["Developer tools", "Cloud & devops", "Work & leadership"],
   },
   {
-    id: "simonwillison",
-    label: "Simon Willison’s Weblog",
-    rssUrl: "https://simonwillison.net/atom/everything/",
-    blurb: "Datasette, LLMs, and practical software notes.",
-    topicTags: ["LLMs & agents", "Developer tools", "Databases & storage"],
-  },
-  {
     id: "bytes",
+    category: "newsletters",
     label: "Bytes",
     rssUrl: "https://bytes.dev/feed",
     blurb: "JavaScript / web engineering newsletter.",
@@ -78,27 +102,72 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "tldr",
+    category: "newsletters",
     label: "TLDR",
     rssUrl: "https://tldr.tech/rss",
     blurb: "Daily tech headlines in a short digest.",
     topicTags: ["AI & infra", "Cloud & devops"],
   },
   {
+    id: "the-hacker-news",
+    category: "newsletters",
+    label: "The Hacker News",
+    rssUrl: "https://feeds.feedburner.com/TheHackersNews",
+    blurb: "Daily cybersecurity and vulnerability headline digest.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "gary-marcus",
+    category: "communities",
+    label: "Gary Marcus",
+    rssUrl: "https://garymarcus.substack.com/feed",
+    blurb: "Critical takes on AI hype and cognition (Substack).",
+    topicTags: ["LLMs & agents", "Evals & safety", "Neuroscience & mind"],
+  },
+  {
+    id: "not-boring",
+    category: "newsletters",
+    label: "Not Boring",
+    rssUrl: "https://www.notboring.co/feed",
+    blurb: "Packy McCormick on startups, markets, and technology.",
+    topicTags: ["Funding & markets", "Product & growth"],
+  },
+  {
+    id: "dense-discovery",
+    category: "newsletters",
+    label: "Dense Discovery",
+    rssUrl: "https://www.densediscovery.com/feed",
+    blurb: "Weekly design, tech, and culture links.",
+    topicTags: ["Design & media", "Philosophy & ideas"],
+  },
+  {
+    id: "sidebar",
+    category: "newsletters",
+    label: "Sidebar",
+    rssUrl: "https://sidebar.io/feed.xml",
+    blurb: "Daily design links for the web.",
+    topicTags: ["Design & media"],
+  },
+  // --- Websites ---
+  {
+    id: "simonwillison",
+    category: "websites",
+    label: "Simon Willison’s Weblog",
+    rssUrl: "https://simonwillison.net/atom/everything/",
+    blurb: "Datasette, LLMs, and practical software notes.",
+    topicTags: ["LLMs & agents", "Developer tools", "Databases & storage"],
+  },
+  {
     id: "ben-evans",
+    category: "websites",
     label: "Benedict Evans",
     rssUrl: "https://www.ben-evans.com/benedictevans?format=rss",
     blurb: "Essays on tech strategy and markets.",
     topicTags: ["AI & infra", "Funding & markets"],
   },
   {
-    id: "gary-marcus",
-    label: "Gary Marcus",
-    rssUrl: "https://garymarcus.substack.com/feed",
-    blurb: "Critical takes on AI hype and cognition.",
-    topicTags: ["LLMs & agents", "Evals & safety", "Neuroscience & mind"],
-  },
-  {
     id: "stratechery",
+    category: "websites",
     label: "Stratechery",
     rssUrl: "https://stratechery.com/feed/",
     blurb: "Ben Thompson on strategy and the internet (RSS may be partial).",
@@ -106,20 +175,97 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "schneier",
+    category: "websites",
     label: "Schneier on Security",
     rssUrl: "https://www.schneier.com/feed/atom/",
     blurb: "Bruce Schneier on security, privacy, and trust.",
-    topicTags: ["Security & privacy", "Policy & rules"],
+    topicTags: ["Security & privacy", "Systems & vulnerabilities", "Policy & rules"],
   },
   {
     id: "krebs",
+    category: "websites",
     label: "Krebs on Security",
     rssUrl: "https://krebsonsecurity.com/feed/",
     blurb: "Investigative reporting on breaches and cybercrime.",
-    topicTags: ["Security & privacy"],
+    topicTags: ["Security & privacy", "Systems & vulnerabilities"],
+  },
+  {
+    id: "cve",
+    category: "websites",
+    label: "CVE (cve.org)",
+    rssUrl: "https://cvefeed.io/rssfeed/severity/high.xml",
+    blurb:
+      "High/critical CVE records from the CVE Program (cve.org). Official site has no RSS yet — this public feed tracks new CVE IDs.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "cvenew-x",
+    category: "websites",
+    label: "CVE @CVEnew",
+    rssUrl: "https://nitter.net/CVEnew/rss",
+    blurb:
+      "Official CVE Program posts of new CVE IDs (X @CVEnew). X ingest is deferred — this uses a public RSS mirror of that account.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "project-zero",
+    category: "websites",
+    label: "Google Project Zero",
+    rssUrl: "https://googleprojectzero.blogspot.com/feeds/posts/default",
+    blurb: "Deep vulnerability research and zero-day write-ups from Google.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "zdi-published",
+    category: "websites",
+    label: "Zero Day Initiative (published)",
+    rssUrl: "https://www.zerodayinitiative.com/rss/published/",
+    blurb: "ZDI published advisories after vendor disclosure windows close.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "cisa-advisories",
+    category: "websites",
+    label: "CISA Cybersecurity Advisories",
+    rssUrl: "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+    blurb: "U.S. CISA alerts and advisories — including known exploited issues.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy", "Policy & rules"],
+  },
+  {
+    id: "bleeping-computer",
+    category: "websites",
+    label: "BleepingComputer",
+    rssUrl: "https://www.bleepingcomputer.com/feed/",
+    blurb: "Breaking malware, ransomware, and vulnerability news.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "the-record",
+    category: "websites",
+    label: "The Record",
+    rssUrl: "https://therecord.media/feed",
+    blurb: "Recorded Future’s newsroom on cyber threats and zero-days.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy", "Policy & rules"],
+  },
+  {
+    id: "dark-reading",
+    category: "websites",
+    label: "Dark Reading",
+    rssUrl: "https://www.darkreading.com/rss.xml",
+    blurb: "Enterprise security news — vulnerabilities, attacks, and defense.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "sans-isc",
+    category: "websites",
+    label: "SANS Internet Storm Center",
+    rssUrl: "https://isc.sans.edu/rssfeed.xml",
+    blurb: "Handler diary on scanning, exploits, and emerging threats.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
   },
   {
     id: "lwn",
+    category: "websites",
     label: "LWN.net",
     rssUrl: "https://lwn.net/headlines/rss",
     blurb: "Linux and free-software news for developers.",
@@ -127,6 +273,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "carbon-brief",
+    category: "websites",
     label: "Carbon Brief",
     rssUrl: "https://www.carbonbrief.org/feed",
     blurb: "Clear climate science and energy policy explainers.",
@@ -134,6 +281,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "nasa-breaking",
+    category: "websites",
     label: "NASA Breaking News",
     rssUrl: "https://www.nasa.gov/rss/dyn/breaking_news.rss",
     blurb: "Official NASA headlines — spaceflight and exploration.",
@@ -141,6 +289,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "aeon",
+    category: "websites",
     label: "Aeon",
     rssUrl: "https://aeon.co/feed.rss",
     blurb: "Long-form ideas on philosophy, science, and culture.",
@@ -148,27 +297,15 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "works-in-progress",
+    category: "websites",
     label: "Works in Progress",
     rssUrl: "https://worksinprogress.co/feed/",
     blurb: "Deep essays on science, technology, and human progress.",
     topicTags: ["Biology & health", "Physics & mathematics", "Climate & energy"],
   },
   {
-    id: "not-boring",
-    label: "Not Boring",
-    rssUrl: "https://www.notboring.co/feed",
-    blurb: "Packy McCormick on startups, markets, and technology.",
-    topicTags: ["Funding & markets", "Product & growth"],
-  },
-  {
-    id: "sidebar",
-    label: "Sidebar",
-    rssUrl: "https://sidebar.io/feed.xml",
-    blurb: "Daily design links for the web.",
-    topicTags: ["Design & media"],
-  },
-  {
     id: "marginal-revolution",
+    category: "websites",
     label: "Marginal Revolution",
     rssUrl: "https://marginalrevolution.com/feed",
     blurb: "Tyler Cowen and Alex Tabarrok on economics and ideas.",
@@ -176,21 +313,16 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "semianalysis",
+    category: "websites",
     label: "SemiAnalysis",
     rssUrl: "https://www.semianalysis.com/feed",
     blurb: "Chips, AI infra, and semiconductor industry analysis.",
     topicTags: ["Hardware & chips", "AI & infra"],
   },
-  {
-    id: "dense-discovery",
-    label: "Dense Discovery",
-    rssUrl: "https://www.densediscovery.com/feed",
-    blurb: "Weekly design, tech, and culture links.",
-    topicTags: ["Design & media", "Philosophy & ideas"],
-  },
-  // --- Subreddits ---
+  // --- Communities (Reddit + Substack / platform RSS) ---
   {
     id: "reddit-machinelearning",
+    category: "communities",
     kind: "reddit",
     label: "r/MachineLearning",
     subreddit: "machinelearning",
@@ -199,6 +331,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "reddit-localllama",
+    category: "communities",
     kind: "reddit",
     label: "r/LocalLLaMA",
     subreddit: "localllama",
@@ -207,6 +340,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "reddit-programming",
+    category: "communities",
     kind: "reddit",
     label: "r/programming",
     subreddit: "programming",
@@ -215,6 +349,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "reddit-rust",
+    category: "communities",
     kind: "reddit",
     label: "r/rust",
     subreddit: "rust",
@@ -223,14 +358,16 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "reddit-netsec",
+    category: "communities",
     kind: "reddit",
     label: "r/netsec",
     subreddit: "netsec",
     blurb: "Network security research and vulnerability write-ups.",
-    topicTags: ["Security & privacy"],
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
   },
   {
     id: "reddit-spacex",
+    category: "communities",
     kind: "reddit",
     label: "r/space",
     subreddit: "space",
@@ -239,6 +376,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "reddit-climate",
+    category: "communities",
     kind: "reddit",
     label: "r/climate",
     subreddit: "climate",
@@ -247,16 +385,103 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "reddit-webdev",
+    category: "communities",
     kind: "reddit",
     label: "r/webdev",
     subreddit: "webdev",
     blurb: "Frontend/backend web development links and advice.",
     topicTags: ["Developer tools", "Languages & runtimes", "Design & media"],
   },
+  // --- Podcasts ---
+  {
+    id: "podcast-atp",
+    category: "podcasts",
+    kind: "podcast",
+    label: "Accidental Tech Podcast",
+    rssUrl: "https://atp.fm/episodes?format=rss",
+    blurb: "Marco, Casey, and John on Apple, tech, and the web.",
+    topicTags: ["Developer tools", "Product & growth"],
+  },
+  {
+    id: "podcast-changelog",
+    category: "podcasts",
+    kind: "podcast",
+    label: "The Changelog",
+    rssUrl: "https://changelog.com/podcast/feed",
+    blurb: "Conversations with the hackers, leaders, and innovators of software.",
+    topicTags: ["Open source", "Developer tools", "Languages & runtimes"],
+  },
+  {
+    id: "podcast-darknet",
+    category: "podcasts",
+    kind: "podcast",
+    label: "Darknet Diaries",
+    rssUrl: "https://feeds.megaphone.fm/darknetdiaries",
+    blurb: "True stories from the dark side of the Internet.",
+    topicTags: ["Security & privacy"],
+  },
+  {
+    id: "podcast-acquired",
+    category: "podcasts",
+    kind: "podcast",
+    label: "Acquired",
+    rssUrl: "https://feeds.transistor.fm/acquired",
+    blurb: "Company histories and tech industry deep dives.",
+    topicTags: ["Funding & markets", "Product & growth"],
+  },
+  {
+    id: "podcast-latent-space",
+    category: "podcasts",
+    kind: "podcast",
+    label: "Latent Space Podcast",
+    rssUrl: "https://api.substack.com/feed/podcast/10845.rss",
+    blurb: "AI engineers talking agents, evals, and production LLM systems.",
+    topicTags: ["LLMs & agents", "AI & infra", "Evals & safety"],
+  },
+  // --- Social (Bluesky) ---
+  {
+    id: "bsky-jay",
+    category: "social_media",
+    kind: "bluesky",
+    label: "Jay Graber",
+    handle: "jay.bsky.social",
+    blurb: "CEO of Bluesky — protocol and product updates.",
+    topicTags: ["AI & infra", "Policy & rules"],
+  },
+  {
+    id: "bsky-simonwillison",
+    category: "social_media",
+    kind: "bluesky",
+    label: "Simon Willison",
+    handle: "simonwillison.net",
+    blurb: "Datasette, LLMs, and practical software notes on Bluesky.",
+    topicTags: ["LLMs & agents", "Developer tools"],
+  },
+  {
+    id: "bsky-bsky",
+    category: "social_media",
+    kind: "bluesky",
+    label: "Bluesky",
+    handle: "bsky.app",
+    blurb: "Official Bluesky account.",
+    topicTags: ["Product & growth", "Policy & rules"],
+  },
+  {
+    id: "bsky-pfrazee",
+    category: "social_media",
+    kind: "bluesky",
+    label: "Paul Frazee",
+    handle: "pfrazee.com",
+    blurb: "AT Protocol and Bluesky client engineering.",
+    topicTags: ["Developer tools", "Open source"],
+  },
 ];
 
 export function catalogEntryKind(entry: FeedCatalogEntry): FeedCatalogKind {
-  return entry.kind === "reddit" ? "reddit" : "feed";
+  if (entry.kind === "reddit") return "reddit";
+  if (entry.kind === "podcast") return "podcast";
+  if (entry.kind === "bluesky") return "bluesky";
+  return "feed";
 }
 
 export function getFeedCatalog(): FeedCatalogResponse {

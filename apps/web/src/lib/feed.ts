@@ -2,7 +2,8 @@ import { articleMatchesTopicKeywords, inheritedKeywordsForTopicName } from "@new
 import type { UserArticleScoreStatus } from "@newsroom/db";
 
 export type FeedSourceJson = {
-  sourceType: string;
+  category: string;
+  adapter?: string;
   externalId: string | null;
   /** Short subscription identity (host, handle, HN mode, …). */
   label: string | null;
@@ -139,11 +140,11 @@ export function parseFeedLimit(raw: string | null): number {
 }
 
 export const FEED_SOURCE_TYPES = [
-  "hackernews",
-  "substack",
+  "website",
+  "community",
+  "newsletter",
   "podcast",
-  "bluesky",
-  "reddit",
+  "social_media",
 ] as const;
 
 export type FeedSourceType = (typeof FEED_SOURCE_TYPES)[number];
@@ -159,8 +160,8 @@ export function parseFeedSourceFilter(
 }
 
 /**
- * Collect source types from repeatable `source` and/or comma-separated `sources`.
- * Empty = no source filter (all types). Article matches if it has any selected type.
+ * Collect source categories from repeatable `source` and/or comma-separated `sources`.
+ * Empty = no source filter (all categories). Article matches if it has any selected category.
  */
 export function parseFeedSourceFilters(
   url: URL,
@@ -188,15 +189,15 @@ export function parseFeedSourceFilters(
   return out;
 }
 
-/** True when the article has at least one of the allowed source types. */
+/** True when the article has at least one of the allowed source categories. */
 export function passesSourceFilter(
-  articleTypes: Set<string> | undefined,
+  articleCategories: Set<string> | undefined,
   allowed: readonly string[],
 ): boolean {
   if (allowed.length === 0) return true;
-  if (!articleTypes || articleTypes.size === 0) return false;
-  for (const type of allowed) {
-    if (articleTypes.has(type)) return true;
+  if (!articleCategories || articleCategories.size === 0) return false;
+  for (const category of allowed) {
+    if (articleCategories.has(category)) return true;
   }
   return false;
 }
@@ -259,19 +260,19 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
   };
 }
 
-/** Human label for a source type (Feed / Podcast / …). */
-export function feedSourceTypeLabel(sourceType: string): string {
-  if (sourceType === "hackernews") return "Hacker News";
-  if (sourceType === "substack") return "Feed";
-  if (sourceType === "podcast") return "Podcast";
-  if (sourceType === "bluesky") return "Bluesky";
-  if (sourceType === "reddit") return "Reddit";
-  return sourceType;
+/** Human label for a source category (Podcast / Website / …). */
+export function feedSourceTypeLabel(category: string): string {
+  if (category === "podcast") return "Podcast";
+  if (category === "website") return "Website";
+  if (category === "newsletter") return "Newsletter";
+  if (category === "social_media") return "Social";
+  if (category === "community") return "Community";
+  return category;
 }
 
 /** Compact identity for a subscription (hostname, @handle, Top/New). */
 export function feedSourceSubscriptionLabel(
-  sourceType: string,
+  adapter: string,
   config: {
     rssUrl?: unknown;
     handle?: unknown;
@@ -279,15 +280,15 @@ export function feedSourceSubscriptionLabel(
     subreddit?: unknown;
   } | null | undefined,
 ): string | null {
-  if (sourceType === "hackernews") {
+  if (adapter === "hackernews") {
     return config?.mode === "new" ? "New" : "Top";
   }
-  if (sourceType === "bluesky") {
+  if (adapter === "bluesky") {
     if (typeof config?.handle !== "string" || !config.handle.trim()) return null;
     const handle = config.handle.trim().replace(/^@/, "");
     return handle ? `@${handle}` : null;
   }
-  if (sourceType === "reddit") {
+  if (adapter === "reddit") {
     if (typeof config?.subreddit !== "string" || !config.subreddit.trim()) {
       return null;
     }
@@ -467,7 +468,7 @@ export function countMatchingFeedRows(
     topicIds: string[] | null;
     topicKeywords: string[] | null;
     topicInheritedKeywords?: string[] | null;
-    /** Non-empty = include articles that have any of these source types. */
+    /** Non-empty = include articles that have any of these source categories. */
     sourceFilter: string[] | null;
     searchQuery: string | null;
     sourceTypesByArticle: Map<string, Set<string>>;
@@ -492,8 +493,8 @@ export function countMatchingFeedRows(
       }
     }
     if (opts.sourceFilter !== null && opts.sourceFilter.length > 0) {
-      const types = opts.sourceTypesByArticle.get(row.articleId);
-      if (!passesSourceFilter(types, opts.sourceFilter)) continue;
+      const categories = opts.sourceTypesByArticle.get(row.articleId);
+      if (!passesSourceFilter(categories, opts.sourceFilter)) continue;
     }
     if (
       opts.searchQuery !== null &&

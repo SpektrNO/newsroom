@@ -9,15 +9,26 @@ import {
 } from "./topic-tree.js";
 
 describe("topic tree catalog", () => {
-  it("exposes version 4 with required seed leaf", () => {
+  it("exposes version 5 with required seed leaf", () => {
     const tree = getTopicTree();
     assert.equal(tree.version, TOPIC_TREE_VERSION);
-    assert.equal(tree.version, 4);
+    assert.equal(tree.version, 5);
     const infra = tree.nodes.find((n) => n.id === "tech.ai.infra");
     assert.ok(infra);
     assert.equal(infra.label, "AI & infra");
     assert.equal(infra.selectable, true);
     assert.equal(infra.parentId, "tech.ai");
+  });
+
+  it("includes Systems & vulnerabilities under Technology", () => {
+    assert.equal(
+      resolveSelectableTopicLabel("Systems & vulnerabilities"),
+      "Systems & vulnerabilities",
+    );
+    assert.deepEqual(topicPathLabels("Systems & vulnerabilities"), [
+      "Technology",
+      "Systems & vulnerabilities",
+    ]);
   });
 
   it("includes science and culture leaves from catalog expansion", () => {

@@ -129,7 +129,7 @@ async function main() {
     .where(
       and(
         eq(sourceSubscriptions.userId, userId),
-        eq(sourceSubscriptions.sourceType, "hackernews"),
+        eq(sourceSubscriptions.adapter, "hackernews"),
       ),
     )
     .limit(1);
@@ -137,7 +137,13 @@ async function main() {
   if (hn) {
     await db
       .update(sourceSubscriptions)
-      .set({ enabled: true, config: { mode: "top" }, updatedAt: now })
+      .set({
+        enabled: true,
+        category: "community",
+        adapter: "hackernews",
+        config: { mode: "top" },
+        updatedAt: now,
+      })
       .where(eq(sourceSubscriptions.id, hn.id));
     console.log(`Updated HN subscription ${hn.id}`);
   } else {
@@ -145,7 +151,8 @@ async function main() {
     await db.insert(sourceSubscriptions).values({
       id,
       userId,
-      sourceType: "hackernews",
+      category: "community",
+      adapter: "hackernews",
       config: { mode: "top" },
       enabled: true,
       createdAt: now,
@@ -155,36 +162,43 @@ async function main() {
   }
 
   const rssUrl = normalizeCanonicalUrl(EXAMPLE_SUBSTACK_RSS);
-  const substackRows = await db
+  const rssRows = await db
     .select()
     .from(sourceSubscriptions)
     .where(
       and(
         eq(sourceSubscriptions.userId, userId),
-        eq(sourceSubscriptions.sourceType, "substack"),
+        eq(sourceSubscriptions.adapter, "rss"),
       ),
     );
 
-  const match = substackRows.find((r) => r.config?.rssUrl === rssUrl);
+  const match = rssRows.find((r) => r.config?.rssUrl === rssUrl);
 
   if (match) {
     await db
       .update(sourceSubscriptions)
-      .set({ enabled: true, config: { rssUrl }, updatedAt: now })
+      .set({
+        enabled: true,
+        category: "website",
+        adapter: "rss",
+        config: { rssUrl },
+        updatedAt: now,
+      })
       .where(eq(sourceSubscriptions.id, match.id));
-    console.log(`Updated Substack subscription ${match.id} (${rssUrl})`);
+    console.log(`Updated RSS subscription ${match.id} (${rssUrl})`);
   } else {
     const id = crypto.randomUUID();
     await db.insert(sourceSubscriptions).values({
       id,
       userId,
-      sourceType: "substack",
+      category: "website",
+      adapter: "rss",
       config: { rssUrl },
       enabled: true,
       createdAt: now,
       updatedAt: now,
     });
-    console.log(`Created Substack subscription ${id} (${rssUrl})`);
+    console.log(`Created RSS subscription ${id} (${rssUrl})`);
   }
 
   const [existingTopic] = await db

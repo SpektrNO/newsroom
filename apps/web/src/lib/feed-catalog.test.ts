@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   FEED_CATALOG,
+  FEED_CATALOG_CATEGORIES,
   catalogEntryKind,
   getFeedCatalog,
   listCatalogTopicTags,
@@ -15,17 +16,34 @@ import {
 describe("getFeedCatalog", () => {
   it("returns versioned feeds with required fields per kind", () => {
     const catalog = getFeedCatalog();
-    assert.equal(catalog.version, 2);
+    assert.equal(catalog.version, 8);
     assert.ok(catalog.feeds.length >= 5);
     for (const feed of catalog.feeds) {
       assert.ok(feed.id);
       assert.ok(feed.label);
+      assert.ok(feed.category);
+      assert.ok(
+        FEED_CATALOG_CATEGORIES.some((c) => c.id === feed.category),
+        `unknown category ${feed.category}`,
+      );
       assert.ok(Array.isArray(feed.topicTags));
-      if (catalogEntryKind(feed) === "reddit") {
+      const kind = catalogEntryKind(feed);
+      if (kind === "reddit") {
         assert.ok(feed.subreddit);
+      } else if (kind === "bluesky") {
+        assert.ok(feed.handle);
       } else {
         assert.ok(feed.rssUrl?.startsWith("http"));
       }
+    }
+  });
+
+  it("covers every suggested category", () => {
+    for (const { id } of FEED_CATALOG_CATEGORIES) {
+      assert.ok(
+        FEED_CATALOG.some((f) => f.category === id),
+        `missing category ${id}`,
+      );
     }
   });
 
@@ -50,7 +68,7 @@ describe("isFeedAlreadyAdded", () => {
   it("matches normalized RSS URLs", () => {
     const sources = [
       {
-        sourceType: "substack",
+        adapter: "rss",
         config: { rssUrl: "https://www.platformer.news/feed/" },
       },
     ];
@@ -67,7 +85,7 @@ describe("isFeedAlreadyAdded", () => {
   it("matches podcast RSS the same way", () => {
     const sources = [
       {
-        sourceType: "podcast",
+        adapter: "rss",
         config: { rssUrl: "https://www.platformer.news/feed/" },
       },
     ];
@@ -80,7 +98,7 @@ describe("isFeedAlreadyAdded", () => {
   it("ignores non-RSS sources", () => {
     assert.equal(
       isFeedAlreadyAdded(
-        [{ sourceType: "hackernews", config: {} }],
+        [{ adapter: "hackernews", config: {} }],
         "https://www.platformer.news/feed",
       ),
       false,
@@ -93,17 +111,51 @@ describe("isCatalogEntryAlreadyAdded", () => {
     const entry = FEED_CATALOG.find((f) => f.id === "reddit-programming")!;
     assert.equal(
       isCatalogEntryAlreadyAdded(
-        [{ sourceType: "reddit", config: { subreddit: "Programming" } }],
+        [{ adapter: "reddit", config: { subreddit: "Programming" } }],
         entry,
       ),
       true,
     );
     assert.equal(
       isCatalogEntryAlreadyAdded(
-        [{ sourceType: "reddit", config: { subreddit: "rust" } }],
+        [{ adapter: "reddit", config: { subreddit: "rust" } }],
         entry,
       ),
       false,
+    );
+  });
+
+  it("matches bluesky handles case-insensitively", () => {
+    const entry = FEED_CATALOG.find((f) => f.id === "bsky-jay")!;
+    assert.equal(
+      isCatalogEntryAlreadyAdded(
+        [{ adapter: "bluesky", config: { handle: "@Jay.Bsky.Social" } }],
+        entry,
+      ),
+      true,
+    );
+    assert.equal(
+      isCatalogEntryAlreadyAdded(
+        [{ adapter: "bluesky", config: { handle: "bsky.app" } }],
+        entry,
+      ),
+      false,
+    );
+  });
+
+  it("matches podcast catalog rows via RSS", () => {
+    const entry = FEED_CATALOG.find((f) => f.id === "podcast-changelog")!;
+    assert.equal(
+      isCatalogEntryAlreadyAdded(
+        [
+          {
+            adapter: "rss",
+            config: { rssUrl: entry.rssUrl! },
+          },
+        ],
+        entry,
+      ),
+      true,
     );
   });
 });

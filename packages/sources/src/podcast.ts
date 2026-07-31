@@ -22,7 +22,8 @@ export type PodcastAdapterOptions = {
  * Does not scrape episode page HTML.
  */
 export class PodcastAdapter implements SourceAdapter {
-  readonly type = "podcast" as const;
+  /** Same ingest adapter id as article RSS; category distinguishes podcast UX. */
+  readonly type = "rss" as const;
   private readonly rssUrl: string;
   private readonly fetchImpl: typeof fetch;
 

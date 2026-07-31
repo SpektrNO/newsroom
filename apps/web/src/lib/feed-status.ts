@@ -40,7 +40,8 @@ export async function updateFeedStatusResponse(
 
   const sourceRows = await getDb()
     .select({
-      sourceType: articleSources.sourceType,
+      category: articleSources.category,
+      adapter: articleSources.adapter,
       externalId: articleSources.externalId,
       subscriptionUserId: sourceSubscriptions.userId,
       config: sourceSubscriptions.config,
@@ -61,9 +62,10 @@ export async function updateFeedStatusResponse(
       continue;
     }
     sources.push({
-      sourceType: row.sourceType,
+      category: row.category,
+      adapter: row.adapter,
       externalId: row.externalId,
-      label: feedSourceSubscriptionLabel(row.sourceType, row.config),
+      label: feedSourceSubscriptionLabel(row.adapter, row.config),
     });
   }
 

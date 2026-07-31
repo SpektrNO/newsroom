@@ -99,6 +99,27 @@
       "when": 1785442486771,
       "tag": "0013_exotic_newton_destine",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785507000000,
+      "tag": "0014_rename_policy_society",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785507100000,
+      "tag": "0015_source_category_adapter",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1785507200000,
+      "tag": "0016_reclassify_rss_categories",
+      "breakpoints": true
     }
   ]
 }
