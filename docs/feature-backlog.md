@@ -145,6 +145,7 @@ Notes for `ai-cloud-providers-byok`:
 | `web-topics-catalog` | Browse full topic catalog (not only my topics) | ✅ | `docs/architecture.md` |
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
+| `web-source-feed-search` | Search RSS/Atom feeds via LangSearch (BFF) | ✅ | `docs/architecture.md` |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
 | `web-elegant-refresh` | Elegant visual/UX polish across web client | ✅ | `docs/architecture.md` |
 | `introduce-themes` | User themes (background + density) + tighter controls | ✅ | `docs/architecture.md` |
@@ -218,8 +219,20 @@ Notes for `web-source-discovery` (shipped — catalog v5):
 
 - **Problem:** Ranking only filters what you already ingest. HN is a shared firehose (discovery built-in); Substack-style sources previously required the user to **already know** an RSS URL.
 - **Shipped:** Static curated feed catalog (`GET /api/feed-catalog`); Sources **Suggested** and **Add** share five categories (Website / Community / Newsletter / Podcast / Social); Me labels match; subscribed catalog rows omitted; Me collapsible (default collapsed). Persisted `category` + `adapter`. Substack/dev.to → community; digests like TLDR → newsletter.
-- **Follow-ups:** Advisor feed suggestions; slug/search resolve; usage-based suggestions.
+- **Follow-ups:** `web-source-feed-search` (LangSearch RSS/Atom discovery); Advisor feed suggestions; usage-based suggestions.
 - **Out of scope (unchanged):** Scraping paywalled bodies; scraping Substack’s entire network; social popularity; auto-subscribe.
+
+Notes for `web-source-feed-search`:
+
+- **Goal:** On Sources, let users search by site/name (e.g. `nrk.no`) and pick a discovered RSS/Atom URL without already knowing the feed path.
+- **Provider:** LangSearch Web Search API — `POST https://api.langsearch.com/v1/web-search`, Authorization `Bearer ${LANGSEARCH_API_KEY}`. Key stays on the server only.
+- **BFF:** Session-authenticated `POST /api/feed-search` with `{ "query": string }`. Browser never calls LangSearch. Build upstream query as `"${userQuery} RSS OR Atom feed"` (trim/sanitize; reject empty). Call with `freshness: "noLimit"`, `summary: false`, `count: 10`.
+- **Response:** Map `data.webPages.value[]` → `{ title, url, snippet }[]`, then **filter to feed-like URLs** (path/query heuristics: `rss`, `atom`, `feed`, `.xml`, `/feeds/`, etc.; drop obvious non-feeds). Dedupe by normalized URL. Soft-fail: missing key → `503` `{ "error": "feed_search_not_configured" }`; upstream failure → `502`.
+- **UI:** In **Add a source** for RSS-capable kinds (website / newsletter / podcast / community RSS), add Search → results list → **Add** that calls existing `POST /api/sources` with `adapter: "rss"`, `config.rssUrl`, and **`category` from the current Add Kind tab**. Reuse create/error handling. No change to Social / Community Subreddit / HN paths.
+- **Env:** `LANGSEARCH_API_KEY` in `apps/web/.env.example` (+ ops note in `docs/ops-local.md`). Not needed in worker root `.env`.
+- **Out of scope v1:** `feedsearch.dev` for bare domains (follow-up); Advisor feed suggestions; catalog curation changes; validating feeds by fetching XML in search (create/ingest already own validation); mobile.
+- **Depends on:** Shipped `web-source-discovery` (category + `createSource` path).
+- **Verify:** Mock LangSearch HTTP; UI Add with active category; key unset → clear unavailable state.
 
 ## D. Mobile client
 

@@ -99,7 +99,7 @@ pnpm --filter @newsroom/worker start
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 
-Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environment-files) for **which file** loads what. Templates: root [`.env.example`](.env.example) (worker/CLI) and [`apps/web/.env.example`](apps/web/.env.example) → `apps/web/.env.local` (Next / Rank latest). Shared: `DATABASE_URL`, `BETTER_AUTH_*`, `OLLAMA_*`, `RANK_*`, `AI_TOKEN_*`, TTLs. Root-only: `GITHUB_*`, `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE`. Mobile: `EXPO_PUBLIC_API_URL`. Ranking tiers: [docs/ops-local.md#ranking-model-tiers](docs/ops-local.md#ranking-model-tiers).
+Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environment-files) for **which file** loads what. Templates: root [`.env.example`](.env.example) (worker/CLI) and [`apps/web/.env.example`](apps/web/.env.example) → `apps/web/.env.local` (Next / Rank latest). Shared: `DATABASE_URL`, `BETTER_AUTH_*`, `OLLAMA_*`, `RANK_*`, `AI_TOKEN_*`, TTLs. Web-only optional: `LANGSEARCH_API_KEY` (Sources feed search). Root-only: `GITHUB_*`, `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE`. Mobile: `EXPO_PUBLIC_API_URL`. Ranking tiers: [docs/ops-local.md#ranking-model-tiers](docs/ops-local.md#ranking-model-tiers).
 
 ### Settings API (session cookie)
 
@@ -107,6 +107,15 @@ Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environmen
 |--------|------|-------|
 | `GET/PATCH` | `/api/settings/rank-model` | Get / set ranking model tier: `none` \| `fast` \| `standard` |
 | `GET/PUT/DELETE` | `/api/settings/ai-credentials` | Optional BYOK OpenAI/Google key (encrypted; requires `AI_CREDENTIALS_KEY`) |
+
+### Sources API (session cookie)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET/POST` | `/api/sources` | List / create (caller’s sources only) |
+| `PATCH/DELETE` | `/api/sources/:id` | Update / delete own source |
+| `GET` | `/api/feed-catalog` | Curated suggested feeds |
+| `POST` | `/api/feed-search` | Discover RSS/Atom URLs via LangSearch (`LANGSEARCH_API_KEY`); `{ query }` → `{ results }` |
 
 ### Topics & feed API (session cookie)
 

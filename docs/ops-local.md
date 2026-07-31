@@ -35,6 +35,7 @@ cp apps/web/.env.example apps/web/.env.local
 | `OLLAMA_*`, `AI_PROVIDER`, `OPENAI_*`, `GOOGLE_AI_*`, `AI_CREDENTIALS_KEY`, `RANK_MODEL_*`, `RANK_BATCH_SIZE`, timeouts | yes (worker rank) | yes (**Rank latest** / chat / health / BYOK) |
 | `AI_TOKEN_*`, `RANK_AI_MAX_*`, score/article TTL | yes (worker) | yes (Rank latest + Settings usage) |
 | `BLUESKY_APPVIEW_URL` | yes (worker ingest) | only if a web path ever fetches Bluesky (ingest is worker) |
+| `LANGSEARCH_API_KEY` | no | optional — Sources **Find a feed** (`POST /api/feed-search`); omit → `503 feed_search_not_configured` |
 | `REDDIT_USER_AGENT`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | yes (worker ingest) | no — Reddit fetch is worker-only |
 | `GITHUB_*`, `SEED_USER_ID`, `NEWSROOM_WORKER_ONCE` | yes | no |
 | `EXPO_PUBLIC_API_URL` | optional (docs/mobile) | no — use `apps/mobile` env |
