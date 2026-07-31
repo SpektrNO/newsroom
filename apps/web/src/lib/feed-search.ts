@@ -9,7 +9,7 @@ export type FeedSearchHit = {
 const LANGSEARCH_URL = "https://api.langsearch.com/v1/web-search";
 const INDEX_FETCH_TIMEOUT_MS = 4_000;
 
-/** Path/query heuristics for likely RSS/Atom feed URLs. */
+/** Path/query heuristics for likely RSS/Atom feed URLs (filter only — never invent). */
 const FEED_LIKE =
   /(?:^|\/)(?:feed|feeds|rss|atom)(?:\/|$|\.)|\.(?:rss|xml|atom)(?:$|\?)|\/rss\.|\/atom\.|[?&](?:format|type)=(?:rss|atom|xml)/i;
 
@@ -22,8 +22,8 @@ function stripWww(host: string): string {
 }
 
 /**
- * When the user typed a domain (or URL), prefer results on that host and
- * bias LangSearch with a site: operator so aggregators like openrss.org drop out.
+ * When the user typed a domain (or URL), prefer results on that host so
+ * aggregators like openrss.org drop out.
  */
 export function extractDomainHint(userQuery: string): string | null {
   const q = userQuery.trim();
@@ -47,19 +47,31 @@ export function urlMatchesDomainHint(url: string, hint: string): boolean {
   return host === h || host.endsWith(`.${h}`);
 }
 
+/** True when the typed query is essentially just a host (or URL to that host). */
+function queryIsBareDomain(userQuery: string, domain: string): boolean {
+  const stripped = userQuery
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/^www\./i, "")
+    .toLowerCase();
+  return stripped === domain;
+}
+
+/**
+ * Upstream LangSearch query. Domains use "<domain> feed" — no invented path list.
+ */
 export function buildLangSearchQuery(userQuery: string): string | null {
   const q = userQuery.trim().replace(/\s+/g, " ");
   if (!q) return null;
   const domain = extractDomainHint(q);
-  if (domain) {
-    // site: keeps results on the publisher; feed hint still helps ranking.
-    return `site:${domain} (RSS OR Atom feed)`;
+  if (domain && queryIsBareDomain(q, domain)) {
+    return `${domain} feed`;
   }
-  // Avoid doubling the feed hint when the user already typed it.
-  if (/\b(rss|atom)\b/i.test(q) && /\bfeed\b/i.test(q)) {
+  if (/\bfeed\b/i.test(q)) {
     return q;
   }
-  return `${q} RSS OR Atom feed`;
+  return `${q} feed`;
 }
 
 export function isFeedLikeUrl(url: string): boolean {
@@ -72,7 +84,7 @@ export function isFeedLikeUrl(url: string): boolean {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return false;
   }
-  // Common publisher pattern: feed.nrk.no, rss.cnn.com (host label, not path).
+  // feed.example.com / rss.example.com host labels.
   const host = stripWww(parsed.hostname);
   const firstLabel = host.split(".")[0] ?? "";
   if (
@@ -87,28 +99,20 @@ export function isFeedLikeUrl(url: string): boolean {
   return FEED_LIKE.test(hay);
 }
 
-/**
- * Well-known feed URL shapes for a publisher domain. Not fetched here —
- * create/ingest validates; this only surfaces likely candidates when search
- * misses hostnames like https://feed.nrk.no.
- */
-export function candidateFeedUrls(domain: string): string[] {
-  const d = stripWww(domain);
-  if (!d.includes(".")) return [];
-  return [
-    `https://www.${d}/rss`,
-    `https://${d}/rss`,
-    `https://feed.${d}`,
-    `https://feeds.${d}`,
-    `https://rss.${d}`,
-    `https://${d}/feed`,
-    `https://${d}/atom.xml`,
-    `https://www.${d}/feed`,
-    `https://www.${d}/atom.xml`,
-  ];
+/** HTML directory pages (e.g. /rss) — not a single .rss/.xml file. */
+export function looksLikeFeedIndexUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    return false;
+  }
+  const path = parsed.pathname.toLowerCase();
+  if (/\.(?:rss|xml|atom)$/i.test(path)) return false;
+  return /(?:^|\/)(?:rss|feeds?)(?:\/|$)/i.test(path);
 }
 
-/** Pull absolute feed-like URLs from an HTML/text index page (e.g. nrk.no/rss). */
+/** Pull absolute feed-like URLs from an HTML/text index page. */
 export function extractFeedUrlsFromText(
   body: string,
   baseUrl: string,
@@ -147,11 +151,9 @@ export function extractFeedUrlsFromText(
   for (const m of body.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
     if (m[1]) consider(m[1]);
   }
-  // Plain text / bare URLs (NRK lists some without <a href>).
   for (const m of body.matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
     consider(m[0].replace(/[),.;]+$/g, ""));
   }
-  // Relative paths ending in .rss listed as bare text (www.nrk.no/sport/toppsaker.rss).
   for (const m of body.matchAll(
     /(?:^|[\s>])((?:https?:\/\/)?(?:www\.)?[a-z0-9.-]+\/[^\s"'<>]*\.rss)/gi,
   )) {
@@ -223,16 +225,10 @@ export function mapLangSearchResults(
   domainHint?: string | null,
 ): FeedSearchHit[] {
   const pages = payload.data?.webPages?.value;
+  if (!Array.isArray(pages)) return [];
+
   const seen = new Set<string>();
   const out: FeedSearchHit[] = [];
-
-  if (domainHint) {
-    for (const url of candidateFeedUrls(domainHint)) {
-      pushHit(out, seen, url, url, "Common feed URL for this site");
-    }
-  }
-
-  if (!Array.isArray(pages)) return out;
 
   for (const page of pages) {
     if (typeof page.url !== "string" || !page.url.trim()) continue;
@@ -248,15 +244,10 @@ export function mapLangSearchResults(
   return out;
 }
 
-/** Index pages that usually list real .rss / Atom links for a publisher. */
-export function feedIndexUrls(domain: string): string[] {
-  const d = stripWww(domain);
-  if (!d.includes(".")) return [];
-  return [`https://www.${d}/rss`, `https://${d}/rss`, `https://www.${d}/feeds`];
-}
-
-export async function discoverFeedsFromDomainIndexes(opts: {
-  domain: string;
+/** Fetch LangSearch-returned index pages and expand linked feeds. */
+export async function discoverFeedsFromIndexPages(opts: {
+  indexUrls: readonly string[];
+  domainHint?: string | null;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }): Promise<FeedSearchHit[]> {
@@ -265,7 +256,15 @@ export async function discoverFeedsFromDomainIndexes(opts: {
   const out: FeedSearchHit[] = [];
   const seen = new Set<string>();
 
-  for (const indexUrl of feedIndexUrls(opts.domain)) {
+  for (const indexUrl of opts.indexUrls) {
+    if (!looksLikeFeedIndexUrl(indexUrl)) continue;
+    if (
+      opts.domainHint &&
+      !urlMatchesDomainHint(indexUrl, opts.domainHint)
+    ) {
+      continue;
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -280,15 +279,12 @@ export async function discoverFeedsFromDomainIndexes(opts: {
       });
       if (!res.ok) continue;
       const text = await res.text();
-      // Always surface the index itself when it looks feed-related.
-      pushHit(
-        out,
-        seen,
+      pushHit(out, seen, indexUrl, indexUrl, "Publisher RSS index");
+      for (const url of extractFeedUrlsFromText(
+        text,
         indexUrl,
-        indexUrl,
-        "Publisher RSS index",
-      );
-      for (const url of extractFeedUrlsFromText(text, indexUrl, opts.domain)) {
+        opts.domainHint,
+      )) {
         pushHit(out, seen, url, url, `From ${indexUrl}`);
       }
     } catch {
@@ -311,21 +307,6 @@ export async function searchFeedsViaLangSearch(opts: {
   | { ok: false; error: "upstream" }
 > {
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-  const seen = new Set<string>();
-  const out: FeedSearchHit[] = [];
-
-  if (opts.domainHint) {
-    for (const url of candidateFeedUrls(opts.domainHint)) {
-      pushHit(out, seen, url, url, "Common feed URL for this site");
-    }
-    const scraped = await discoverFeedsFromDomainIndexes({
-      domain: opts.domainHint,
-      fetchImpl,
-    });
-    for (const hit of scraped) {
-      pushHit(out, seen, hit.url, hit.title, hit.snippet);
-    }
-  }
 
   let res: Response;
   try {
@@ -344,12 +325,10 @@ export async function searchFeedsViaLangSearch(opts: {
       }),
     });
   } catch {
-    if (out.length > 0) return { ok: true, results: out };
     return { ok: false, error: "upstream" };
   }
 
   if (!res.ok) {
-    if (out.length > 0) return { ok: true, results: out };
     return { ok: false, error: "upstream" };
   }
 
@@ -357,14 +336,16 @@ export async function searchFeedsViaLangSearch(opts: {
   try {
     json = (await res.json()) as LangSearchResponse;
   } catch {
-    if (out.length > 0) return { ok: true, results: out };
     return { ok: false, error: "upstream" };
   }
 
   if (json.code !== undefined && json.code !== 200) {
-    if (out.length > 0) return { ok: true, results: out };
     return { ok: false, error: "upstream" };
   }
+
+  const seen = new Set<string>();
+  const out: FeedSearchHit[] = [];
+  const indexUrls: string[] = [];
 
   const pages = json.data?.webPages?.value;
   if (Array.isArray(pages)) {
@@ -379,6 +360,20 @@ export async function searchFeedsViaLangSearch(opts: {
           : page.url;
       const snippet = typeof page.snippet === "string" ? page.snippet : "";
       pushHit(out, seen, page.url, title, snippet);
+      if (looksLikeFeedIndexUrl(page.url)) {
+        indexUrls.push(page.url);
+      }
+    }
+  }
+
+  if (indexUrls.length > 0) {
+    const scraped = await discoverFeedsFromIndexPages({
+      indexUrls,
+      domainHint: opts.domainHint,
+      fetchImpl,
+    });
+    for (const hit of scraped) {
+      pushHit(out, seen, hit.url, hit.title, hit.snippet);
     }
   }
 

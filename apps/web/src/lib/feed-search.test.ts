@@ -5,6 +5,7 @@ import {
   extractDomainHint,
   extractFeedUrlsFromText,
   isFeedLikeUrl,
+  looksLikeFeedIndexUrl,
   mapLangSearchResults,
   parseFeedSearchBody,
   searchFeedsViaLangSearch,
@@ -44,17 +45,15 @@ describe("urlMatchesDomainHint", () => {
 });
 
 describe("buildLangSearchQuery", () => {
-  it("uses site: when the query is a domain", () => {
-    assert.equal(
-      buildLangSearchQuery("nrk.no"),
-      "site:nrk.no (RSS OR Atom feed)",
-    );
+  it("uses '<domain> feed' for a bare domain", () => {
+    assert.equal(buildLangSearchQuery("nrk.no"), "nrk.no feed");
+    assert.equal(buildLangSearchQuery("https://www.wired.com/"), "wired.com feed");
   });
 
-  it("trims free-text queries and appends feed hint", () => {
+  it("appends feed to free-text queries", () => {
     assert.equal(
       buildLangSearchQuery("  schneier security  "),
-      "schneier security RSS OR Atom feed",
+      "schneier security feed",
     );
   });
 
@@ -62,10 +61,10 @@ describe("buildLangSearchQuery", () => {
     assert.equal(buildLangSearchQuery("   "), null);
   });
 
-  it("does not double the hint when already present (non-domain)", () => {
+  it("does not double feed when already present", () => {
     assert.equal(
-      buildLangSearchQuery("schneier RSS Atom feed"),
-      "schneier RSS Atom feed",
+      buildLangSearchQuery("schneier security feed"),
+      "schneier security feed",
     );
   });
 });
@@ -80,7 +79,7 @@ describe("isFeedLikeUrl", () => {
     assert.equal(isFeedLikeUrl("https://x.com/?format=rss"), true);
   });
 
-  it("accepts .rss extensions used by publishers like NRK", () => {
+  it("accepts .rss extensions", () => {
     assert.equal(isFeedLikeUrl("https://www.nrk.no/toppsaker.rss"), true);
     assert.equal(isFeedLikeUrl("https://www.nrk.no/nyheter/siste.rss"), true);
   });
@@ -98,6 +97,22 @@ describe("isFeedLikeUrl", () => {
   });
 });
 
+describe("looksLikeFeedIndexUrl", () => {
+  it("detects HTML directory paths", () => {
+    assert.equal(looksLikeFeedIndexUrl("https://www.nrk.no/rss"), true);
+    assert.equal(looksLikeFeedIndexUrl("https://www.nrk.no/rss/"), true);
+    assert.equal(looksLikeFeedIndexUrl("https://example.com/feeds"), true);
+  });
+
+  it("rejects concrete feed files", () => {
+    assert.equal(
+      looksLikeFeedIndexUrl("https://www.nrk.no/toppsaker.rss"),
+      false,
+    );
+    assert.equal(looksLikeFeedIndexUrl("https://example.com/atom.xml"), false);
+  });
+});
+
 describe("extractFeedUrlsFromText", () => {
   it("pulls NRK-style .rss links from an index page", () => {
     const html = `
@@ -105,7 +120,11 @@ describe("extractFeedUrlsFromText", () => {
       NRK Nyheter www.nrk.no/nyheter/siste.rss
       <a href="/sport/toppsaker.rss">Sport</a>
     `;
-    const urls = extractFeedUrlsFromText(html, "https://www.nrk.no/rss/", "nrk.no");
+    const urls = extractFeedUrlsFromText(
+      html,
+      "https://www.nrk.no/rss/",
+      "nrk.no",
+    );
     assert.ok(urls.includes("https://www.nrk.no/buskerud/toppsaker.rss"));
     assert.ok(urls.includes("https://www.nrk.no/nyheter/siste.rss"));
     assert.ok(urls.includes("https://www.nrk.no/sport/toppsaker.rss"));
@@ -113,10 +132,10 @@ describe("extractFeedUrlsFromText", () => {
 });
 
 describe("parseFeedSearchBody", () => {
-  it("builds site query and domain hint from body", () => {
+  it("builds domain feed query and domain hint from body", () => {
     assert.deepEqual(parseFeedSearchBody({ query: "nrk.no" }), {
       ok: true,
-      query: "site:nrk.no (RSS OR Atom feed)",
+      query: "nrk.no feed",
       domainHint: "nrk.no",
     });
   });
@@ -130,7 +149,7 @@ describe("parseFeedSearchBody", () => {
 });
 
 describe("mapLangSearchResults", () => {
-  it("filters feed-like URLs and dedupes", () => {
+  it("filters feed-like URLs and dedupes without inventing paths", () => {
     const hits = mapLangSearchResults({
       code: 200,
       data: {
@@ -160,13 +179,12 @@ describe("mapLangSearchResults", () => {
     assert.equal(hits[0]?.url, "https://www.nrk.no/rss");
   });
 
-  it("includes www.nrk.no/rss among domain candidates", () => {
+  it("does not invent candidates for an empty LangSearch payload", () => {
     const hits = mapLangSearchResults(
       { code: 200, data: { webPages: { value: [] } } },
-      "nrk.no",
+      "wired.com",
     );
-    assert.ok(hits.some((h) => h.url === "https://www.nrk.no/rss"));
-    assert.ok(hits.some((h) => h.url === "https://feed.nrk.no/"));
+    assert.equal(hits.length, 0);
   });
 
   it("drops feed-like URLs off the queried domain", () => {
@@ -192,46 +210,54 @@ describe("mapLangSearchResults", () => {
       },
       "nrk.no",
     );
-    assert.ok(hits.some((h) => h.url === "https://www.nrk.no/toppsaker.rss"));
-    assert.ok(hits.some((h) => h.url === "https://www.nrk.no/rss"));
-    assert.ok(!hits.some((h) => h.url.includes("openrss.org")));
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.url, "https://www.nrk.no/toppsaker.rss");
   });
 });
 
 describe("searchFeedsViaLangSearch", () => {
-  it("returns domain candidates even when LangSearch fails", async () => {
+  it("returns upstream on HTTP failure", async () => {
     const result = await searchFeedsViaLangSearch({
-      query: "site:nrk.no (RSS OR Atom feed)",
-      domainHint: "nrk.no",
+      query: "wired.com feed",
+      domainHint: "wired.com",
       apiKey: "test-key",
-      fetchImpl: async (input) => {
-        const url = String(input);
-        if (url.includes("langsearch.com")) {
-          return new Response("nope", { status: 500 });
-        }
-        // Index pages unavailable in unit test.
-        return new Response("not found", { status: 404 });
-      },
+      fetchImpl: async () => new Response("nope", { status: 500 }),
     });
-    assert.equal(result.ok, true);
-    if (!result.ok) return;
-    assert.ok(result.results.some((h) => h.url === "https://www.nrk.no/rss"));
+    assert.deepEqual(result, { ok: false, error: "upstream" });
   });
 
-  it("scrapes feed links from an RSS index page", async () => {
+  it("scrapes only index pages returned by LangSearch", async () => {
     const result = await searchFeedsViaLangSearch({
-      query: "site:nrk.no (RSS OR Atom feed)",
+      query: "nrk.no feed",
       domainHint: "nrk.no",
       apiKey: "test-key",
       fetchImpl: async (input) => {
         const url = String(input);
         if (url.includes("langsearch.com")) {
           return new Response(
-            JSON.stringify({ code: 200, data: { webPages: { value: [] } } }),
+            JSON.stringify({
+              code: 200,
+              data: {
+                webPages: {
+                  value: [
+                    {
+                      name: "NRK RSS",
+                      url: "https://www.nrk.no/rss",
+                      snippet: "index",
+                    },
+                    {
+                      name: "Wired junk",
+                      url: "https://www.wired.com/feed",
+                      snippet: "wrong domain",
+                    },
+                  ],
+                },
+              },
+            }),
             { status: 200, headers: { "content-type": "application/json" } },
           );
         }
-        if (url.includes("/rss")) {
+        if (url === "https://www.nrk.no/rss" || url === "https://www.nrk.no/rss/") {
           return new Response(
             `<a href="https://www.nrk.no/toppsaker.rss">Forside</a>`,
             { status: 200, headers: { "content-type": "text/html" } },
@@ -246,14 +272,6 @@ describe("searchFeedsViaLangSearch", () => {
     assert.ok(
       result.results.some((h) => h.url === "https://www.nrk.no/toppsaker.rss"),
     );
-  });
-
-  it("returns upstream on HTTP failure without domain fallback", async () => {
-    const result = await searchFeedsViaLangSearch({
-      query: "x",
-      apiKey: "test-key",
-      fetchImpl: async () => new Response("nope", { status: 500 }),
-    });
-    assert.deepEqual(result, { ok: false, error: "upstream" });
+    assert.ok(!result.results.some((h) => h.url.includes("wired.com")));
   });
 });
