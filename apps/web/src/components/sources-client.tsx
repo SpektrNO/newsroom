@@ -719,7 +719,14 @@ export function SourcesClient(): ReactNode {
                   <input
                     type="search"
                     value={feedSearchQuery}
-                    onChange={(e) => setFeedSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setFeedSearchQuery(next);
+                      if (!next.trim()) {
+                        setFeedSearchResults([]);
+                        setFeedSearchNote(null);
+                      }
+                    }}
                     placeholder="Site or name (e.g. nrk.no)"
                     autoComplete="off"
                     disabled={feedSearching || pending}
