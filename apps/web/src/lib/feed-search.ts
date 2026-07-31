@@ -71,8 +71,59 @@ export function isFeedLikeUrl(url: string): boolean {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return false;
   }
+  // Common publisher pattern: feed.nrk.no, rss.cnn.com (host label, not path).
+  const host = stripWww(parsed.hostname);
+  const firstLabel = host.split(".")[0] ?? "";
+  if (
+    firstLabel === "feed" ||
+    firstLabel === "feeds" ||
+    firstLabel === "rss" ||
+    firstLabel === "atom"
+  ) {
+    return true;
+  }
   const hay = `${parsed.pathname}${parsed.search}`;
   return FEED_LIKE.test(hay);
+}
+
+/**
+ * Well-known feed URL shapes for a publisher domain. Not fetched here —
+ * create/ingest validates; this only surfaces likely candidates when search
+ * misses hostnames like https://feed.nrk.no.
+ */
+export function candidateFeedUrls(domain: string): string[] {
+  const d = stripWww(domain);
+  if (!d.includes(".")) return [];
+  return [
+    `https://feed.${d}`,
+    `https://feeds.${d}`,
+    `https://rss.${d}`,
+    `https://${d}/rss`,
+    `https://${d}/feed`,
+    `https://${d}/atom.xml`,
+    `https://www.${d}/rss`,
+    `https://www.${d}/feed`,
+    `https://www.${d}/atom.xml`,
+  ];
+}
+
+function pushHit(
+  out: FeedSearchHit[],
+  seen: Set<string>,
+  url: string,
+  title: string,
+  snippet: string,
+): void {
+  if (!isFeedLikeUrl(url)) return;
+  let canonical: string;
+  try {
+    canonical = normalizeCanonicalUrl(url);
+  } catch {
+    return;
+  }
+  if (seen.has(canonical)) return;
+  seen.add(canonical);
+  out.push({ title: title.trim() || canonical, url: canonical, snippet });
 }
 
 export function parseFeedSearchBody(
@@ -118,33 +169,26 @@ export function mapLangSearchResults(
   domainHint?: string | null,
 ): FeedSearchHit[] {
   const pages = payload.data?.webPages?.value;
-  if (!Array.isArray(pages)) return [];
-
   const seen = new Set<string>();
   const out: FeedSearchHit[] = [];
 
+  if (domainHint) {
+    for (const url of candidateFeedUrls(domainHint)) {
+      pushHit(out, seen, url, url, "Common feed URL for this site");
+    }
+  }
+
+  if (!Array.isArray(pages)) return out;
+
   for (const page of pages) {
     if (typeof page.url !== "string" || !page.url.trim()) continue;
-    if (!isFeedLikeUrl(page.url)) continue;
     if (domainHint && !urlMatchesDomainHint(page.url, domainHint)) continue;
-
-    let canonical: string;
-    try {
-      canonical = normalizeCanonicalUrl(page.url);
-    } catch {
-      continue;
-    }
-    if (seen.has(canonical)) continue;
-    seen.add(canonical);
-
-    out.push({
-      title:
-        typeof page.name === "string" && page.name.trim()
-          ? page.name.trim()
-          : canonical,
-      url: canonical,
-      snippet: typeof page.snippet === "string" ? page.snippet : "",
-    });
+    const title =
+      typeof page.name === "string" && page.name.trim()
+        ? page.name.trim()
+        : page.url;
+    const snippet = typeof page.snippet === "string" ? page.snippet : "";
+    pushHit(out, seen, page.url, title, snippet);
   }
 
   return out;

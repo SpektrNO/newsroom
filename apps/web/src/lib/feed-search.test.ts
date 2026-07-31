@@ -78,6 +78,12 @@ describe("isFeedLikeUrl", () => {
     assert.equal(isFeedLikeUrl("https://x.com/?format=rss"), true);
   });
 
+  it("accepts feed/rss/atom hostnames with a bare path", () => {
+    assert.equal(isFeedLikeUrl("https://feed.nrk.no"), true);
+    assert.equal(isFeedLikeUrl("https://feed.nrk.no/"), true);
+    assert.equal(isFeedLikeUrl("https://rss.example.com/"), true);
+  });
+
   it("rejects non-feed pages", () => {
     assert.equal(isFeedLikeUrl("https://nrk.no/"), false);
     assert.equal(isFeedLikeUrl("https://nrk.no/nyheter"), false);
@@ -156,8 +162,17 @@ describe("mapLangSearchResults", () => {
       },
       "nrk.no",
     );
-    assert.equal(hits.length, 1);
-    assert.equal(hits[0]?.url, "https://www.nrk.no/rss");
+    assert.ok(hits.some((h) => h.url === "https://www.nrk.no/rss"));
+    assert.ok(hits.some((h) => h.url === "https://feed.nrk.no/"));
+    assert.ok(!hits.some((h) => h.url.includes("openrss.org")));
+  });
+
+  it("surfaces feed.nrk.no even when LangSearch omits it", () => {
+    const hits = mapLangSearchResults(
+      { code: 200, data: { webPages: { value: [] } } },
+      "nrk.no",
+    );
+    assert.ok(hits.some((h) => h.url === "https://feed.nrk.no/"));
   });
 });
 
@@ -193,8 +208,9 @@ describe("searchFeedsViaLangSearch", () => {
     });
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    assert.equal(result.results.length, 1);
-    assert.equal(result.results[0]?.url, "https://www.nrk.no/atom.xml");
+    assert.ok(result.results.some((h) => h.url === "https://www.nrk.no/atom.xml"));
+    assert.ok(result.results.some((h) => h.url === "https://feed.nrk.no/"));
+    assert.ok(!result.results.some((h) => h.url.includes("example.com")));
   });
 
   it("returns upstream on HTTP failure", async () => {
