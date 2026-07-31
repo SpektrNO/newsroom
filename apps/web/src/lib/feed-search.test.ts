@@ -2,21 +2,58 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildLangSearchQuery,
+  extractDomainHint,
   isFeedLikeUrl,
   mapLangSearchResults,
   parseFeedSearchBody,
   searchFeedsViaLangSearch,
+  urlMatchesDomainHint,
 } from "./feed-search.js";
 
-describe("buildLangSearchQuery", () => {
-  it("appends RSS OR Atom feed", () => {
-    assert.equal(buildLangSearchQuery("nrk.no"), "nrk.no RSS OR Atom feed");
+describe("extractDomainHint", () => {
+  it("pulls a bare domain", () => {
+    assert.equal(extractDomainHint("nrk.no"), "nrk.no");
+    assert.equal(extractDomainHint("www.nrk.no"), "nrk.no");
   });
 
-  it("trims and collapses whitespace", () => {
+  it("pulls a domain from a URL", () => {
+    assert.equal(extractDomainHint("https://www.nrk.no/nyheter"), "nrk.no");
+  });
+
+  it("returns null for free text without a host", () => {
+    assert.equal(extractDomainHint("schneier security blog"), null);
+  });
+});
+
+describe("urlMatchesDomainHint", () => {
+  it("matches host and subdomains", () => {
     assert.equal(
-      buildLangSearchQuery("  nrk  no  "),
-      "nrk no RSS OR Atom feed",
+      urlMatchesDomainHint("https://www.nrk.no/rss", "nrk.no"),
+      true,
+    );
+    assert.equal(
+      urlMatchesDomainHint("https://podcast.nrk.no/feed", "nrk.no"),
+      true,
+    );
+    assert.equal(
+      urlMatchesDomainHint("https://openrss.org/feeds/reddit", "nrk.no"),
+      false,
+    );
+  });
+});
+
+describe("buildLangSearchQuery", () => {
+  it("uses site: when the query is a domain", () => {
+    assert.equal(
+      buildLangSearchQuery("nrk.no"),
+      "site:nrk.no (RSS OR Atom feed)",
+    );
+  });
+
+  it("trims free-text queries and appends feed hint", () => {
+    assert.equal(
+      buildLangSearchQuery("  schneier security  "),
+      "schneier security RSS OR Atom feed",
     );
   });
 
@@ -24,10 +61,10 @@ describe("buildLangSearchQuery", () => {
     assert.equal(buildLangSearchQuery("   "), null);
   });
 
-  it("does not double the hint when already present", () => {
+  it("does not double the hint when already present (non-domain)", () => {
     assert.equal(
-      buildLangSearchQuery("nrk.no RSS Atom feed"),
-      "nrk.no RSS Atom feed",
+      buildLangSearchQuery("schneier RSS Atom feed"),
+      "schneier RSS Atom feed",
     );
   });
 });
@@ -49,10 +86,11 @@ describe("isFeedLikeUrl", () => {
 });
 
 describe("parseFeedSearchBody", () => {
-  it("builds query from body", () => {
+  it("builds site query and domain hint from body", () => {
     assert.deepEqual(parseFeedSearchBody({ query: "nrk.no" }), {
       ok: true,
-      query: "nrk.no RSS OR Atom feed",
+      query: "site:nrk.no (RSS OR Atom feed)",
+      domainHint: "nrk.no",
     });
   });
 
@@ -94,12 +132,40 @@ describe("mapLangSearchResults", () => {
     assert.equal(hits[0]?.title, "NRK RSS");
     assert.equal(hits[0]?.url, "https://www.nrk.no/rss");
   });
+
+  it("drops feed-like URLs off the queried domain", () => {
+    const hits = mapLangSearchResults(
+      {
+        code: 200,
+        data: {
+          webPages: {
+            value: [
+              {
+                name: "Open RSS Reddit",
+                url: "https://openrss.org/feeds/reddit",
+                snippet: "aggregator",
+              },
+              {
+                name: "NRK",
+                url: "https://www.nrk.no/rss",
+                snippet: "ok",
+              },
+            ],
+          },
+        },
+      },
+      "nrk.no",
+    );
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.url, "https://www.nrk.no/rss");
+  });
 });
 
 describe("searchFeedsViaLangSearch", () => {
-  it("maps a successful LangSearch payload", async () => {
+  it("maps a successful LangSearch payload with domain filter", async () => {
     const result = await searchFeedsViaLangSearch({
-      query: "nrk.no RSS OR Atom feed",
+      query: "site:nrk.no (RSS OR Atom feed)",
+      domainHint: "nrk.no",
       apiKey: "test-key",
       fetchImpl: async () =>
         new Response(
@@ -109,8 +175,13 @@ describe("searchFeedsViaLangSearch", () => {
               webPages: {
                 value: [
                   {
-                    name: "Feed",
+                    name: "Wrong",
                     url: "https://example.com/atom.xml",
+                    snippet: "atom",
+                  },
+                  {
+                    name: "Feed",
+                    url: "https://www.nrk.no/atom.xml",
                     snippet: "atom",
                   },
                 ],
@@ -123,7 +194,7 @@ describe("searchFeedsViaLangSearch", () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.results.length, 1);
-    assert.equal(result.results[0]?.url, "https://example.com/atom.xml");
+    assert.equal(result.results[0]?.url, "https://www.nrk.no/atom.xml");
   });
 
   it("returns upstream on HTTP failure", async () => {

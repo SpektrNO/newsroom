@@ -33,6 +33,7 @@ export async function POST(request: Request) {
 
   const searched = await searchFeedsViaLangSearch({
     query: parsed.query,
+    domainHint: parsed.domainHint,
     apiKey,
   });
   if (!searched.ok) {
