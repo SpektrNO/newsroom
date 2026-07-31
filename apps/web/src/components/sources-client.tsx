@@ -104,6 +104,13 @@ function categoryLabel(category: string): string {
   return category;
 }
 
+function feedSearchPlaceholder(kind: AddKind): string {
+  if (kind === "podcast") return "Show or site (e.g. radiolab.org)";
+  if (kind === "newsletter") return "Digest or site (e.g. tldr.tech)";
+  if (kind === "community") return "Community or site (e.g. importai.substack.com)";
+  return "Site or name (e.g. nrk.no)";
+}
+
 /** Suggested-row prefix aligned with the active shelf, not ingest kind. */
 function catalogShelfLabel(shelf: FeedCatalogCategory): string {
   if (shelf === "websites") return "Site";
@@ -727,7 +734,7 @@ export function SourcesClient(): ReactNode {
                         setFeedSearchNote(null);
                       }
                     }}
-                    placeholder="Site or name (e.g. nrk.no)"
+                    placeholder={feedSearchPlaceholder(addKind)}
                     autoComplete="off"
                     disabled={feedSearching || pending}
                     onKeyDown={(e) => {
