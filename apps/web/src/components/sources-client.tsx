@@ -18,7 +18,7 @@ import {
 } from "@newsroom/api-client";
 import { defaultRssCategory } from "@newsroom/sources/community-host";
 import { getBrowserApiClient } from "@/lib/api";
-import { isCatalogEntryAlreadyAdded } from "@/lib/feed-catalog-match";
+import { isCatalogEntryAlreadyAdded, isFeedAlreadyAdded } from "@/lib/feed-catalog-match";
 import {
   FEED_CATALOG_CATEGORIES,
   catalogEntryKind,
@@ -760,7 +760,9 @@ export function SourcesClient(): ReactNode {
                 ) : null}
                 {feedSearchResults.length > 0 ? (
                   <ul className="manage-list source-feed-search-results">
-                    {feedSearchResults.map((hit) => (
+                    {feedSearchResults.map((hit) => {
+                      const alreadyAdded = isFeedAlreadyAdded(sources, hit.url);
+                      return (
                       <li key={hit.url} className="manage-row">
                         <div className="manage-main">
                           <p className="manage-title">{hit.title}</p>
@@ -773,17 +775,23 @@ export function SourcesClient(): ReactNode {
                           <button
                             type="button"
                             disabled={
+                              alreadyAdded ||
                               pending ||
                               addingFeedUrl !== null ||
                               feedSearching
                             }
                             onClick={() => void addSearchedFeed(hit)}
                           >
-                            {addingFeedUrl === hit.url ? "Adding…" : "Add"}
+                            {alreadyAdded
+                              ? "Added"
+                              : addingFeedUrl === hit.url
+                                ? "Adding…"
+                                : "Add"}
                           </button>
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 ) : null}
               </div>
