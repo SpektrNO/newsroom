@@ -302,6 +302,20 @@ export type FeedCatalogResponse = {
   feeds: FeedCatalogEntry[];
 };
 
+export type FeedSearchHit = {
+  title: string;
+  url: string;
+  snippet: string;
+};
+
+export type FeedSearchResponse = {
+  results: FeedSearchHit[];
+};
+
+export type FeedSearchRequest = {
+  query: string;
+};
+
 export type ApiClientOptions = {
   baseUrl: string;
   fetch?: typeof fetch;
@@ -378,6 +392,11 @@ export class ApiClient {
 
   async listFeedCatalog(): Promise<FeedCatalogResponse> {
     return this.requestJson("GET", "/api/feed-catalog");
+  }
+
+  /** Discover RSS/Atom feed URLs via BFF → LangSearch (never call LangSearch from the browser). */
+  async searchFeeds(input: FeedSearchRequest): Promise<FeedSearchResponse> {
+    return this.requestJson("POST", "/api/feed-search", input);
   }
 
   /**

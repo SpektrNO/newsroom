@@ -34,6 +34,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | 2026-07-30 | `source-reddit` | Reddit adapter (subreddits → ranked feed) | #165 | Completed via spec→implement pipeline |
 | 2026-07-30 | `ai-cloud-providers` | OpenAI + Google Gemini `AiProvider` (+ optional BYOK) | #175 | Completed via spec→implement pipeline |
 | 2026-07-30 | `ai-cloud-providers-byok` | Per-user encrypted OpenAI/Google keys (BYOK) | #183 | Completed via spec→implement pipeline |
+| 2026-07-31 | `web-source-feed-search` | Search RSS/Atom feeds via LangSearch (BFF) | #192 | LangSearch BFF feed search on Sources |
 | _—_ | _pipeline completions append here (newest first)_ | | | |
 
 ## A. Foundation
@@ -62,6 +63,7 @@ Shipped features registry. Complements [feature-backlog.md](./feature-backlog.md
 | `web-source-discovery` | Discover/add feeds without knowing URLs | 2026-07-26 | `docs/architecture.md` | Completed via spec→implement pipeline |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | 2026-07-27 | `docs/architecture.md` | Wipe rankings button; keep saved/dismissed; no auto re-rank |
 | `web-elegant-refresh` | Elegant visual/UX polish across web client | 2026-07-28 | `docs/architecture.md` | Completed via spec→implement pipeline |
+| `web-source-feed-search` | Search RSS/Atom feeds via LangSearch (BFF) | 2026-07-31 | `docs/architecture.md` | LangSearch BFF feed search on Sources |
 ## Other
 
 | ID | Feature | Completed | Spec | Notes |
