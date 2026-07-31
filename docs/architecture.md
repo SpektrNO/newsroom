@@ -1,6 +1,6 @@
 # Newsroom architecture
 
-Personal-first, multi-user-ready feed of stories matched to topics of interest. Primary sources: Hacker News, Substack, podcasts, Bluesky, and Reddit; X deferred.
+Personal-first, multi-user-ready feed of stories matched to topics of interest. Sources are categorized as websites, communities (HN, Reddit, Substack/dev.to-style RSS, …), podcasts, and social media (Bluesky; X deferred).
 
 ## Goals
 
@@ -67,7 +67,7 @@ flowchart LR
 | `packages/db` | Drizzle schema + migrations |
 | `packages/api-client` | Shared typed fetch client for web + mobile |
 | `packages/ai` | `AiProvider` interface; `createAiProvider` → Ollama (default) / OpenAI / Google |
-| `packages/sources` | Source adapters (HN, Substack, podcasts, Bluesky, Reddit; later X) |
+| `packages/sources` | Source adapters (`hackernews`, `rss`, `bluesky`, `reddit`) + category helpers |
 
 ## Defaults
 
@@ -80,8 +80,8 @@ flowchart LR
 
 - `users`, `sessions` — Better Auth
 - `articles` — canonical URL, title, summary, author, published_at, optional podcast show_title / duration_seconds / enclosure_url, raw payload, content hash
-- `source_subscriptions` — `user_id`, `source_type` (`hackernews` \| `substack` \| `podcast` \| `bluesky` \| `reddit` \| …), config JSON, enabled
-- `article_sources` — which adapter produced an article
+- `source_subscriptions` — `user_id`, **`category`** (`podcast` \| `website` \| `social_media` \| `community`), **`adapter`** (`hackernews` \| `rss` \| `bluesky` \| `reddit`), config JSON, enabled
+- `article_sources` — which category/adapter produced an article (denormalized at ingest)
 - `user_article_scores` — per-user keyword_score, ai_score, final_rank, reason, status (`new` \| `seen` \| `saved` \| `dismissed`), matched_topic_ids (topic ids the article belongs to — keyword-matched, then AI-narrowed; `NULL` on pre-migration rows)
 - `user_article_evaluations` — per-user keyword check markers (`hit` true/false); lets rank walk past misses without polluting the feed score table
 - `jobs` — ingest/rank work items
@@ -109,16 +109,24 @@ Never call model hosts (Ollama, OpenAI, Google, …) from UI code — only via B
 
 ## Source adapters
 
-| Source | Approach | Status |
-|--------|----------|--------|
-| Hacker News | Firebase API + Algolia HN Search | v1 |
-| Substack | User-added RSS URLs + curated catalog (`web-source-discovery`) | v1 |
-| Podcasts | Podcast RSS/Atom (`source_type: podcast`, `{ rssUrl }`); episodes as feed items with show/duration/enclosure | v1 (`source-podcast`) |
-| Bluesky | Public AppView `getAuthorFeed` (`source_type: bluesky`, `{ handle }`); posts as feed items (no Bluesky auth) | v1 (`source-bluesky`) |
-| Reddit | Subreddit listing (`source_type: reddit`, `{ subreddit }`); OAuth JSON when creds set, else public JSON with `REDDIT_USER_AGENT`, falling back to `r/{sub}/.rss` on 403/429 | v1 (`source-reddit`) |
-| X | Paid API | deferred |
+Subscriptions have a product **category** (feed filters / Sources UI) and an ingest **adapter** (fetch implementation). Examples (HN, Substack, Bluesky) are not top-level types.
 
-Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`.
+| Category | Typical adapters | Notes |
+|----------|------------------|--------|
+| `community` | `hackernews`, `reddit`, `rss` | HN, Reddit, Substack/dev.to-style RSS, etc. |
+| `website` | `rss` | Magazines, newspapers, independent blogs |
+| `podcast` | `rss` | Enclosure-aware RSS parse |
+| `social_media` | `bluesky` | Follow a handle (X/FB later) |
+
+| Adapter | Approach | Status |
+|---------|----------|--------|
+| `hackernews` | Firebase API + Algolia HN Search | v1 |
+| `rss` | Generic RSS/Atom (`{ rssUrl }`); podcast category adds show/duration/enclosure | v1 |
+| `bluesky` | Public AppView `getAuthorFeed` (`{ handle }`) | v1 |
+| `reddit` | Subreddit listing (`{ subreddit }`); OAuth JSON when creds set, else public JSON / RSS fallback | v1 |
+| X / Facebook | Paid / restricted APIs | deferred |
+
+Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`. Curated catalog (`GET /api/feed-catalog`) shelves include a **Newsletters** browse tab; persisted category is `community` or `website` from host heuristics (Substack/dev.to → community).
 
 ## API surface
 

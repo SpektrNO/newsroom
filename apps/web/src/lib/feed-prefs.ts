@@ -1,21 +1,20 @@
-import type { SourceTypeV1 } from "@newsroom/api-client";
+import type { SourceCategoryV1 } from "@newsroom/api-client";
 
 export const FEED_PREFS_KEY = "newsroom.feed.prefs";
 
 export type FeedViewFilter = "feed" | "saved" | "dismissed";
 export type FeedSortField = "score" | "date";
 export type FeedSortOrder = "asc" | "desc";
-export type FeedSourceFilter = SourceTypeV1;
+export type FeedSourceFilter = SourceCategoryV1;
 
 const VIEWS = ["feed", "saved", "dismissed"] as const;
 const SORTS = ["score", "date"] as const;
 const ORDERS = ["asc", "desc"] as const;
 const SOURCES = [
-  "hackernews",
-  "substack",
   "podcast",
-  "bluesky",
-  "reddit",
+  "website",
+  "social_media",
+  "community",
 ] as const;
 
 export type StoredFeedPrefs = {

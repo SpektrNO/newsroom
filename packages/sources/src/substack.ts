@@ -3,24 +3,29 @@ import { normalizeCanonicalUrl } from "./url.js";
 import { hashArticleContent } from "./hash.js";
 import { fetchAndParseRss } from "./rss.js";
 
-export type SubstackConfig = {
+export type RssConfig = {
   rssUrl: string;
 };
 
-export type SubstackAdapterOptions = {
+export type RssAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+/** @deprecated Use RssConfig */
+export type SubstackConfig = RssConfig;
+/** @deprecated Use RssAdapterOptions */
+export type SubstackAdapterOptions = RssAdapterOptions;
+
 /**
- * Substack (and compatible) RSS/Atom feeds.
+ * Generic article RSS/Atom feeds (websites, community platforms, digests).
  * Does not scrape paywalled full bodies — title/summary/link only.
  */
-export class SubstackAdapter implements SourceAdapter {
-  readonly type = "substack" as const;
+export class RssAdapter implements SourceAdapter {
+  readonly type = "rss" as const;
   private readonly rssUrl: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(config: SubstackConfig, options: SubstackAdapterOptions = {}) {
+  constructor(config: RssConfig, options: RssAdapterOptions = {}) {
     if (!config.rssUrl?.trim()) {
       throw new Error("invalid_config");
     }
@@ -31,7 +36,7 @@ export class SubstackAdapter implements SourceAdapter {
   async fetchRecent(): Promise<NormalizedArticle[]> {
     const feed = await fetchAndParseRss(this.rssUrl, {
       fetch: this.fetchImpl,
-      fetchErrorPrefix: "substack_fetch_failed",
+      fetchErrorPrefix: "rss_fetch_failed",
     });
     const articles: NormalizedArticle[] = [];
 
@@ -72,3 +77,6 @@ export class SubstackAdapter implements SourceAdapter {
     return articles;
   }
 }
+
+/** @deprecated Use RssAdapter */
+export const SubstackAdapter = RssAdapter;

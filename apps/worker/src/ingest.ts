@@ -13,7 +13,8 @@ import {
   hashArticleContent,
   normalizeCanonicalUrl,
   type NormalizedArticle,
-  type SourceType,
+  type SourceAdapterId,
+  type SourceCategory,
 } from "@newsroom/sources";
 import { completeJob } from "./jobs.js";
 
@@ -50,18 +51,20 @@ export async function runIngest(
   };
 
   for (const sub of subs) {
-    const sourceType = sub.sourceType as SourceType;
+    const adapterId = sub.adapter as SourceAdapterId;
+    const category = sub.category as SourceCategory;
     try {
       const adapter = createSourceAdapter(
-        sourceType,
+        adapterId,
         (sub.config ?? {}) as SourceSubscriptionConfig,
-        { fetch: options.fetch },
+        { fetch: options.fetch, category },
       );
       const items = await adapter.fetchRecent();
       for (const item of items) {
         await upsertArticleAndSource(db, item, {
           subscriptionId: sub.id,
-          sourceType,
+          category,
+          adapter: adapterId,
         });
         result.articlesUpserted += 1;
       }
@@ -72,9 +75,9 @@ export async function runIngest(
     } catch (err) {
       result.failed += 1;
       const message = err instanceof Error ? err.message : String(err);
-      result.errors.push(`${sub.id}:${sourceType}:${message}`);
+      result.errors.push(`${sub.id}:${adapterId}:${message}`);
       console.error(
-        `[newsroom-worker] ingest failed for subscription ${sub.id} (${sourceType}):`,
+        `[newsroom-worker] ingest failed for subscription ${sub.id} (${adapterId}):`,
         message,
       );
     }
@@ -87,7 +90,11 @@ export async function runIngest(
 async function upsertArticleAndSource(
   db: Database,
   item: NormalizedArticle,
-  link: { subscriptionId: string; sourceType: SourceType },
+  link: {
+    subscriptionId: string;
+    category: SourceCategory;
+    adapter: SourceAdapterId;
+  },
 ): Promise<void> {
   const canonicalUrl = normalizeCanonicalUrl(item.url);
   const contentHash =
@@ -149,7 +156,8 @@ async function upsertArticleAndSource(
     await db
       .update(articleSources)
       .set({
-        sourceType: link.sourceType,
+        category: link.category,
+        adapter: link.adapter,
         externalId: item.externalId ?? null,
         fetchedAt: now,
       })
@@ -159,7 +167,8 @@ async function upsertArticleAndSource(
       id: crypto.randomUUID(),
       articleId: article.id,
       sourceSubscriptionId: link.subscriptionId,
-      sourceType: link.sourceType,
+      category: link.category,
+      adapter: link.adapter,
       externalId: item.externalId ?? null,
       fetchedAt: now,
     });

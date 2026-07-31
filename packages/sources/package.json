@@ -11,6 +11,10 @@
     "./url": {
       "types": "./dist/url.d.ts",
       "default": "./dist/url.js"
+    },
+    "./community-host": {
+      "types": "./dist/community-host.d.ts",
+      "default": "./dist/community-host.js"
     }
   },
   "scripts": {

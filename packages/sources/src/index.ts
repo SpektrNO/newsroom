@@ -1,4 +1,6 @@
 export type {
+  SourceCategory,
+  SourceAdapterId,
   SourceType,
   NormalizedArticle,
   SourceAdapter,
@@ -6,6 +8,10 @@ export type {
 export { StubSourceAdapter } from "./stub.js";
 export { normalizeCanonicalUrl } from "./url.js";
 export { normalizeBlueskyHandle } from "./bluesky-handle.js";
+export {
+  isCommunityRssHost,
+  defaultRssCategory,
+} from "./community-host.js";
 export { hashArticleContent } from "./hash.js";
 export {
   HackerNewsAdapter,
@@ -14,7 +20,10 @@ export {
   type HackerNewsAdapterOptions,
 } from "./hackernews.js";
 export {
+  RssAdapter,
   SubstackAdapter,
+  type RssConfig,
+  type RssAdapterOptions,
   type SubstackConfig,
   type SubstackAdapterOptions,
 } from "./substack.js";

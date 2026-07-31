@@ -22,7 +22,8 @@ export async function GET() {
     sources: rows.map((row) =>
       toSourceJson({
         id: row.id,
-        sourceType: row.sourceType,
+        category: row.category,
+        adapter: row.adapter,
         config: row.config ?? {},
         enabled: row.enabled,
         createdAt: row.createdAt,
@@ -57,7 +58,8 @@ export async function POST(request: Request) {
       .values({
         id,
         userId: authResult.userId,
-        sourceType: parsed.sourceType,
+        category: parsed.category,
+        adapter: parsed.adapter,
         config: parsed.config,
         enabled: parsed.enabled,
         createdAt: now,
@@ -75,7 +77,8 @@ export async function POST(request: Request) {
       {
         source: toSourceJson({
           id: row.id,
-          sourceType: row.sourceType,
+          category: row.category,
+          adapter: row.adapter,
           config: row.config ?? {},
           enabled: row.enabled,
           createdAt: row.createdAt,

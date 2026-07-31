@@ -1,8 +1,12 @@
-import type { NormalizedArticle, SourceAdapter, SourceType } from "./types.js";
+import type {
+  NormalizedArticle,
+  SourceAdapter,
+  SourceAdapterId,
+} from "./types.js";
 
-/** No-op stub — used for unsupported types (e.g. bluesky) until implemented. */
+/** No-op stub — used for unsupported adapter ids until implemented. */
 export class StubSourceAdapter implements SourceAdapter {
-  constructor(readonly type: SourceType) {}
+  constructor(readonly type: SourceAdapterId) {}
 
   async fetchRecent(): Promise<NormalizedArticle[]> {
     return [];

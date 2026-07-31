@@ -31,7 +31,10 @@ export const sourceSubscriptions = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    sourceType: text("source_type").notNull(),
+    /** Product category: podcast | website | social_media | community */
+    category: text("category").notNull(),
+    /** Ingest adapter: hackernews | rss | bluesky | reddit */
+    adapter: text("adapter").notNull(),
     config: jsonb("config").$type<SourceSubscriptionConfig>().notNull().default({}),
     enabled: boolean("enabled").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -44,30 +47,26 @@ export const sourceSubscriptions = pgTable(
   },
   (table) => [
     index("source_subscriptions_user_id_idx").on(table.userId),
-    index("source_subscriptions_enabled_source_type_idx").on(
+    index("source_subscriptions_enabled_category_idx").on(
       table.enabled,
-      table.sourceType,
+      table.category,
     ),
     /** At most one Hacker News subscription per user. */
     uniqueIndex("source_subscriptions_user_hn_uidx")
       .on(table.userId)
-      .where(sql`${table.sourceType} = 'hackernews'`),
-    /** One Substack feed URL per user (rssUrl normalized in app before insert). */
+      .where(sql`${table.adapter} = 'hackernews'`),
+    /** One RSS URL per user (shared across website / community / podcast). */
     uniqueIndex("source_subscriptions_user_rss_uidx")
       .on(table.userId, sql`(${table.config}->>'rssUrl')`)
-      .where(sql`${table.sourceType} = 'substack'`),
-    /** One podcast feed URL per user (rssUrl normalized in app before insert). */
-    uniqueIndex("source_subscriptions_user_podcast_rss_uidx")
-      .on(table.userId, sql`(${table.config}->>'rssUrl')`)
-      .where(sql`${table.sourceType} = 'podcast'`),
+      .where(sql`${table.adapter} = 'rss'`),
     /** One Bluesky handle per user (handle normalized in app before insert). */
     uniqueIndex("source_subscriptions_user_bluesky_handle_uidx")
       .on(table.userId, sql`(${table.config}->>'handle')`)
-      .where(sql`${table.sourceType} = 'bluesky'`),
+      .where(sql`${table.adapter} = 'bluesky'`),
     /** One Reddit subreddit per user (name normalized in app before insert). */
     uniqueIndex("source_subscriptions_user_reddit_sub_uidx")
       .on(table.userId, sql`(${table.config}->>'subreddit')`)
-      .where(sql`${table.sourceType} = 'reddit'`),
+      .where(sql`${table.adapter} = 'reddit'`),
   ],
 );
 
@@ -106,7 +105,8 @@ export const articleSources = pgTable(
       () => sourceSubscriptions.id,
       { onDelete: "set null" },
     ),
-    sourceType: text("source_type").notNull(),
+    category: text("category").notNull(),
+    adapter: text("adapter").notNull(),
     externalId: text("external_id"),
     fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
   },
@@ -115,8 +115,8 @@ export const articleSources = pgTable(
     uniqueIndex("article_sources_article_subscription_uidx")
       .on(table.articleId, table.sourceSubscriptionId)
       .where(sql`${table.sourceSubscriptionId} is not null`),
-    uniqueIndex("article_sources_article_type_orphan_uidx")
-      .on(table.articleId, table.sourceType)
+    uniqueIndex("article_sources_article_adapter_orphan_uidx")
+      .on(table.articleId, table.adapter)
       .where(sql`${table.sourceSubscriptionId} is null`),
   ],
 );

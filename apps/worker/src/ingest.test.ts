@@ -53,7 +53,8 @@ describe("runIngest", () => {
     await db.insert(sourceSubscriptions).values({
       id: subId,
       userId,
-      sourceType: "substack",
+      category: "website",
+      adapter: "rss",
       config: { rssUrl: "https://fixture.example/feed" },
       enabled: true,
       createdAt: now,
@@ -115,7 +116,8 @@ describe("runIngest", () => {
       .limit(1);
 
     assert.ok(link);
-    assert.equal(link.sourceType, "substack");
+    assert.equal(link.category, "website");
+    assert.equal(link.adapter, "rss");
     assert.equal(link.externalId, "fixture-guid-1");
   });
 

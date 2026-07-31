@@ -1,13 +1,17 @@
-import type { SourceAdapter, SourceType } from "./types.js";
+import type {
+  SourceAdapter,
+  SourceAdapterId,
+  SourceCategory,
+} from "./types.js";
 import { StubSourceAdapter } from "./stub.js";
 import { HackerNewsAdapter, type HackerNewsConfig } from "./hackernews.js";
-import { SubstackAdapter, type SubstackConfig } from "./substack.js";
+import { RssAdapter, type RssConfig } from "./substack.js";
 import { PodcastAdapter, type PodcastConfig } from "./podcast.js";
 import { BlueskyAdapter, type BlueskyConfig } from "./bluesky.js";
 import { RedditAdapter, type RedditConfig } from "./reddit.js";
 
 export type AdapterConfig = HackerNewsConfig &
-  Partial<SubstackConfig> &
+  Partial<RssConfig> &
   Partial<PodcastConfig> &
   Partial<BlueskyConfig> &
   Partial<RedditConfig> & {
@@ -17,26 +21,27 @@ export type AdapterConfig = HackerNewsConfig &
 export type CreateAdapterOptions = {
   fetch?: typeof fetch;
   hnLimit?: number;
+  /** When adapter is rss, podcast category selects enclosure-aware parsing. */
+  category?: SourceCategory;
 };
 
 export function createSourceAdapter(
-  sourceType: SourceType,
+  adapter: SourceAdapterId,
   config: AdapterConfig = {},
   options: CreateAdapterOptions = {},
 ): SourceAdapter {
-  switch (sourceType) {
+  switch (adapter) {
     case "hackernews":
       return new HackerNewsAdapter(
         { mode: config.mode === "new" ? "new" : "top" },
         { fetch: options.fetch, limit: options.hnLimit },
       );
-    case "substack": {
+    case "rss": {
       const rssUrl = typeof config.rssUrl === "string" ? config.rssUrl : "";
-      return new SubstackAdapter({ rssUrl }, { fetch: options.fetch });
-    }
-    case "podcast": {
-      const rssUrl = typeof config.rssUrl === "string" ? config.rssUrl : "";
-      return new PodcastAdapter({ rssUrl }, { fetch: options.fetch });
+      if (options.category === "podcast") {
+        return new PodcastAdapter({ rssUrl }, { fetch: options.fetch });
+      }
+      return new RssAdapter({ rssUrl }, { fetch: options.fetch });
     }
     case "bluesky": {
       const handle = typeof config.handle === "string" ? config.handle : "";
@@ -49,6 +54,6 @@ export function createSourceAdapter(
       return new RedditAdapter({ subreddit }, { fetch: options.fetch });
     }
     default:
-      return new StubSourceAdapter(sourceType);
+      return new StubSourceAdapter(adapter);
   }
 }

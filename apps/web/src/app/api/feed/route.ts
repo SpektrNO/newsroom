@@ -66,8 +66,8 @@ const APP_FILTER_BATCH = 100;
 /** Safety cap so a sparse topic filter cannot scan the entire score table. */
 const APP_FILTER_MAX_SCAN = 5000;
 
-/** Article is linked to one of the allowed source types for this user (or orphan). */
-function articleHasSourceTypes(userId: string, sourceTypes: string[]): SQL {
+/** Article is linked to one of the allowed source categories for this user (or orphan). */
+function articleHasSourceCategories(userId: string, categories: string[]): SQL {
   return exists(
     getDb()
       .select({ id: articleSources.id })
@@ -79,7 +79,7 @@ function articleHasSourceTypes(userId: string, sourceTypes: string[]): SQL {
       .where(
         and(
           eq(articleSources.articleId, userArticleScores.articleId),
-          inArray(articleSources.sourceType, sourceTypes),
+          inArray(articleSources.category, categories),
           or(
             isNull(sourceSubscriptions.userId),
             eq(sourceSubscriptions.userId, userId),
@@ -262,7 +262,7 @@ async function loadFeedCounts(args: {
     args.searchQuery !== null ? feedSearchConditions(args.searchQuery) : [];
   const sourceCond =
     args.sourceFilter !== null && args.sourceFilter.length > 0
-      ? articleHasSourceTypes(args.userId, args.sourceFilter)
+      ? articleHasSourceCategories(args.userId, args.sourceFilter)
       : null;
   const scoredWhere = and(
     baseWhere,
@@ -430,7 +430,7 @@ export async function GET(request: Request) {
   // Source allow-list in SQL so sparse types (e.g. Bluesky) are not lost when
   // they sit below the previous top-N over-fetch window.
   if (sourceFilter !== null) {
-    conditions.push(articleHasSourceTypes(authResult.userId, sourceFilter));
+    conditions.push(articleHasSourceCategories(authResult.userId, sourceFilter));
   }
 
   // Topic filter still needs an app-layer pass (matchedTopicIds + legacy keyword).
@@ -571,7 +571,8 @@ export async function GET(request: Request) {
   const sourceRows = await getDb()
     .select({
       articleId: articleSources.articleId,
-      sourceType: articleSources.sourceType,
+      category: articleSources.category,
+      adapter: articleSources.adapter,
       externalId: articleSources.externalId,
       subscriptionUserId: sourceSubscriptions.userId,
       config: sourceSubscriptions.config,
@@ -594,9 +595,10 @@ export async function GET(request: Request) {
     }
     const list = sourcesByArticle.get(row.articleId) ?? [];
     list.push({
-      sourceType: row.sourceType,
+      category: row.category,
+      adapter: row.adapter,
       externalId: row.externalId,
-      label: feedSourceSubscriptionLabel(row.sourceType, row.config),
+      label: feedSourceSubscriptionLabel(row.adapter, row.config),
     });
     sourcesByArticle.set(row.articleId, list);
   }

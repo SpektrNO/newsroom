@@ -133,22 +133,22 @@ describe("feed query parsers", () => {
   });
 
   it("validates source filter", () => {
-    assert.equal(parseFeedSourceFilter("hackernews"), "hackernews");
+    assert.equal(parseFeedSourceFilter("community"), "community");
     assert.equal(parseFeedSourceFilter("podcast"), "podcast");
-    assert.equal(parseFeedSourceFilter("bluesky"), "bluesky");
-    assert.equal(parseFeedSourceFilter("reddit"), "reddit");
+    assert.equal(parseFeedSourceFilter("social_media"), "social_media");
+    assert.equal(parseFeedSourceFilter("website"), "website");
     assert.equal(parseFeedSourceFilter("nope"), "invalid");
     assert.equal(parseFeedSourceFilter(null), null);
   });
 
   it("parses multi source filters from source and sources params", () => {
     const url = new URL(
-      "http://localhost/api/feed?source=hackernews&source=podcast&sources=bluesky,podcast",
+      "http://localhost/api/feed?source=community&source=podcast&sources=social_media,podcast",
     );
     assert.deepEqual(parseFeedSourceFilters(url), [
-      "hackernews",
+      "community",
       "podcast",
-      "bluesky",
+      "social_media",
     ]);
     assert.deepEqual(
       parseFeedSourceFilters(new URL("http://localhost/api/feed")),
@@ -163,10 +163,10 @@ describe("feed query parsers", () => {
   });
 
   it("matches articles against multi source allow-list", () => {
-    const types = new Set(["hackernews", "bluesky"]);
+    const types = new Set(["community", "social_media"]);
     assert.equal(passesSourceFilter(types, ["podcast"]), false);
-    assert.equal(passesSourceFilter(types, ["hackernews", "podcast"]), true);
-    assert.equal(passesSourceFilter(undefined, ["hackernews"]), false);
+    assert.equal(passesSourceFilter(types, ["community", "podcast"]), true);
+    assert.equal(passesSourceFilter(undefined, ["community"]), false);
     assert.equal(passesSourceFilter(types, []), true);
   });
 
@@ -225,11 +225,11 @@ describe("feed query parsers", () => {
     });
   });
 
-  it("labels source types and subscription identities", () => {
-    assert.equal(feedSourceTypeLabel("substack"), "Feed");
+  it("labels source categories and subscription identities", () => {
+    assert.equal(feedSourceTypeLabel("website"), "Website");
     assert.equal(feedSourceTypeLabel("podcast"), "Podcast");
     assert.equal(
-      feedSourceSubscriptionLabel("substack", {
+      feedSourceSubscriptionLabel("rss", {
         rssUrl: "https://www.platformer.news/feed",
       }),
       "platformer.news",
@@ -246,7 +246,7 @@ describe("feed query parsers", () => {
       feedSourceSubscriptionLabel("hackernews", { mode: "new" }),
       "New",
     );
-    assert.equal(feedSourceTypeLabel("reddit"), "Reddit");
+    assert.equal(feedSourceTypeLabel("community"), "Community");
   });
 });
 
@@ -325,15 +325,15 @@ describe("countMatchingFeedRows", () => {
 
   it("falls back to keyword re-check for legacy rows with no matchedTopicIds", () => {
     const sources = new Map<string, Set<string>>([
-      ["1", new Set(["hackernews"])],
-      ["2", new Set(["substack"])],
-      ["3", new Set(["hackernews"])],
+      ["1", new Set(["community"])],
+      ["2", new Set(["website"])],
+      ["3", new Set(["community"])],
     ]);
     assert.equal(
       countMatchingFeedRows(rows, {
         topicIds: ["topic-llm"],
         topicKeywords: ["llm"],
-        sourceFilter: ["hackernews"],
+        sourceFilter: ["community"],
         searchQuery: null,
         sourceTypesByArticle: sources,
       }),
