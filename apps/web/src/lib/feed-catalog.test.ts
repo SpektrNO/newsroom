@@ -16,7 +16,7 @@ import {
 describe("getFeedCatalog", () => {
   it("returns versioned feeds with required fields per kind", () => {
     const catalog = getFeedCatalog();
-    assert.equal(catalog.version, 4);
+    assert.equal(catalog.version, 8);
     assert.ok(catalog.feeds.length >= 5);
     for (const feed of catalog.feeds) {
       assert.ok(feed.id);

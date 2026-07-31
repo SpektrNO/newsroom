@@ -47,6 +47,7 @@ const CATEGORIES: readonly SourceCategoryV1[] = [
   "website",
   "social_media",
   "community",
+  "newsletter",
 ];
 
 const ADAPTERS: readonly SourceAdapterV1[] = [
@@ -75,7 +76,8 @@ function pairAllowed(
     return (
       category === "podcast" ||
       category === "website" ||
-      category === "community"
+      category === "community" ||
+      category === "newsletter"
     );
   }
   return false;

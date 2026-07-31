@@ -227,7 +227,10 @@ describe("feed query parsers", () => {
 
   it("labels source categories and subscription identities", () => {
     assert.equal(feedSourceTypeLabel("website"), "Website");
+    assert.equal(feedSourceTypeLabel("newsletter"), "Newsletter");
     assert.equal(feedSourceTypeLabel("podcast"), "Podcast");
+    assert.equal(feedSourceTypeLabel("community"), "Community");
+    assert.equal(feedSourceTypeLabel("social_media"), "Social");
     assert.equal(
       feedSourceSubscriptionLabel("rss", {
         rssUrl: "https://www.platformer.news/feed",
@@ -246,7 +249,6 @@ describe("feed query parsers", () => {
       feedSourceSubscriptionLabel("hackernews", { mode: "new" }),
       "New",
     );
-    assert.equal(feedSourceTypeLabel("community"), "Community");
   });
 });
 

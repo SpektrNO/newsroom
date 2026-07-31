@@ -15,7 +15,7 @@ import {
   type Source,
   type SourceCategoryV1,
 } from "@newsroom/api-client";
-import { defaultRssCategory, isCommunityRssHost } from "@newsroom/sources/community-host";
+import { defaultRssCategory } from "@newsroom/sources/community-host";
 import { getBrowserApiClient } from "@/lib/api";
 import { isCatalogEntryAlreadyAdded } from "@/lib/feed-catalog-match";
 import {
@@ -25,64 +25,103 @@ import {
   type FeedCatalogCategory,
 } from "@/lib/feed-catalog";
 
-type AddKind = "website" | "podcast" | "social_media" | "reddit";
+type AddKind =
+  | "website"
+  | "community"
+  | "newsletter"
+  | "podcast"
+  | "social_media";
+
+type CommunityAddMode = "reddit" | "rss";
 
 function configSummary(source: Source): string {
   if (source.adapter === "hackernews") {
-    const mode = source.config.mode === "new" ? "new" : "top";
-    return `mode: ${mode}`;
+    const mode = source.config.mode === "new" ? "New" : "Top";
+    return `${categoryLabel(source.category)} · ${mode} stories`;
   }
   if (source.adapter === "rss") {
-    return typeof source.config.rssUrl === "string"
-      ? source.config.rssUrl
-      : "RSS feed";
+    const url =
+      typeof source.config.rssUrl === "string" ? source.config.rssUrl : "";
+    return url
+      ? `${categoryLabel(source.category)} · ${url}`
+      : categoryLabel(source.category);
   }
   if (source.adapter === "bluesky") {
     const handle =
       typeof source.config.handle === "string" ? source.config.handle : "";
     const did =
       typeof source.config.did === "string" ? source.config.did : "";
-    if (handle && did) return `${handle} · ${did}`;
-    if (handle) return handle;
-    if (did) return did;
-    return "Bluesky account";
+    const id = handle || did;
+    return id
+      ? `${categoryLabel(source.category)} · ${id}`
+      : categoryLabel(source.category);
   }
+  if (source.adapter === "reddit") {
+    return categoryLabel(source.category);
+  }
+  return categoryLabel(source.category);
+}
+
+/** Primary label in Me — adapter identity, not only the category bucket. */
+function sourceTitle(source: Source): string {
+  if (source.adapter === "hackernews") return "Hacker News";
   if (source.adapter === "reddit") {
     const sub =
       typeof source.config.subreddit === "string"
-        ? source.config.subreddit.trim()
+        ? source.config.subreddit.trim().replace(/^\/?(r\/)/i, "")
         : "";
-    return sub ? `r/${sub}` : "Subreddit";
+    return sub ? `r/${sub}` : "Reddit";
   }
-  return "";
+  if (source.adapter === "bluesky") {
+    const handle =
+      typeof source.config.handle === "string"
+        ? source.config.handle.trim().replace(/^@+/, "")
+        : "";
+    return handle ? `@${handle}` : "Social account";
+  }
+  if (source.adapter === "rss") {
+    const raw =
+      typeof source.config.rssUrl === "string" ? source.config.rssUrl : "";
+    if (raw) {
+      try {
+        return new URL(raw).hostname.replace(/^www\./, "");
+      } catch {
+        /* fall through */
+      }
+    }
+    return categoryLabel(source.category);
+  }
+  return categoryLabel(source.category);
 }
 
 function categoryLabel(category: string): string {
   if (category === "podcast") return "Podcast";
   if (category === "website") return "Website";
+  if (category === "newsletter") return "Newsletter";
   if (category === "social_media") return "Social";
   if (category === "community") return "Community";
   return category;
 }
 
-function catalogKindLabel(kind: ReturnType<typeof catalogEntryKind>): string {
-  if (kind === "reddit") return "Reddit";
-  if (kind === "podcast") return "Podcast";
-  if (kind === "bluesky") return "Bluesky";
-  return "Feed";
+/** Suggested-row prefix aligned with the active shelf, not ingest kind. */
+function catalogShelfLabel(shelf: FeedCatalogCategory): string {
+  if (shelf === "websites") return "Site";
+  if (shelf === "communities") return "Community";
+  if (shelf === "newsletters") return "Newsletter";
+  if (shelf === "podcasts") return "Podcast";
+  if (shelf === "social_media") return "Social";
+  return "Source";
 }
 
-/** Persist category for a catalog RSS shelf row. */
+/** Persist category for a catalog RSS shelf row (1:1 with Suggested tabs). */
 function catalogRssCategory(
   shelf: FeedCatalogCategory,
   rssUrl: string,
 ): SourceCategoryV1 {
   if (shelf === "podcasts") return "podcast";
   if (shelf === "websites") return "website";
+  if (shelf === "newsletters") return "newsletter";
   if (shelf === "communities") return "community";
-  if (shelf === "newsletters") {
-    return isCommunityRssHost(rssUrl) ? "community" : "website";
-  }
   return defaultRssCategory(rssUrl);
 }
 
@@ -96,6 +135,8 @@ export function SourcesClient(): ReactNode {
   const [formError, setFormError] = useState<string | null>(null);
   const [catalogNote, setCatalogNote] = useState<string | null>(null);
   const [addKind, setAddKind] = useState<AddKind>("website");
+  const [communityMode, setCommunityMode] =
+    useState<CommunityAddMode>("reddit");
   const [rssUrl, setRssUrl] = useState("");
   const [blueskyHandle, setBlueskyHandle] = useState("");
   const [redditSubreddit, setRedditSubreddit] = useState("");
@@ -127,6 +168,29 @@ export function SourcesClient(): ReactNode {
       setLoading(false);
     }
   }, [api, router]);
+
+  /** Soft reload after mutations — keeps the page mounted (no scroll jump). */
+  const reloadSources = useCallback(async () => {
+    try {
+      const sourcesRes = await api.listSources();
+      setSources(sourcesRes.sources);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.push("/sign-in?callbackUrl=%2Fsources");
+        return;
+      }
+      setError("Couldn't refresh sources.");
+    }
+  }, [api, router]);
+
+  function rememberSource(source: Source) {
+    setSources((prev) => {
+      if (prev.some((s) => s.id === source.id)) {
+        return prev.map((s) => (s.id === source.id ? source : s));
+      }
+      return [...prev, source];
+    });
+  }
 
   useEffect(() => {
     void refresh();
@@ -162,12 +226,12 @@ export function SourcesClient(): ReactNode {
     setFormError(null);
     setPending(true);
     try {
-      await api.createSource({
+      const res = await api.createSource({
         category: "community",
         adapter: "hackernews",
         config: { mode: "top" },
       });
-      await refresh();
+      rememberSource(res.source);
     } catch (err) {
       mapSourceError(err, setFormError);
     } finally {
@@ -180,44 +244,66 @@ export function SourcesClient(): ReactNode {
     setFormError(null);
     setPending(true);
     try {
+      let created: Source;
       if (addKind === "social_media") {
-        await api.createSource({
+        const res = await api.createSource({
           category: "social_media",
           adapter: "bluesky",
           config: { handle: blueskyHandle.trim() },
         });
+        created = res.source;
         setBlueskyHandle("");
-      } else if (addKind === "reddit") {
-        await api.createSource({
+      } else if (addKind === "community" && communityMode === "reddit") {
+        const res = await api.createSource({
           category: "community",
           adapter: "reddit",
           config: { subreddit: redditSubreddit.trim() },
         });
+        created = res.source;
         setRedditSubreddit("");
       } else if (addKind === "podcast") {
-        await api.createSource({
+        const res = await api.createSource({
           category: "podcast",
           adapter: "rss",
           config: { rssUrl: rssUrl.trim() },
         });
+        created = res.source;
         setRssUrl("");
-      } else {
+      } else if (addKind === "newsletter") {
+        const res = await api.createSource({
+          category: "newsletter",
+          adapter: "rss",
+          config: { rssUrl: rssUrl.trim() },
+        });
+        created = res.source;
+        setRssUrl("");
+      } else if (addKind === "community") {
         const url = rssUrl.trim();
-        await api.createSource({
-          category: defaultRssCategory(url),
+        const res = await api.createSource({
+          category: "community",
           adapter: "rss",
           config: { rssUrl: url },
         });
+        created = res.source;
+        setRssUrl("");
+      } else {
+        const url = rssUrl.trim();
+        const res = await api.createSource({
+          category: "website",
+          adapter: "rss",
+          config: { rssUrl: url },
+        });
+        created = res.source;
         setRssUrl("");
       }
-      await refresh();
+      rememberSource(created);
     } catch (err) {
       mapSourceError(
         err,
         setFormError,
         addKind === "social_media"
-          ? "Check the Bluesky handle."
-          : addKind === "reddit"
+          ? "Check the handle."
+          : addKind === "community" && communityMode === "reddit"
             ? "Check the subreddit name."
             : "Check the RSS URL.",
       );
@@ -231,61 +317,66 @@ export function SourcesClient(): ReactNode {
     setAddingId(feed.id);
     const kind = catalogEntryKind(feed);
     try {
+      let created: Source;
       if (kind === "reddit") {
         const subreddit = feed.subreddit?.trim();
         if (!subreddit) {
           setCatalogNote("Couldn't add source — try again.");
           return;
         }
-        await api.createSource({
+        const res = await api.createSource({
           category: "community",
           adapter: "reddit",
           config: { subreddit },
           enabled: true,
         });
+        created = res.source;
       } else if (kind === "bluesky") {
         const handle = feed.handle?.trim();
         if (!handle) {
           setCatalogNote("Couldn't add source — try again.");
           return;
         }
-        await api.createSource({
+        const res = await api.createSource({
           category: "social_media",
           adapter: "bluesky",
           config: { handle },
           enabled: true,
         });
+        created = res.source;
       } else if (kind === "podcast") {
         const url = feed.rssUrl?.trim();
         if (!url) {
           setCatalogNote("Couldn't add source — try again.");
           return;
         }
-        await api.createSource({
+        const res = await api.createSource({
           category: "podcast",
           adapter: "rss",
           config: { rssUrl: url },
           enabled: true,
         });
+        created = res.source;
       } else {
         const url = feed.rssUrl?.trim();
         if (!url) {
           setCatalogNote("Couldn't add source — try again.");
           return;
         }
-        await api.createSource({
+        const res = await api.createSource({
           category: catalogRssCategory(feed.category, url),
           adapter: "rss",
           config: { rssUrl: url },
           enabled: true,
         });
+        created = res.source;
       }
+      rememberSource(created);
       setCatalogNote(`Added ${feed.label}.`);
-      await refresh();
     } catch (err) {
       if (err instanceof ApiError && (err.code === "duplicate" || err.status === 409)) {
         setCatalogNote("That source is already added.");
-        await refresh();
+        await reloadSources();
       } else {
         mapSourceError(
           err,
@@ -293,7 +384,7 @@ export function SourcesClient(): ReactNode {
           kind === "reddit"
             ? "Check the subreddit name."
             : kind === "bluesky"
-              ? "Check the Bluesky handle."
+              ? "Check the handle."
               : "Check the RSS URL.",
         );
       }
@@ -304,8 +395,10 @@ export function SourcesClient(): ReactNode {
 
   async function toggleEnabled(source: Source) {
     try {
-      await api.patchSource(source.id, { enabled: !source.enabled });
-      await refresh();
+      const res = await api.patchSource(source.id, {
+        enabled: !source.enabled,
+      });
+      rememberSource(res.source);
     } catch {
       setError("Couldn't update source — try again.");
     }
@@ -315,7 +408,7 @@ export function SourcesClient(): ReactNode {
     if (!window.confirm("Remove this source?")) return;
     try {
       await api.deleteSource(source.id);
-      await refresh();
+      setSources((prev) => prev.filter((s) => s.id !== source.id));
     } catch {
       setError("Couldn't remove source — try again.");
     }
@@ -335,7 +428,7 @@ export function SourcesClient(): ReactNode {
           spellCheck={false}
         />
       </label>
-    ) : addKind === "reddit" ? (
+    ) : addKind === "community" && communityMode === "reddit" ? (
       <label>
         Subreddit
         <input
@@ -358,7 +451,11 @@ export function SourcesClient(): ReactNode {
           placeholder={
             addKind === "podcast"
               ? "https://feeds.example.com/show.xml"
-              : "https://www.platformer.news/feed"
+              : addKind === "newsletter"
+                ? "https://tldr.tech/rss"
+                : addKind === "community"
+                  ? "https://importai.substack.com/feed"
+                  : "https://www.schneier.com/feed/atom/"
           }
           required
         />
@@ -370,8 +467,8 @@ export function SourcesClient(): ReactNode {
       <header className="page-header">
         <h1 className="page-title">Sources</h1>
         <p className="page-lede">
-          What Newsroom ingests for ranking — websites, podcasts, communities,
-          and social accounts.
+          What Newsroom ingests for ranking — websites, communities,
+          newsletters, podcasts, and social accounts.
         </p>
       </header>
 
@@ -445,13 +542,12 @@ export function SourcesClient(): ReactNode {
             ) : (
               <ul className="manage-list">
                 {visibleCatalog.map((feed) => {
-                  const kind = catalogEntryKind(feed);
                   return (
                     <li key={feed.id} className="manage-row">
                       <div className="manage-main">
                         <p className="manage-title">{feed.label}</p>
                         <p className="manage-meta">
-                          {catalogKindLabel(kind)} · {feed.blurb}
+                          {catalogShelfLabel(feed.category)} · {feed.blurb}
                         </p>
                         {feed.topicTags.length > 0 ? (
                           <p className="catalog-feed-tags">
@@ -485,9 +581,10 @@ export function SourcesClient(): ReactNode {
               {(
                 [
                   ["website", "Website"],
+                  ["community", "Community"],
+                  ["newsletter", "Newsletter"],
                   ["podcast", "Podcast"],
                   ["social_media", "Social"],
-                  ["reddit", "Reddit"],
                 ] as const
               ).map(([kind, label]) => (
                 <button
@@ -505,6 +602,34 @@ export function SourcesClient(): ReactNode {
                 </button>
               ))}
             </div>
+            {addKind === "community" ? (
+              <div
+                className="topics-filter-toggle source-community-mode"
+                role="group"
+                aria-label="Community type"
+              >
+                {(
+                  [
+                    ["reddit", "Subreddit"],
+                    ["rss", "RSS"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={
+                      communityMode === mode
+                        ? "topics-filter-btn active"
+                        : "topics-filter-btn"
+                    }
+                    aria-pressed={communityMode === mode}
+                    onClick={() => setCommunityMode(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <form className="form" onSubmit={(e) => void onAddSubmit(e)}>
               {addField}
               {formError ? <p className="error">{formError}</p> : null}
@@ -515,12 +640,16 @@ export function SourcesClient(): ReactNode {
                     : addKind === "podcast"
                       ? "Add podcast"
                       : addKind === "social_media"
-                        ? "Add Bluesky"
-                        : addKind === "reddit"
-                          ? "Add Reddit"
-                          : "Add website"}
+                        ? "Add social"
+                        : addKind === "newsletter"
+                          ? "Add newsletter"
+                          : addKind === "community"
+                            ? communityMode === "reddit"
+                              ? "Add subreddit"
+                              : "Add community RSS"
+                            : "Add website"}
                 </button>
-                {!hasHn ? (
+                {addKind === "community" && !hasHn ? (
                   <button
                     type="button"
                     className="ghost"
@@ -531,13 +660,24 @@ export function SourcesClient(): ReactNode {
                   </button>
                 ) : null}
               </div>
-              {hasHn ? (
-                <p className="helper">Hacker News is already connected.</p>
-              ) : (
+              {addKind === "community" ? (
+                hasHn ? (
+                  <p className="helper">Hacker News is already connected.</p>
+                ) : (
+                  <p className="helper">
+                    Communities include Reddit, HN, Substack, and similar
+                    platforms. HN is one click — no URL needed.
+                  </p>
+                )
+              ) : addKind === "newsletter" ? (
                 <p className="helper">
-                  HN is a shared firehose — one click, no URL needed.
+                  Digests and email-style publications (TLDR, Bytes, …).
                 </p>
-              )}
+              ) : addKind === "website" ? (
+                <p className="helper">
+                  Magazines, newspapers, and independent blogs.
+                </p>
+              ) : null}
             </form>
           </div>
 
@@ -569,7 +709,7 @@ export function SourcesClient(): ReactNode {
                       <li key={source.id} className="manage-row">
                         <div className="manage-main">
                           <p className="manage-title">
-                            {categoryLabel(source.category)}
+                            {sourceTitle(source)}
                           </p>
                           <p className="manage-meta">
                             {configSummary(source)}

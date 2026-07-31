@@ -80,7 +80,7 @@ flowchart LR
 
 - `users`, `sessions` — Better Auth
 - `articles` — canonical URL, title, summary, author, published_at, optional podcast show_title / duration_seconds / enclosure_url, raw payload, content hash
-- `source_subscriptions` — `user_id`, **`category`** (`podcast` \| `website` \| `social_media` \| `community`), **`adapter`** (`hackernews` \| `rss` \| `bluesky` \| `reddit`), config JSON, enabled
+- `source_subscriptions` — `user_id`, **`category`** (`podcast` \| `website` \| `social_media` \| `community` \| `newsletter`), **`adapter`** (`hackernews` \| `rss` \| `bluesky` \| `reddit`), config JSON, enabled
 - `article_sources` — which category/adapter produced an article (denormalized at ingest)
 - `user_article_scores` — per-user keyword_score, ai_score, final_rank, reason, status (`new` \| `seen` \| `saved` \| `dismissed`), matched_topic_ids (topic ids the article belongs to — keyword-matched, then AI-narrowed; `NULL` on pre-migration rows)
 - `user_article_evaluations` — per-user keyword check markers (`hit` true/false); lets rank walk past misses without polluting the feed score table
@@ -115,6 +115,7 @@ Subscriptions have a product **category** (feed filters / Sources UI) and an ing
 |----------|------------------|--------|
 | `community` | `hackernews`, `reddit`, `rss` | HN, Reddit, Substack/dev.to-style RSS, etc. |
 | `website` | `rss` | Magazines, newspapers, independent blogs |
+| `newsletter` | `rss` | Digests / email-style publications (TLDR, Bytes, …) |
 | `podcast` | `rss` | Enclosure-aware RSS parse |
 | `social_media` | `bluesky` | Follow a handle (X/FB later) |
 
@@ -126,7 +127,7 @@ Subscriptions have a product **category** (feed filters / Sources UI) and an ing
 | `reddit` | Subreddit listing (`{ subreddit }`); OAuth JSON when creds set, else public JSON / RSS fallback | v1 |
 | X / Facebook | Paid / restricted APIs | deferred |
 
-Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`. Curated catalog (`GET /api/feed-catalog`) shelves include a **Newsletters** browse tab; persisted category is `community` or `website` from host heuristics (Substack/dev.to → community).
+Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptions.config`. Curated catalog shelves match categories 1:1 (Websites, Communities, Newsletters, Podcasts, Social).
 
 ## API surface
 

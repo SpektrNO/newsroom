@@ -1186,6 +1186,10 @@ button.danger-text:hover {
   margin-bottom: 0.15rem;
 }
 
+.source-community-mode {
+  margin: 0.35rem 0 0.5rem;
+}
+
 .source-catalog-tabs {
   margin: 0.5rem 0 0.25rem;
   flex-wrap: wrap;

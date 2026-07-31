@@ -36,10 +36,11 @@ type SortField = FeedSortField;
 type SortOrder = FeedSortOrder;
 
 const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
-  { id: "podcast", label: "Podcast" },
   { id: "website", label: "Website" },
-  { id: "social_media", label: "Social" },
   { id: "community", label: "Community" },
+  { id: "newsletter", label: "Newsletter" },
+  { id: "podcast", label: "Podcast" },
+  { id: "social_media", label: "Social" },
 ];
 
 type TopicGroup = {

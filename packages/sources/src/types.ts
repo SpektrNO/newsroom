@@ -3,7 +3,8 @@ export type SourceCategory =
   | "podcast"
   | "website"
   | "social_media"
-  | "community";
+  | "community"
+  | "newsletter";
 
 /** Ingest adapter identity (createSourceAdapter switch). */
 export type SourceAdapterId =

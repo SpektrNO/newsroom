@@ -140,10 +140,11 @@ export function parseFeedLimit(raw: string | null): number {
 }
 
 export const FEED_SOURCE_TYPES = [
-  "podcast",
   "website",
-  "social_media",
   "community",
+  "newsletter",
+  "podcast",
+  "social_media",
 ] as const;
 
 export type FeedSourceType = (typeof FEED_SOURCE_TYPES)[number];
@@ -263,6 +264,7 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
 export function feedSourceTypeLabel(category: string): string {
   if (category === "podcast") return "Podcast";
   if (category === "website") return "Website";
+  if (category === "newsletter") return "Newsletter";
   if (category === "social_media") return "Social";
   if (category === "community") return "Community";
   return category;

@@ -21,7 +21,8 @@ export type SourceCategoryV1 =
   | "podcast"
   | "website"
   | "social_media"
-  | "community";
+  | "community"
+  | "newsletter";
 
 export type SourceAdapterV1 =
   | "hackernews"

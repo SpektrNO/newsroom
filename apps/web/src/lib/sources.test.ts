@@ -3,6 +3,18 @@ import { describe, it } from "node:test";
 import { parseCreateBody, parsePatchBody } from "./sources.js";
 
 describe("parseCreateBody", () => {
+  it("accepts newsletter with rssUrl", () => {
+    const parsed = parseCreateBody({
+      category: "newsletter",
+      adapter: "rss",
+      config: { rssUrl: "https://tldr.tech/rss" },
+    });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.category, "newsletter");
+    assert.equal(parsed.adapter, "rss");
+  });
+
   it("accepts podcast with rssUrl", () => {
     const parsed = parseCreateBody({
       category: "podcast",

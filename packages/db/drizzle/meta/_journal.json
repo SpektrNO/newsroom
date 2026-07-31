@@ -113,6 +113,13 @@
       "when": 1785507100000,
       "tag": "0015_source_category_adapter",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1785507200000,
+      "tag": "0016_reclassify_rss_categories",
+      "breakpoints": true
     }
   ]
 }

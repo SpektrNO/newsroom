@@ -214,10 +214,10 @@ Notes for `web-ai-advisor-chat`:
 - **Depends on:** Existing topic tree + Follow APIs. Stronger with hosted AI (`ai-cloud-providers`) for latency/quality; works locally via Ollama. Token reveal/cap → `ai-token-metering`.
 - **Does not replace:** Catalog browse / Follow; advisor **suggests**, user still owns Following.
 
-Notes for `web-source-discovery` (shipped — catalog v4):
+Notes for `web-source-discovery` (shipped — catalog v5):
 
 - **Problem:** Ranking only filters what you already ingest. HN is a shared firehose (discovery built-in); Substack-style sources previously required the user to **already know** an RSS URL.
-- **Shipped:** Static curated feed catalog (`GET /api/feed-catalog`); Sources **Suggested sources** tabbed by shelf (websites / communities / newsletters / podcasts / social_media), search + topic-tag filter within the active tab; subscribed catalog rows are **omitted** (not shown as “Added”); **Me** subscriptions collapsible (collapsed by default); single **Add a source** form by category (Website / Podcast / Social / Reddit + HN). Persisted subscriptions use `category` + `adapter` (newsletters shelf maps to community or website by host). Catalog is a small multi-domain starter set — not every topic-tree leaf.
+- **Shipped:** Static curated feed catalog (`GET /api/feed-catalog`); Sources **Suggested** and **Add** share five categories (Website / Community / Newsletter / Podcast / Social); Me labels match; subscribed catalog rows omitted; Me collapsible (default collapsed). Persisted `category` + `adapter`. Substack/dev.to → community; digests like TLDR → newsletter.
 - **Follow-ups:** Advisor feed suggestions; slug/search resolve; usage-based suggestions.
 - **Out of scope (unchanged):** Scraping paywalled bodies; scraping Substack’s entire network; social popularity; auto-subscribe.
 

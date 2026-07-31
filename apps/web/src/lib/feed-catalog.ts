@@ -5,8 +5,8 @@
  * Intentionally a small starter set — not every topic-tree leaf. Users paste
  * arbitrary RSS / handles / subreddit names via Add a source for everything else.
  *
- * Catalog `category` is a Suggested-tab shelf id (may differ from persisted
- * subscription category — e.g. newsletters map to community or website on add).
+ * Catalog `category` is a Suggested-tab shelf id aligned with persisted
+ * subscription categories (newsletters → newsletter, websites → website, …).
  */
 
 export type FeedCatalogCategory =
@@ -41,7 +41,7 @@ export type FeedCatalogResponse = {
   feeds: FeedCatalogEntry[];
 };
 
-export const FEED_CATALOG_VERSION = 4;
+export const FEED_CATALOG_VERSION = 8;
 
 export const FEED_CATALOG_CATEGORIES: readonly {
   id: FeedCatalogCategory;
@@ -70,10 +70,10 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
   },
   {
     id: "import-ai",
-    category: "newsletters",
+    category: "communities",
     label: "Import AI",
     rssUrl: "https://importai.substack.com/feed",
-    blurb: "Jack Clark’s weekly AI research and industry roundup.",
+    blurb: "Jack Clark’s weekly AI research and industry roundup (Substack).",
     topicTags: ["AI & infra", "LLMs & agents"],
   },
   {
@@ -109,11 +109,19 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
     topicTags: ["AI & infra", "Cloud & devops"],
   },
   {
-    id: "gary-marcus",
+    id: "the-hacker-news",
     category: "newsletters",
+    label: "The Hacker News",
+    rssUrl: "https://feeds.feedburner.com/TheHackersNews",
+    blurb: "Daily cybersecurity and vulnerability headline digest.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "gary-marcus",
+    category: "communities",
     label: "Gary Marcus",
     rssUrl: "https://garymarcus.substack.com/feed",
-    blurb: "Critical takes on AI hype and cognition.",
+    blurb: "Critical takes on AI hype and cognition (Substack).",
     topicTags: ["LLMs & agents", "Evals & safety", "Neuroscience & mind"],
   },
   {
@@ -171,7 +179,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
     label: "Schneier on Security",
     rssUrl: "https://www.schneier.com/feed/atom/",
     blurb: "Bruce Schneier on security, privacy, and trust.",
-    topicTags: ["Security & privacy", "Policy & rules"],
+    topicTags: ["Security & privacy", "Systems & vulnerabilities", "Policy & rules"],
   },
   {
     id: "krebs",
@@ -179,7 +187,81 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
     label: "Krebs on Security",
     rssUrl: "https://krebsonsecurity.com/feed/",
     blurb: "Investigative reporting on breaches and cybercrime.",
-    topicTags: ["Security & privacy"],
+    topicTags: ["Security & privacy", "Systems & vulnerabilities"],
+  },
+  {
+    id: "cve",
+    category: "websites",
+    label: "CVE (cve.org)",
+    rssUrl: "https://cvefeed.io/rssfeed/severity/high.xml",
+    blurb:
+      "High/critical CVE records from the CVE Program (cve.org). Official site has no RSS yet — this public feed tracks new CVE IDs.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "cvenew-x",
+    category: "websites",
+    label: "CVE @CVEnew",
+    rssUrl: "https://nitter.net/CVEnew/rss",
+    blurb:
+      "Official CVE Program posts of new CVE IDs (X @CVEnew). X ingest is deferred — this uses a public RSS mirror of that account.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "project-zero",
+    category: "websites",
+    label: "Google Project Zero",
+    rssUrl: "https://googleprojectzero.blogspot.com/feeds/posts/default",
+    blurb: "Deep vulnerability research and zero-day write-ups from Google.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "zdi-published",
+    category: "websites",
+    label: "Zero Day Initiative (published)",
+    rssUrl: "https://www.zerodayinitiative.com/rss/published/",
+    blurb: "ZDI published advisories after vendor disclosure windows close.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "cisa-advisories",
+    category: "websites",
+    label: "CISA Cybersecurity Advisories",
+    rssUrl: "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+    blurb: "U.S. CISA alerts and advisories — including known exploited issues.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy", "Policy & rules"],
+  },
+  {
+    id: "bleeping-computer",
+    category: "websites",
+    label: "BleepingComputer",
+    rssUrl: "https://www.bleepingcomputer.com/feed/",
+    blurb: "Breaking malware, ransomware, and vulnerability news.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "the-record",
+    category: "websites",
+    label: "The Record",
+    rssUrl: "https://therecord.media/feed",
+    blurb: "Recorded Future’s newsroom on cyber threats and zero-days.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy", "Policy & rules"],
+  },
+  {
+    id: "dark-reading",
+    category: "websites",
+    label: "Dark Reading",
+    rssUrl: "https://www.darkreading.com/rss.xml",
+    blurb: "Enterprise security news — vulnerabilities, attacks, and defense.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
+  },
+  {
+    id: "sans-isc",
+    category: "websites",
+    label: "SANS Internet Storm Center",
+    rssUrl: "https://isc.sans.edu/rssfeed.xml",
+    blurb: "Handler diary on scanning, exploits, and emerging threats.",
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
   },
   {
     id: "lwn",
@@ -237,7 +319,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
     blurb: "Chips, AI infra, and semiconductor industry analysis.",
     topicTags: ["Hardware & chips", "AI & infra"],
   },
-  // --- Communities (Reddit) ---
+  // --- Communities (Reddit + Substack / platform RSS) ---
   {
     id: "reddit-machinelearning",
     category: "communities",
@@ -281,7 +363,7 @@ export const FEED_CATALOG: readonly FeedCatalogEntry[] = [
     label: "r/netsec",
     subreddit: "netsec",
     blurb: "Network security research and vulnerability write-ups.",
-    topicTags: ["Security & privacy"],
+    topicTags: ["Systems & vulnerabilities", "Security & privacy"],
   },
   {
     id: "reddit-spacex",

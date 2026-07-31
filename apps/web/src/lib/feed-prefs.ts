@@ -11,10 +11,11 @@ const VIEWS = ["feed", "saved", "dismissed"] as const;
 const SORTS = ["score", "date"] as const;
 const ORDERS = ["asc", "desc"] as const;
 const SOURCES = [
-  "podcast",
   "website",
-  "social_media",
   "community",
+  "newsletter",
+  "podcast",
+  "social_media",
 ] as const;
 
 export type StoredFeedPrefs = {

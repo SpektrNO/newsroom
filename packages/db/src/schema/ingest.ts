@@ -31,7 +31,7 @@ export const sourceSubscriptions = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    /** Product category: podcast | website | social_media | community */
+    /** Product category: podcast | website | social_media | community | newsletter */
     category: text("category").notNull(),
     /** Ingest adapter: hackernews | rss | bluesky | reddit */
     adapter: text("adapter").notNull(),
