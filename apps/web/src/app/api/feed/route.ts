@@ -11,6 +11,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  not,
   or,
   sql,
   type SQL,
@@ -50,7 +51,7 @@ import {
   parseFeedTopicIds,
   passesTopicSelection,
   toFeedItemJson,
-  tokenizeFeedSearch,
+  parseFeedSearchTokens,
   type FeedCursor,
   type FeedOrder,
   type FeedSort,
@@ -225,16 +226,43 @@ function laterTimestamp(
   return ta >= tb ? a : b;
 }
 
-/** AND of ILIKE token matches across title / summary / reason. */
-function feedSearchConditions(searchQuery: string) {
-  return tokenizeFeedSearch(searchQuery).map((token) => {
+/**
+ * Include tokens: AND of (token in title|summary|reason).
+ * Exclude tokens (`-word`): AND of (token in none of those fields).
+ */
+function feedSearchConditions(searchQuery: string): SQL[] {
+  const { include, exclude } = parseFeedSearchTokens(searchQuery);
+  const conditions: SQL[] = [];
+
+  for (const token of include) {
     const pattern = `%${escapeIlikePattern(token)}%`;
-    return or(
-      ilike(articles.title, pattern),
-      ilike(articles.summary, pattern),
-      ilike(userArticleScores.reason, pattern),
-    )!;
-  });
+    conditions.push(
+      or(
+        ilike(articles.title, pattern),
+        ilike(articles.summary, pattern),
+        ilike(userArticleScores.reason, pattern),
+      )!,
+    );
+  }
+
+  for (const token of exclude) {
+    const pattern = `%${escapeIlikePattern(token)}%`;
+    // NULL fields do not contain the token (match client haystack coalesce).
+    conditions.push(
+      not(
+        or(
+          ilike(articles.title, pattern),
+          and(isNotNull(articles.summary), ilike(articles.summary, pattern)),
+          and(
+            isNotNull(userArticleScores.reason),
+            ilike(userArticleScores.reason, pattern),
+          ),
+        )!,
+      ),
+    );
+  }
+
+  return conditions;
 }
 
 async function loadFeedCounts(args: {

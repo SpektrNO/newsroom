@@ -19,6 +19,7 @@ import {
   parseFeedStatusFilter,
   parseFeedTopicIds,
   parseFeedExcludeTopicIds,
+  parseFeedSearchTokens,
   passesSearchFilter,
   passesSourceFilter,
   passesTopicSelection,
@@ -290,12 +291,42 @@ describe("passesSearchFilter", () => {
       false,
     );
   });
+
+  it("excludes tokens prefixed with -", () => {
+    assert.equal(
+      passesSearchFilter("Local LLM tools", "Postgres tips", null, "llm -postgres"),
+      false,
+    );
+    assert.equal(
+      passesSearchFilter("Local LLM tools", "Redis tips", null, "llm -postgres"),
+      true,
+    );
+    assert.equal(
+      passesSearchFilter("Spam about parking", null, null, "-parking"),
+      false,
+    );
+    assert.equal(
+      passesSearchFilter("Space telescope news", null, null, "-parking"),
+      true,
+    );
+  });
 });
 
-describe("tokenizeFeedSearch / escapeIlikePattern", () => {
+describe("tokenizeFeedSearch / parseFeedSearchTokens / escapeIlikePattern", () => {
   it("splits and lowercases tokens", () => {
     assert.deepEqual(tokenizeFeedSearch("  LLM   Agents "), ["llm", "agents"]);
     assert.deepEqual(tokenizeFeedSearch("   "), []);
+  });
+
+  it("parses include and exclude tokens", () => {
+    assert.deepEqual(parseFeedSearchTokens("llm -postgres - "), {
+      include: ["llm"],
+      exclude: ["postgres"],
+    });
+    assert.deepEqual(parseFeedSearchTokens("-spam"), {
+      include: [],
+      exclude: ["spam"],
+    });
   });
 
   it("escapes ILIKE wildcards", () => {

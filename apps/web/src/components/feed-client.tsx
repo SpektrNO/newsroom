@@ -82,7 +82,7 @@ function formatRankLatestNote(result: RankFeedLatestResponse): string {
         `AI scored ${aiScored}; ${aiSkipped} stayed keyword-only (per-run limit or token budget)`,
       );
     } else if (aiScored > 0 && result.scored > 0) {
-      parts.push(`AI scored ${aiScored} of them`);
+      parts.push(`AI scored ${aiScored} articles (including backlog).`);
     } else if (aiSkipped > 0 && aiScored === 0) {
       parts.push(
         "AI was not applied — per-run AI article limit or token budget reached (keyword scores only; try Rank latest again later)",
@@ -1018,7 +1018,7 @@ export function FeedClient(): ReactNode {
           <input
             type="search"
             value={searchDraft}
-            placeholder="Title, summary, or reason…"
+            placeholder="Words to find; -word to exclude…"
             onChange={(e) => setSearchDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {

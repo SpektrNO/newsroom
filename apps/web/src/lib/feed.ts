@@ -524,8 +524,8 @@ export function parseFeedSearchQuery(
 }
 
 /**
- * Case-insensitive find-in-feed: every whitespace token must appear in
- * title, summary, or reason (AND).
+ * Case-insensitive find-in-feed: every include token must appear in
+ * title, summary, or reason (AND); exclude tokens (`-word`) must not.
  */
 export function passesSearchFilter(
   title: string,
@@ -534,9 +534,11 @@ export function passesSearchFilter(
   query: string,
 ): boolean {
   const hay = `${title}\n${summary ?? ""}\n${reason ?? ""}`.toLowerCase();
-  const tokens = tokenizeFeedSearch(query);
-  if (tokens.length === 0) return true;
-  return tokens.every((t) => hay.includes(t));
+  const { include, exclude } = parseFeedSearchTokens(query);
+  if (include.length === 0 && exclude.length === 0) return true;
+  if (!include.every((t) => hay.includes(t))) return false;
+  if (exclude.some((t) => hay.includes(t))) return false;
+  return true;
 }
 
 /** Whitespace tokens for `q` (lowercased). */
@@ -546,6 +548,27 @@ export function tokenizeFeedSearch(query: string): string[] {
     .split(/\s+/)
     .map((t) => t.trim())
     .filter(Boolean);
+}
+
+/**
+ * Split `q` into required and negated tokens. A token starting with `-`
+ * (and at least one more character) is an exclude of the remainder.
+ * Bare `-` is ignored.
+ */
+export function parseFeedSearchTokens(query: string): {
+  include: string[];
+  exclude: string[];
+} {
+  const include: string[] = [];
+  const exclude: string[] = [];
+  for (const t of tokenizeFeedSearch(query)) {
+    if (t.startsWith("-") && t.length > 1) {
+      exclude.push(t.slice(1));
+    } else if (!t.startsWith("-")) {
+      include.push(t);
+    }
+  }
+  return { include, exclude };
 }
 
 /** Escape `%` / `_` for SQL ILIKE patterns. */
