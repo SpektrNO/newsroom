@@ -26,8 +26,10 @@ export type StoredFeedPrefs = {
   sources: FeedSourceFilter[];
   /** Specific subscription id, or null = all sources. */
   sourceId: string | null;
-  /** Empty = all topics. */
+  /** Empty = no include filter (all topics, modulo excludes). */
   topicIds: string[];
+  /** Empty = no exclude filter. */
+  excludedTopicIds: string[];
   topicsOpen: boolean;
 };
 
@@ -38,6 +40,7 @@ export const DEFAULT_FEED_PREFS: StoredFeedPrefs = {
   sources: [],
   sourceId: null,
   topicIds: [],
+  excludedTopicIds: [],
   topicsOpen: true,
 };
 
@@ -143,6 +146,7 @@ export function readStoredFeedPrefs(): StoredFeedPrefs {
       sources: parseSources(obj.sources),
       sourceId: parseSourceId(obj.sourceId),
       topicIds: parseTopicIds(obj.topicIds),
+      excludedTopicIds: parseTopicIds(obj.excludedTopicIds),
       topicsOpen:
         typeof obj.topicsOpen === "boolean"
           ? obj.topicsOpen

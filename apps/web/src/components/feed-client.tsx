@@ -93,6 +93,15 @@ function formatRankLatestNote(result: RankFeedLatestResponse): string {
   return `${parts.join(". ")}.`;
 }
 
+function topicFilterTooltip(topic: Topic): string {
+  const keywords = topic.keywords
+    .map((kw) => kw.trim())
+    .filter(Boolean);
+  const keywordBlock =
+    keywords.length > 0 ? keywords.join(", ") : "No keywords";
+  return `${keywordBlock}\n\nLeft-click: include · Right-click: exclude`;
+}
+
 function formatStoryMeta(item: FeedItem): string | null {
   const date = formatPublished(item.publishedAt);
   const primary = item.sources[0];
@@ -217,8 +226,12 @@ export function FeedClient(): ReactNode {
   const [treeNodes, setTreeNodes] = useState<TopicTreeNode[]>([]);
   const [items, setItems] = useState<FeedItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  /** Empty set = show all topics (no topic filter). */
+  /** Empty set = show all topics (no include filter). */
   const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  /** Empty set = no topic exclusions. */
+  const [excludedTopicIds, setExcludedTopicIds] = useState<Set<string>>(
     () => new Set(),
   );
   /** Empty set = show all source types (no type filter). */
@@ -276,6 +289,7 @@ export function FeedClient(): ReactNode {
     setSelectedSources(new Set(prefs.sources));
     setSelectedSourceId(prefs.sourceId);
     setSelectedTopicIds(new Set(prefs.topicIds));
+    setExcludedTopicIds(new Set(prefs.excludedTopicIds));
     setTopicsOpen(prefs.topicsOpen);
     setPrefsHydrated(true);
   }, []);
@@ -289,6 +303,7 @@ export function FeedClient(): ReactNode {
       sources: [...selectedSources],
       sourceId: selectedSourceId,
       topicIds: [...selectedTopicIds],
+      excludedTopicIds: [...excludedTopicIds],
       topicsOpen,
     });
   }, [
@@ -299,6 +314,7 @@ export function FeedClient(): ReactNode {
     selectedSources,
     selectedSourceId,
     selectedTopicIds,
+    excludedTopicIds,
     topicsOpen,
   ]);
 
@@ -313,8 +329,10 @@ export function FeedClient(): ReactNode {
 
   const allTopicIds = useMemo(() => topics.map((t) => t.id), [topics]);
 
-  // Empty selection = all topics (no API filter). Any selection narrows the feed.
-  const topicFilterActive = selectedTopicIds.size > 0;
+  // Empty selection = all topics (no API include filter). Any selection narrows.
+  const topicIncludeActive = selectedTopicIds.size > 0;
+  const topicExcludeActive = excludedTopicIds.size > 0;
+  const topicFilterActive = topicIncludeActive || topicExcludeActive;
   // Empty selection = all source types. Any selection includes only those types.
   const sourceFilterActive = selectedSources.size > 0;
 
@@ -349,7 +367,10 @@ export function FeedClient(): ReactNode {
       try {
         const page = await api.listFeed({
           cursor,
-          topics: topicFilterActive ? [...selectedTopicIds] : undefined,
+          topics: topicIncludeActive ? [...selectedTopicIds] : undefined,
+          excludeTopics: topicExcludeActive
+            ? [...excludedTopicIds]
+            : undefined,
           sources: sourceFilterActive ? [...selectedSources] : undefined,
           sourceId: selectedSourceId || undefined,
           status:
@@ -429,9 +450,11 @@ export function FeedClient(): ReactNode {
       router,
       search,
       selectedTopicIds,
+      excludedTopicIds,
       selectedSources,
       selectedSourceId,
-      topicFilterActive,
+      topicIncludeActive,
+      topicExcludeActive,
       sourceFilterActive,
       view,
       sort,
@@ -472,6 +495,16 @@ export function FeedClient(): ReactNode {
   useEffect(() => {
     if (!prefsHydrated || !topicsReady) return;
     setSelectedTopicIds((prev) => {
+      const pruned = pruneTopicIds([...prev], allTopicIds);
+      if (
+        pruned.length === prev.size &&
+        pruned.every((id) => prev.has(id))
+      ) {
+        return prev;
+      }
+      return new Set(pruned);
+    });
+    setExcludedTopicIds((prev) => {
       const pruned = pruneTopicIds([...prev], allTopicIds);
       if (
         pruned.length === prev.size &&
@@ -544,7 +577,28 @@ export function FeedClient(): ReactNode {
   }
 
   function toggleTopic(id: string) {
+    setExcludedTopicIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setSelectedTopicIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function negateTopic(id: string) {
+    setSelectedTopicIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setExcludedTopicIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -554,6 +608,17 @@ export function FeedClient(): ReactNode {
 
   function toggleGroup(group: TopicGroup) {
     const ids = group.topics.map((t) => t.id);
+    setExcludedTopicIds((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (next.has(id)) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
     setSelectedTopicIds((prev) => {
       const allOn = ids.every((id) => prev.has(id));
       const next = new Set(prev);
@@ -849,18 +914,31 @@ export function FeedClient(): ReactNode {
                         </button>
                         <div className="topic-filter-chips">
                           {group.topics.map((topic) => {
-                            const on = selectedTopicIds.has(topic.id);
+                            const included = selectedTopicIds.has(topic.id);
+                            const excluded = excludedTopicIds.has(topic.id);
                             return (
                               <button
                                 key={topic.id}
                                 type="button"
                                 className={
-                                  on
-                                    ? "topic-filter-chip on"
-                                    : "topic-filter-chip"
+                                  excluded
+                                    ? "topic-filter-chip exclude"
+                                    : included
+                                      ? "topic-filter-chip on"
+                                      : "topic-filter-chip"
                                 }
-                                aria-pressed={on}
+                                aria-pressed={included}
+                                aria-label={
+                                  excluded
+                                    ? `${topic.name} (excluded)`
+                                    : topic.name
+                                }
+                                title={topicFilterTooltip(topic)}
                                 onClick={() => toggleTopic(topic.id)}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  negateTopic(topic.id);
+                                }}
                               >
                                 {topic.name}
                               </button>
@@ -876,7 +954,16 @@ export function FeedClient(): ReactNode {
           ) : null}
           {topicFilterActive ? (
             <p className="topic-filter-hint">
-              Showing {selectedTopicIds.size} of {allTopicIds.length} topics
+              {[
+                topicIncludeActive
+                  ? `${selectedTopicIds.size} included`
+                  : null,
+                topicExcludeActive
+                  ? `${excludedTopicIds.size} excluded`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
               {matchedCount != null
                 ? ` · ${matchedCount} article${matchedCount === 1 ? "" : "s"}`
                 : null}
@@ -970,6 +1057,7 @@ export function FeedClient(): ReactNode {
                 className="ghost"
                 onClick={() => {
                   setSelectedTopicIds(new Set());
+                  setExcludedTopicIds(new Set());
                   setSelectedSources(new Set());
                   setSelectedSourceId(null);
                   setView("feed");

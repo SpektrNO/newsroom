@@ -34,6 +34,7 @@ describe("feed-prefs", () => {
         sources: ["podcast", "community", "podcast"],
         sourceId: "sub-1",
         topicIds: ["a", "b", "a"],
+        excludedTopicIds: ["c", "c"],
         topicsOpen: false,
       });
       assert.deepEqual(readStoredFeedPrefs(), {
@@ -43,6 +44,7 @@ describe("feed-prefs", () => {
         sources: ["podcast", "community"],
         sourceId: "sub-1",
         topicIds: ["a", "b"],
+        excludedTopicIds: ["c"],
         topicsOpen: false,
       });
     } finally {
@@ -92,6 +94,7 @@ describe("feed-prefs", () => {
         sources: ["social_media"],
         sourceId: null,
         topicIds: ["ok"],
+        excludedTopicIds: [],
         topicsOpen: true,
       });
     } finally {

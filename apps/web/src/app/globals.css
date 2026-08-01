@@ -678,6 +678,14 @@ button.danger-text:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+.topic-filter-chip.exclude {
+  color: var(--muted);
+  border-color: color-mix(in srgb, var(--ink) 28%, var(--hairline));
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 .topic-filter-hint {
   margin: 0;
   font-size: 0.8rem;

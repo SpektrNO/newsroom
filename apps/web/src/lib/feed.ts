@@ -385,13 +385,26 @@ export function formatEpisodeDuration(
 
 /** Collect topic ids from `topic` (repeatable) and/or `topics` (comma-separated). */
 export function parseFeedTopicIds(url: URL): string[] | "invalid" {
-  const fromRepeat = url.searchParams.getAll("topic").flatMap((raw) =>
+  return parseTopicIdParams(url, "topic", "topics");
+}
+
+/** Collect excluded topic ids from `excludeTopic` / `excludeTopics`. */
+export function parseFeedExcludeTopicIds(url: URL): string[] | "invalid" {
+  return parseTopicIdParams(url, "excludeTopic", "excludeTopics");
+}
+
+function parseTopicIdParams(
+  url: URL,
+  repeatKey: string,
+  csvKey: string,
+): string[] | "invalid" {
+  const fromRepeat = url.searchParams.getAll(repeatKey).flatMap((raw) =>
     raw
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  const fromCsv = (url.searchParams.get("topics") ?? "")
+  const fromCsv = (url.searchParams.get(csvKey) ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
@@ -439,6 +452,62 @@ export function matchesTopicIds(
   return rowMatchedTopicIds.some((id) => selectedTopicIds.includes(id))
     ? "match"
     : "no-match";
+}
+
+/**
+ * Include (OR) ∩ exclude (NOT any). Empty includes = no include filter;
+ * empty excludes = no exclude filter.
+ */
+export function passesTopicSelection(opts: {
+  matchedTopicIds: string[] | null | undefined;
+  title: string;
+  summary: string | null;
+  showTitle?: string | null;
+  includeIds: readonly string[];
+  excludeIds: readonly string[];
+  includeKeywords: readonly string[];
+  includeInheritedKeywords?: readonly string[];
+  excludeKeywords: readonly string[];
+  excludeInheritedKeywords?: readonly string[];
+}): boolean {
+  if (opts.excludeIds.length > 0) {
+    const excluded = matchesTopicIds(opts.matchedTopicIds, [...opts.excludeIds]);
+    if (excluded === "match") return false;
+    if (
+      excluded === "unknown" &&
+      passesTopicFilter(
+        opts.title,
+        opts.summary,
+        [...opts.excludeKeywords],
+        opts.excludeInheritedKeywords
+          ? [...opts.excludeInheritedKeywords]
+          : undefined,
+        opts.showTitle,
+      )
+    ) {
+      return false;
+    }
+  }
+
+  if (opts.includeIds.length === 0) return true;
+
+  const included = matchesTopicIds(opts.matchedTopicIds, [...opts.includeIds]);
+  if (included === "no-match") return false;
+  if (
+    included === "unknown" &&
+    !passesTopicFilter(
+      opts.title,
+      opts.summary,
+      [...opts.includeKeywords],
+      opts.includeInheritedKeywords
+        ? [...opts.includeInheritedKeywords]
+        : undefined,
+      opts.showTitle,
+    )
+  ) {
+    return false;
+  }
+  return true;
 }
 
 const MAX_FEED_SEARCH_LEN = 200;
@@ -496,28 +565,36 @@ export function countMatchingFeedRows(
   }>,
   opts: {
     topicIds: string[] | null;
+    excludeTopicIds?: string[] | null;
     topicKeywords: string[] | null;
     topicInheritedKeywords?: string[] | null;
+    excludeTopicKeywords?: string[] | null;
+    excludeTopicInheritedKeywords?: string[] | null;
     /** Non-empty = include articles that have any of these source categories. */
     sourceFilter: string[] | null;
     searchQuery: string | null;
     sourceTypesByArticle: Map<string, Set<string>>;
   },
 ): number {
+  const includeIds = opts.topicIds ?? [];
+  const excludeIds = opts.excludeTopicIds ?? [];
   let n = 0;
   for (const row of rows) {
-    if (opts.topicIds !== null) {
-      const verdict = matchesTopicIds(row.matchedTopicIds, opts.topicIds);
-      if (verdict === "no-match") continue;
+    if (includeIds.length > 0 || excludeIds.length > 0) {
       if (
-        verdict === "unknown" &&
-        !passesTopicFilter(
-          row.title,
-          row.summary,
-          opts.topicKeywords ?? [],
-          opts.topicInheritedKeywords ?? undefined,
-          row.showTitle,
-        )
+        !passesTopicSelection({
+          matchedTopicIds: row.matchedTopicIds,
+          title: row.title,
+          summary: row.summary,
+          showTitle: row.showTitle,
+          includeIds,
+          excludeIds,
+          includeKeywords: opts.topicKeywords ?? [],
+          includeInheritedKeywords: opts.topicInheritedKeywords ?? undefined,
+          excludeKeywords: opts.excludeTopicKeywords ?? [],
+          excludeInheritedKeywords:
+            opts.excludeTopicInheritedKeywords ?? undefined,
+        })
       ) {
         continue;
       }

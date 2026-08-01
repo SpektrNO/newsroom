@@ -39,7 +39,7 @@ import {
   escapeIlikePattern,
   feedCursorFromRow,
   feedSourceSubscriptionLabel,
-  matchesTopicIds,
+  parseFeedExcludeTopicIds,
   parseFeedLimit,
   parseFeedOrder,
   parseFeedSearchQuery,
@@ -48,7 +48,7 @@ import {
   parseFeedSourceId,
   parseFeedStatusFilter,
   parseFeedTopicIds,
-  passesTopicFilter,
+  passesTopicSelection,
   toFeedItemJson,
   tokenizeFeedSearch,
   type FeedCursor,
@@ -241,8 +241,11 @@ async function loadFeedCounts(args: {
   userId: string;
   statusFilter: UserArticleScoreStatus | null;
   topicIds: string[] | null;
+  excludeTopicIds: string[] | null;
   topicKeywords: string[] | null;
   topicInheritedKeywords: string[] | null;
+  excludeTopicKeywords: string[] | null;
+  excludeTopicInheritedKeywords: string[] | null;
   sourceFilter: string[] | null;
   sourceId: string | null;
   searchQuery: string | null;
@@ -297,8 +300,12 @@ async function loadFeedCounts(args: {
     ...(sourceIdCond ? [sourceIdCond] : []),
   )!;
 
+  const needsTopicScan =
+    (args.topicIds !== null && args.topicIds.length > 0) ||
+    (args.excludeTopicIds !== null && args.excludeTopicIds.length > 0);
+
   // Recency (+ search/source) are SQL; topic still needs an app scan.
-  if (args.topicIds === null) {
+  if (!needsTopicScan) {
     const [matchedRow] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(userArticleScores)
@@ -329,8 +336,11 @@ async function loadFeedCounts(args: {
 
   const matchedCount = countMatchingFeedRows(scanRows, {
     topicIds: args.topicIds,
+    excludeTopicIds: args.excludeTopicIds,
     topicKeywords: args.topicKeywords,
     topicInheritedKeywords: args.topicInheritedKeywords,
+    excludeTopicKeywords: args.excludeTopicKeywords,
+    excludeTopicInheritedKeywords: args.excludeTopicInheritedKeywords,
     // Source + recency already applied in SQL.
     sourceFilter: null,
     searchQuery: null,
@@ -370,6 +380,7 @@ export async function GET(request: Request) {
   const limit = parseFeedLimit(url.searchParams.get("limit"));
   const cursorRaw = url.searchParams.get("cursor");
   const topicIds = parseFeedTopicIds(url);
+  const excludeTopicIdsRaw = parseFeedExcludeTopicIds(url);
   const sourceFilters = parseFeedSourceFilters(url);
   const sourceIdRaw = parseFeedSourceId(url.searchParams.get("sourceId"));
   const statusFilter = parseFeedStatusFilter(url.searchParams.get("status"));
@@ -379,6 +390,7 @@ export async function GET(request: Request) {
 
   if (
     topicIds === "invalid" ||
+    excludeTopicIdsRaw === "invalid" ||
     sourceFilters === "invalid" ||
     sourceIdRaw === "invalid" ||
     statusFilter === "invalid" ||
@@ -389,7 +401,10 @@ export async function GET(request: Request) {
     return Response.json({ error: "invalid_filter" }, { status: 400 });
   }
 
-  const selectedTopicIds: string[] = topicIds;
+  // Exclude wins on overlap (client should not send both for the same id).
+  const excludeSet = new Set(excludeTopicIdsRaw);
+  const selectedTopicIds = topicIds.filter((id) => !excludeSet.has(id));
+  const excludedTopicIds = excludeTopicIdsRaw;
   const feedSort: FeedSort = sort;
   const feedOrder: FeedOrder = order;
   const sourceFilter = sourceFilters.length > 0 ? sourceFilters : null;
@@ -421,23 +436,22 @@ export async function GET(request: Request) {
   // Kept separate (not flattened) — inherited/ancestor keywords must never
   // count as a primary match on their own, only as a weak boost once a
   // topic's own keyword has already matched. See scoreKeywordMatch.
-  let topicKeywords: string[] | null = null;
-  let topicInheritedKeywords: string[] | null = null;
-  if (selectedTopicIds.length > 0) {
+  async function loadTopicKeywordSets(ids: string[]): Promise<
+    | { ok: true; keywords: string[]; inherited: string[] }
+    | { ok: false }
+  > {
+    if (ids.length === 0) {
+      return { ok: true, keywords: [], inherited: [] };
+    }
     const topicRows = await getDb()
       .select()
       .from(topics)
       .where(
-        and(
-          eq(topics.userId, authResult.userId),
-          inArray(topics.id, selectedTopicIds),
-        ),
+        and(eq(topics.userId, authResult.userId), inArray(topics.id, ids)),
       );
-    if (topicRows.length !== selectedTopicIds.length) {
-      return Response.json({ error: "invalid_filter" }, { status: 400 });
-    }
+    if (topicRows.length !== ids.length) return { ok: false };
     const keywords: string[] = [];
-    const inheritedKeywords: string[] = [];
+    const inherited: string[] = [];
     const seenKw = new Set<string>();
     const seenInherited = new Set<string>();
     for (const topic of topicRows) {
@@ -451,12 +465,24 @@ export async function GET(request: Request) {
         const key = kw.trim().toLowerCase();
         if (!key || seenInherited.has(key)) continue;
         seenInherited.add(key);
-        inheritedKeywords.push(kw.trim());
+        inherited.push(kw.trim());
       }
     }
-    topicKeywords = keywords;
-    topicInheritedKeywords = inheritedKeywords;
+    return { ok: true, keywords, inherited };
   }
+
+  const includeKw = await loadTopicKeywordSets(selectedTopicIds);
+  if (!includeKw.ok) {
+    return Response.json({ error: "invalid_filter" }, { status: 400 });
+  }
+  const excludeKw = await loadTopicKeywordSets(excludedTopicIds);
+  if (!excludeKw.ok) {
+    return Response.json({ error: "invalid_filter" }, { status: 400 });
+  }
+  const topicKeywords = includeKw.keywords;
+  const topicInheritedKeywords = includeKw.inherited;
+  const excludeTopicKeywords = excludeKw.keywords;
+  const excludeTopicInheritedKeywords = excludeKw.inherited;
 
   const conditions: SQL[] = [
     eq(userArticleScores.userId, authResult.userId),
@@ -481,7 +507,8 @@ export async function GET(request: Request) {
   }
 
   // Topic filter still needs an app-layer pass (matchedTopicIds + legacy keyword).
-  const needsTopicAppFilter = selectedTopicIds.length > 0;
+  const needsTopicAppFilter =
+    selectedTopicIds.length > 0 || excludedTopicIds.length > 0;
 
   const scoreSelect = {
     articleId: userArticleScores.articleId,
@@ -509,8 +536,11 @@ export async function GET(request: Request) {
       userId: authResult.userId,
       statusFilter,
       topicIds: selectedTopicIds.length > 0 ? selectedTopicIds : null,
+      excludeTopicIds: excludedTopicIds.length > 0 ? excludedTopicIds : null,
       topicKeywords,
       topicInheritedKeywords,
+      excludeTopicKeywords,
+      excludeTopicInheritedKeywords,
       sourceFilter,
       sourceId,
       searchQuery,
@@ -555,22 +585,18 @@ export async function GET(request: Request) {
   }
 
   function passesTopicAppFilter(row: FeedScoreRow): boolean {
-    if (selectedTopicIds.length === 0) return true;
-    const verdict = matchesTopicIds(row.matchedTopicIds, selectedTopicIds);
-    if (verdict === "no-match") return false;
-    if (
-      verdict === "unknown" &&
-      !passesTopicFilter(
-        row.title,
-        row.summary,
-        topicKeywords ?? [],
-        topicInheritedKeywords ?? undefined,
-        row.showTitle,
-      )
-    ) {
-      return false;
-    }
-    return true;
+    return passesTopicSelection({
+      matchedTopicIds: row.matchedTopicIds,
+      title: row.title,
+      summary: row.summary,
+      showTitle: row.showTitle,
+      includeIds: selectedTopicIds,
+      excludeIds: excludedTopicIds,
+      includeKeywords: topicKeywords,
+      includeInheritedKeywords: topicInheritedKeywords,
+      excludeKeywords: excludeTopicKeywords,
+      excludeInheritedKeywords: excludeTopicInheritedKeywords,
+    });
   }
 
   const filtered: FeedScoreRow[] = [];

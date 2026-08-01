@@ -137,7 +137,7 @@ Contract: `fetchRecent() → NormalizedArticle[]`. Config in `source_subscriptio
 - `GET/POST/DELETE /api/sources`
 - `GET /api/feed-catalog` — curated RSS feed catalog (session; static v1)
 - `POST /api/feed-search` — session; discover RSS/Atom URLs via LangSearch (`LANGSEARCH_API_KEY`); browser never calls LangSearch
-- `GET /api/feed?cursor=&topic=&source=&sourceId=&status=`
+- `GET /api/feed?cursor=&topic=&excludeTopic=&source=&sourceId=&status=`
 - `POST /api/feed/rank` — session; run keyword + AI rank for the current user only (may take minutes)
 - `POST /api/feed/wipe-rankings` — session; delete `new`/`seen` scores (+ orphan evaluations); keep saved/dismissed; clear dirty (no auto re-rank)
 - `GET/PATCH /api/settings/rank-model` — session; get/set the caller's rank model tier (`none` \| `fast` \| `standard`); PATCH marks preferences dirty

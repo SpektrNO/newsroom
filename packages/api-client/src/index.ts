@@ -170,6 +170,8 @@ export type ListFeedOptions = {
   topic?: string;
   /** Topic ids to include (OR). Omitted / empty = all topics. */
   topics?: string[];
+  /** Topic ids to exclude (NOT any). Applied after includes. */
+  excludeTopics?: string[];
   /** Single source category (legacy). Prefer `sources` for multi-select. */
   source?: SourceCategoryV1;
   /** Source categories to include (OR). Omitted / empty = all source types. */
@@ -439,6 +441,9 @@ export class ApiClient {
     ].filter(Boolean);
     for (const id of topicIds) {
       params.append("topic", id);
+    }
+    for (const id of options.excludeTopics ?? []) {
+      if (id) params.append("excludeTopic", id);
     }
     const sourceCategories = [
       ...(options.sources ?? []),

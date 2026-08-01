@@ -10,8 +10,8 @@ export type TopicTreeResponse = {
   nodes: TopicTreeNode[];
 };
 
-/** Curated hierarchical topic catalog (v5 — Systems & vulnerabilities). */
-export const TOPIC_TREE_VERSION = 5;
+/** Curated hierarchical topic catalog (v6 — Breaking & politics). */
+export const TOPIC_TREE_VERSION = 6;
 
 export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
   { id: "tech", parentId: null, label: "Technology", selectable: false },
@@ -176,6 +176,12 @@ export const TOPIC_TREE_NODES: readonly TopicTreeNode[] = [
     id: "culture.policy",
     parentId: "culture",
     label: "Policy & rules",
+    selectable: true,
+  },
+  {
+    id: "culture.breaking",
+    parentId: "culture",
+    label: "Breaking & politics",
     selectable: true,
   },
   {

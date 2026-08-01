@@ -18,8 +18,10 @@ import {
   parseFeedSourceId,
   parseFeedStatusFilter,
   parseFeedTopicIds,
+  parseFeedExcludeTopicIds,
   passesSearchFilter,
   passesSourceFilter,
+  passesTopicSelection,
   splitFeedReason,
   feedSourceSubscriptionLabel,
   feedSourceTypeLabel,
@@ -207,6 +209,12 @@ describe("feed query parsers", () => {
       parseFeedTopicIds(new URL("http://localhost/api/feed?topic=bad%20id")),
       "invalid",
     );
+    assert.deepEqual(
+      parseFeedExcludeTopicIds(
+        new URL("http://localhost/api/feed?excludeTopic=x&excludeTopics=y,x"),
+      ),
+      ["x", "y"],
+    );
   });
 
   it("parses search query", () => {
@@ -307,6 +315,53 @@ describe("matchesTopicIds", () => {
   it("unknown for pre-migration rows (null matchedTopicIds)", () => {
     assert.equal(matchesTopicIds(null, ["t2"]), "unknown");
     assert.equal(matchesTopicIds(undefined, ["t2"]), "unknown");
+  });
+});
+
+describe("passesTopicSelection", () => {
+  it("excludes articles that match an excluded topic", () => {
+    assert.equal(
+      passesTopicSelection({
+        matchedTopicIds: ["ai", "sports"],
+        title: "Match",
+        summary: null,
+        includeIds: [],
+        excludeIds: ["sports"],
+        includeKeywords: [],
+        excludeKeywords: [],
+      }),
+      false,
+    );
+  });
+
+  it("keeps articles that only match includes when excludes miss", () => {
+    assert.equal(
+      passesTopicSelection({
+        matchedTopicIds: ["ai"],
+        title: "Match",
+        summary: null,
+        includeIds: ["ai"],
+        excludeIds: ["sports"],
+        includeKeywords: [],
+        excludeKeywords: [],
+      }),
+      true,
+    );
+  });
+
+  it("exclude-only mode keeps non-matching articles", () => {
+    assert.equal(
+      passesTopicSelection({
+        matchedTopicIds: ["ai"],
+        title: "Match",
+        summary: null,
+        includeIds: [],
+        excludeIds: ["sports"],
+        includeKeywords: [],
+        excludeKeywords: [],
+      }),
+      true,
+    );
   });
 });
 
