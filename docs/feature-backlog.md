@@ -146,9 +146,24 @@ Notes for `ai-cloud-providers-byok`:
 | `web-ai-advisor-chat` | In-app AI chat for topic/keyword advice | ✅ | `docs/architecture.md` |
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
 | `web-source-feed-search` | Search RSS/Atom feeds via LangSearch (BFF) | ✅ | `docs/architecture.md` |
+| `web-feed-offline-cache` | Cached feed scroll when API/server is unreachable | ⬜ | `docs/architecture.md` |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
 | `web-elegant-refresh` | Elegant visual/UX polish across web client | ✅ | `docs/architecture.md` |
 | `introduce-themes` | User themes (background + density) + tighter controls | ✅ | `docs/architecture.md` |
+
+Notes for `web-feed-offline-cache`:
+
+- **Goal:** When the API, Postgres, or whole host is unreachable, a signed-in user can still **scroll the last successfully loaded feed** instead of seeing an empty error state.
+- **Problem today:** `FeedClient` loads only via live `GET /api/feed` (session + DB every time). On failure it clears items. Prefs/theme live in `localStorage`; feed items do not. No service worker / IndexedDB.
+- **MVP (read-only cache):** After each successful `listFeed`, persist the returned page(s) client-side (**IndexedDB** preferred over `localStorage` for size). Key at least by user id (from session/client knowledge) + a cache key for the active filter/sort query (or v1: cache only the **default / last-used** feed view). On network error, offline, or 5xx from `listFeed`, hydrate from cache and show a calm banner: cached feed, server unreachable, timestamp of last sync. Do **not** empty the list when cache exists.
+- **Offline UX:** Disable or no-op **Rank latest**, **Wipe rankings**, and **Load more** beyond what is cached. Save / Dismiss / Seen: **disable** in v1 (no silent local-only status that diverges). External article links still need the open web; that is fine.
+- **Auth:** Cached path must **bypass** `/api/feed` entirely (no live cookie/DB check). Fresh data still requires a normal session when online. If the browser has never successfully loaded a feed for this user, offline stays empty with a clear message.
+- **Retention:** Cap cached items (e.g. last ~100–200 stories or last N pages) and/or TTL (e.g. 7 days); document eviction. Overwrite on successful online fetch for the same cache key.
+- **Cold open when the host is down (optional in same feature or follow-up):** MVP helps a tab that already had the app JS. Serving the shell when `apps/web` itself is down needs a **service worker / PWA** (cache app shell + static assets) or a CDN-hosted shell. Spec should call this out as **P0 shell** vs **P1 cold-open**; ship IndexedDB feed cache first if scope is tight.
+- **Out of scope v1:** On-device ingest or ranking; local Postgres/SQLite corpus; offline Topics/Sources/Advisor/Settings mutations; multi-filter full offline browsing beyond the cached key; mobile/Expo (`mobile-feed-topics` can reuse the idea later via AsyncStorage); outbox sync for Save/Dismiss (follow-up).
+- **Follow-ups (do not block MVP):** Offline mutation outbox; expose `matchedTopicIds` on feed items for richer offline filters; prefetch next page while online to deepen cache; PWA shell; mobile parity.
+- **Depends on:** Shipped `web-feed-topics-sources` / `FeedClient` + `FeedItem` payload (title, rank, reason, URL, sources, status already sufficient to render the list).
+- **Verify:** Load feed online → go offline (devtools) → reload client path still shows items + banner; Rank/Wipe/Save disabled; online fetch refreshes cache; second browser profile / different user must not see the other user’s cached items; no new server schema required.
 
 Notes for `wipe-rankings`:
 
