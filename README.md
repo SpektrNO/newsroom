@@ -80,7 +80,7 @@ pnpm --filter @newsroom/worker start
 |--------|-------------|
 | `make setup` | Copy `.env` + `apps/web/.env.local` if missing, then `pnpm install` |
 | `make install` | Install workspace deps |
-| `make up` | Start Postgres + Ollama |
+| `make up` | Start Postgres; Compose Ollama only if `:11434` is free (else use host Ollama) |
 | `make up-postgres` | Postgres only (skip Ollama) |
 | `make up-gpu` | Compose with NVIDIA GPU passthrough for Ollama |
 | `make down` | Stop Compose services |

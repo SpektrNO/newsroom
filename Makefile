@@ -4,6 +4,7 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 COMPOSE ?= docker compose
 PNPM ?= pnpm
 OLLAMA_MODEL ?= llama3.2
+OLLAMA_PORT ?= 11434
 
 ifneq (,$(wildcard $(ROOT)/.env))
   include $(ROOT)/.env
@@ -38,17 +39,32 @@ setup: ## First-time setup: copy env files + pnpm install
 install: ## Install workspace deps (pnpm)
 	cd $(ROOT) && $(PNPM) install
 
-up: ## Start Postgres + Ollama (Compose)
-	$(COMPOSE) -f $(ROOT)/docker-compose.yml up -d
-	@echo "Postgres: localhost:5432  Ollama: http://localhost:11434"
+# Host Ollama often already owns :11434; binding Compose Ollama then fails with
+# "address already in use". Start Postgres always; only start Compose Ollama when
+# the port is free (otherwise use the host daemon — same OLLAMA_HOST).
+up: ## Start Postgres; Compose Ollama only if :11434 is free
+	$(COMPOSE) -f $(ROOT)/docker-compose.yml up -d postgres
+	@if bash -c 'exec 3<>/dev/tcp/127.0.0.1/$(OLLAMA_PORT)' 2>/dev/null; then \
+		echo "Postgres: localhost:5432"; \
+		echo "Port $(OLLAMA_PORT) already in use — skipping Compose Ollama (using host/other at http://localhost:$(OLLAMA_PORT))."; \
+		echo "Stop host Ollama to use the container, or keep using make up-postgres. See docs/ops-local.md#ollama"; \
+	else \
+		$(COMPOSE) -f $(ROOT)/docker-compose.yml up -d ollama; \
+		echo "Postgres: localhost:5432  Ollama (Compose): http://localhost:$(OLLAMA_PORT)"; \
+	fi
 
 up-postgres: ## Start Postgres only (skip Ollama)
 	$(COMPOSE) -f $(ROOT)/docker-compose.yml up -d postgres
 	@echo "Postgres: localhost:5432"
 
-up-gpu: ## Start Compose with NVIDIA GPU passthrough for Ollama
+up-gpu: ## Start Compose with NVIDIA GPU for Ollama (needs free :11434)
+	@if bash -c 'exec 3<>/dev/tcp/127.0.0.1/$(OLLAMA_PORT)' 2>/dev/null; then \
+		echo "Port $(OLLAMA_PORT) in use — stop host Ollama before make up-gpu."; \
+		echo "See docs/ops-local.md#ollama"; \
+		exit 1; \
+	fi
 	$(COMPOSE) -f $(ROOT)/docker-compose.yml -f $(ROOT)/docker-compose.gpu.yml up -d
-	@echo "Postgres: localhost:5432  Ollama (GPU): http://localhost:11434"
+	@echo "Postgres: localhost:5432  Ollama (GPU): http://localhost:$(OLLAMA_PORT)"
 
 down: ## Stop Compose services
 	$(COMPOSE) -f $(ROOT)/docker-compose.yml down
@@ -104,8 +120,12 @@ typecheck: ## Turbo typecheck
 build: ## Turbo build
 	cd $(ROOT) && $(PNPM) build
 
-ollama-pull: ## Pull ranking model into Compose Ollama (OLLAMA_MODEL=…)
-	docker exec -it newsroom-ollama ollama pull $(OLLAMA_MODEL)
+ollama-pull: ## Pull model (Compose container if running, else host ollama)
+	@if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx newsroom-ollama; then \
+		docker exec -it newsroom-ollama ollama pull $(OLLAMA_MODEL); \
+	else \
+		ollama pull $(OLLAMA_MODEL); \
+	fi
 
 verify: ## Local acceptance: health + sign-up (web must be up)
 	cd $(ROOT) && ./scripts/verify-scaffold.sh
