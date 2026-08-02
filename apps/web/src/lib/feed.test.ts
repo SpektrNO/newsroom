@@ -310,12 +310,53 @@ describe("passesSearchFilter", () => {
       true,
     );
   });
+
+  it("matches quoted phrases as a single contiguous substring", () => {
+    assert.equal(
+      passesSearchFilter(
+        "Advances in artificial intelligence research",
+        null,
+        null,
+        '"artificial intelligence"',
+      ),
+      true,
+    );
+    assert.equal(
+      passesSearchFilter(
+        "Artificial minds and intelligence tests",
+        null,
+        null,
+        '"artificial intelligence"',
+      ),
+      false,
+    );
+    assert.equal(
+      passesSearchFilter(
+        "Notes on artificial intelligence hype",
+        null,
+        null,
+        '-"artificial intelligence"',
+      ),
+      false,
+    );
+  });
 });
 
 describe("tokenizeFeedSearch / parseFeedSearchTokens / escapeIlikePattern", () => {
   it("splits and lowercases tokens", () => {
     assert.deepEqual(tokenizeFeedSearch("  LLM   Agents "), ["llm", "agents"]);
     assert.deepEqual(tokenizeFeedSearch("   "), []);
+  });
+
+  it("keeps double-quoted spans as one token", () => {
+    assert.deepEqual(tokenizeFeedSearch('"Artificial Intelligence"'), [
+      "artificial intelligence",
+    ]);
+    assert.deepEqual(
+      tokenizeFeedSearch('llm "artificial intelligence" agent'),
+      ["llm", "artificial intelligence", "agent"],
+    );
+    assert.deepEqual(tokenizeFeedSearch('"open  source'), ["open source"]);
   });
 
   it("parses include and exclude tokens", () => {
@@ -327,6 +368,13 @@ describe("tokenizeFeedSearch / parseFeedSearchTokens / escapeIlikePattern", () =
       include: [],
       exclude: ["spam"],
     });
+    assert.deepEqual(
+      parseFeedSearchTokens('llm -"artificial intelligence"'),
+      {
+        include: ["llm"],
+        exclude: ["artificial intelligence"],
+      },
+    );
   });
 
   it("escapes ILIKE wildcards", () => {
