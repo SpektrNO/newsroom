@@ -4,6 +4,8 @@
 
 Instead of browsing each source separately, Newsroom pulls recent items into one hybrid-ranked feed (keywords + optional AI), with Save / Dismiss, topic filters, and an in-app Advisor for refining interests.
 
+![Ranked feed with scores, keyword matches, and Save / Dismiss](docs/newsroom-feed.png)
+
 Personal-first; multi-user-ready data model and APIs. Web UI today; Expo mobile feed next.
 
 ## Prerequisites
