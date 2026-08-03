@@ -1018,7 +1018,7 @@ export function FeedClient(): ReactNode {
           <input
             type="search"
             value={searchDraft}
-            placeholder="Words to find; -word to exclude…"
+            placeholder='Words; "exact phrase"; -word to exclude…'
             onChange={(e) => setSearchDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {

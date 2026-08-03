@@ -72,6 +72,36 @@ pnpm --filter @newsroom/worker start
 
 ## Commands
 
+`make help` lists the same shortcuts. Prefer Make for day-to-day; `pnpm` / `docker compose` remain the underlying commands.
+
+### Make targets
+
+| Target | Description |
+|--------|-------------|
+| `make setup` | Copy `.env` + `apps/web/.env.local` if missing, then `pnpm install` |
+| `make install` | Install workspace deps |
+| `make up` | Start Postgres; Compose Ollama only if `:11434` is free (else use host Ollama) |
+| `make up-postgres` | Postgres only (skip Ollama) |
+| `make up-gpu` | Compose with NVIDIA GPU passthrough for Ollama |
+| `make down` | Stop Compose services |
+| `make logs` | Tail Compose logs |
+| `make migrate` | Apply Drizzle migrations |
+| `make generate` | Generate Drizzle migrations from schema |
+| `make seed` | Demo user + HN + Platformer Substack + example topic |
+| `make studio` | Drizzle Studio |
+| `make web` | Next.js dev server (:3000) |
+| `make worker` | Long-running ingest + rank job poller |
+| `make ingest` | One-shot ingest then exit |
+| `make rank` | One-shot rank (`RANK_ARGS=-- --all-dirty` optional) |
+| `make prune` | One-shot prune stale scores + old articles |
+| `make test` | AI + sources unit tests (offline-safe) |
+| `make test-ai` / `test-web` / `test-worker` / `test-sources` | Package test suites |
+| `make typecheck` / `make build` | Turbo typecheck / build |
+| `make ollama-pull` | Pull model into Compose Ollama (`OLLAMA_MODEL=llama3.2` default) |
+| `make verify` | Local acceptance script (web must be up) |
+
+### pnpm / Docker equivalents
+
 | Command | Description |
 |---------|-------------|
 | `pnpm install` | Install workspace deps |
@@ -84,18 +114,18 @@ pnpm --filter @newsroom/worker start
 | `pnpm db:migrate` | Apply migrations to `DATABASE_URL` |
 | `pnpm db:seed` | Demo user + HN + Platformer Substack + `AI & infra` topic |
 | `pnpm db:studio` | Drizzle Studio |
-| `pnpm --filter @newsroom/web dev` | Next.js dev server (:3000) |
+| `pnpm --filter @newsroom/web dev` / `pnpm web:dev` | Next.js dev server (:3000) |
 | `pnpm --filter @newsroom/web build` / `start` | Production web build / serve |
-| `pnpm --filter @newsroom/worker start` | Long-running ingest + rank job poller |
+| `pnpm --filter @newsroom/worker start` / `pnpm worker:start` | Long-running ingest + rank job poller |
 | `pnpm worker:ingest` / `pnpm --filter @newsroom/worker ingest` | One-shot ingest then exit (enqueues rank) |
 | `pnpm worker:rank` / `pnpm --filter @newsroom/worker rank` | One-shot rank then exit |
 | `pnpm worker:prune-scores` | One-shot prune of stale scores + old articles then exit (same article GC also runs at end of each rank pass) |
-| `pnpm --filter @newsroom/mobile start` | Expo dev server |
+| `pnpm --filter @newsroom/mobile start` / `pnpm mobile:start` | Expo dev server |
 | `pnpm sources:test` | Adapter + URL normalization fixture tests |
 | `pnpm worker:test` | Ingest + rank integration tests (needs Postgres; AI mocked) |
 | `pnpm web:test` | Topics/feed parsers + session isolation (needs Postgres) |
-| `pnpm --filter @newsroom/ai test` | AI unit tests (offline-safe keyword + rank parse) |
-| `pnpm --filter @newsroom/ai smoke` | Live AI smoke via `AI_PROVIDER` (skips if unreachable; `AI_SMOKE=1` / `OLLAMA_SMOKE=1` to require it) |
+| `pnpm --filter @newsroom/ai test` / `pnpm ai:test` | AI unit tests (offline-safe keyword + rank parse) |
+| `pnpm --filter @newsroom/ai smoke` / `pnpm ai:smoke` | Live AI smoke via `AI_PROVIDER` (skips if unreachable; `AI_SMOKE=1` / `OLLAMA_SMOKE=1` to require it) |
 | `pnpm build` / `pnpm typecheck` | Turbo build / typecheck graph |
 | `./scripts/verify-scaffold.sh` | Local acceptance: health + sign-up session (web must be up) |
 

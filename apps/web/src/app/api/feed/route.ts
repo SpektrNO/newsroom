@@ -228,7 +228,8 @@ function laterTimestamp(
 
 /**
  * Include tokens: AND of (token in title|summary|reason).
- * Exclude tokens (`-word`): AND of (token in none of those fields).
+ * Exclude tokens (`-word` / `-"phrase"`): AND of (token in none of those fields).
+ * Quoted `"phrases"` are a single contiguous substring token.
  */
 function feedSearchConditions(searchQuery: string): SQL[] {
   const { include, exclude } = parseFeedSearchTokens(searchQuery);

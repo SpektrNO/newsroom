@@ -525,7 +525,8 @@ export function parseFeedSearchQuery(
 
 /**
  * Case-insensitive find-in-feed: every include token must appear in
- * title, summary, or reason (AND); exclude tokens (`-word`) must not.
+ * title, summary, or reason (AND); exclude tokens (`-word` / `-"phrase"`)
+ * must not. Double-quoted spans are one token (phrase substring).
  */
 export function passesSearchFilter(
   title: string,
@@ -541,19 +542,56 @@ export function passesSearchFilter(
   return true;
 }
 
-/** Whitespace tokens for `q` (lowercased). */
+/**
+ * Tokenize free-text `q` (lowercased). Whitespace splits tokens, except
+ * inside `"double quotes"` (opening quote to closing quote or end of
+ * string). A leading `-` before a token or quoted phrase marks exclude
+ * (kept on the returned token for `parseFeedSearchTokens`).
+ */
 export function tokenizeFeedSearch(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const s = query.toLowerCase();
+  const out: string[] = [];
+  let i = 0;
+
+  while (i < s.length) {
+    while (i < s.length && /\s/.test(s[i]!)) i++;
+    if (i >= s.length) break;
+
+    let negated = false;
+    if (
+      s[i] === "-" &&
+      i + 1 < s.length &&
+      s[i + 1] !== "-" &&
+      !/\s/.test(s[i + 1]!)
+    ) {
+      negated = true;
+      i++;
+    }
+
+    let token: string;
+    if (s[i] === '"') {
+      i++;
+      const start = i;
+      while (i < s.length && s[i] !== '"') i++;
+      token = s.slice(start, i).trim().replace(/\s+/g, " ");
+      if (i < s.length && s[i] === '"') i++;
+    } else {
+      const start = i;
+      while (i < s.length && !/\s/.test(s[i]!)) i++;
+      token = s.slice(start, i);
+    }
+
+    if (!token) continue;
+    out.push(negated ? `-${token}` : token);
+  }
+
+  return out;
 }
 
 /**
  * Split `q` into required and negated tokens. A token starting with `-`
- * (and at least one more character) is an exclude of the remainder.
- * Bare `-` is ignored.
+ * (and at least one more character) is an exclude of the remainder —
+ * including `-"exact phrase"`. Bare `-` is ignored.
  */
 export function parseFeedSearchTokens(query: string): {
   include: string[];

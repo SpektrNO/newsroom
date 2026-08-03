@@ -70,6 +70,7 @@ Ngrok free interstitial / changing subdomain → update env and restart again.
 ```bash
 docker compose up -d          # Postgres + Ollama
 docker compose up -d postgres # Postgres only
+# or: make up                 # Postgres; Compose Ollama only if :11434 is free
 ```
 
 Default `DATABASE_URL`:
@@ -81,17 +82,19 @@ postgres://newsroom:newsroom@localhost:5432/newsroom
 Ollama listens on `http://localhost:11434` (`OLLAMA_HOST`). First time, pull the ranking model:
 
 ```bash
-docker exec -it newsroom-ollama ollama pull llama3.2
+make ollama-pull
+# or: docker exec -it newsroom-ollama ollama pull llama3.2
+# or (host install): ollama pull llama3.2
 ```
 
 Optional: also pull one of the stronger models (see [Model options](#model-options)) if you use the **Standard** ranking tier (defaults to `llama3.1:8b`) or want a better Fast/`OLLAMA_MODEL` than `llama3.2`:
 
 ```bash
-docker exec -it newsroom-ollama ollama pull llama3.1:8b
-docker exec -it newsroom-ollama ollama pull qwen2.5:7b
+OLLAMA_MODEL=llama3.1:8b make ollama-pull
+OLLAMA_MODEL=qwen2.5:7b make ollama-pull
 ```
 
-Install Ollama on the **host** only if you want easier GPU access — see [Ollama](#ollama). Do not run host and Compose Ollama at the same time (both use port `11434`).
+Install Ollama on the **host** only if you want easier GPU access — see [Ollama](#ollama). Do not run host and Compose Ollama at the same time (both use port `11434`). If host Ollama is already running, `make up` starts Postgres and **skips** the Compose Ollama service instead of failing with `address already in use`.
 
 ## Health (`GET /api/health`)
 
