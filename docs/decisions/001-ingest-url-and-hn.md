@@ -11,7 +11,7 @@ Ingest needs a stable article identity and a deterministic HN fetch path for loc
 
 1. **Canonical URLs** — `normalizeCanonicalUrl` in `@newsroom/sources`: lowercase host, strip `#fragment`, drop default ports, remove trailing slash except origin `/`, preserve query. Applied to article URLs and Substack `rssUrl` uniqueness.
 
-2. **Hacker News** — Firebase only (`/v0/topstories|newstories` + `/v0/item/{id}`). Batch cap **100** items per `fetchRecent`. Algolia HN Search deferred (architecture allows both; Firebase is enough for v1).
+2. **Hacker News** — Firebase only (`/v0/topstories.json` **and** `/v0/newstories.json` + `/v0/item/{id}`). Each list is capped at **100** IDs; the adapter unions and dedupes by HN id before hydrate (≤200 story fetches). When a story has no body `text`, the adapter may fetch **one** extra item — `kids[0]` — and use it as `summary` only if it is a comment by the same author as the story (OP clarification). One HN subscription per user covers both ranked and latest. Legacy `config.mode` (`top`|`new`) is ignored for fetching. Algolia HN Search deferred (architecture allows both; Firebase is enough for v1).
 
 3. **Job cadence** — Worker self-enqueues the next `ingest` job **12 minutes** after completion (single-flight: no second pending/running ingest).
 

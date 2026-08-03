@@ -121,7 +121,7 @@ Subscriptions have a product **category** (feed filters / Sources UI) and an ing
 
 | Adapter | Approach | Status |
 |---------|----------|--------|
-| `hackernews` | Firebase API + Algolia HN Search | v1 |
+| `hackernews` | Firebase `topstories` + `newstories`; OP first comment → summary when no story body | v1 |
 | `rss` | Generic RSS/Atom (`{ rssUrl }`); podcast category adds show/duration/enclosure | v1 |
 | `bluesky` | Public AppView `getAuthorFeed` (`{ handle }`) | v1 |
 | `reddit` | Subreddit listing (`{ subreddit }`); OAuth JSON when creds set, else public JSON / RSS fallback | v1 |

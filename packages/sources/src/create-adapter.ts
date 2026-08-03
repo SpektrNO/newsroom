@@ -33,6 +33,7 @@ export function createSourceAdapter(
   switch (adapter) {
     case "hackernews":
       return new HackerNewsAdapter(
+        // mode is legacy subscription JSON; adapter always fetches top + new
         { mode: config.mode === "new" ? "new" : "top" },
         { fetch: options.fetch, limit: options.hnLimit },
       );

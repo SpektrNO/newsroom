@@ -167,7 +167,7 @@ pnpm web:test                # topics/feed parsers + session isolation
 pnpm --filter @newsroom/ai test   # keyword + rank parse + cloud provider mocks
 ```
 
-- HN: Firebase `topstories`/`newstories` + item hydrate, ≤100 per fetch (see [001](./decisions/001-ingest-url-and-hn.md)).
+- HN: Firebase `topstories` **and** `newstories` + item hydrate, ≤100 IDs per list then dedupe; optional OP `kids[0]` comment → summary (see [001](./decisions/001-ingest-url-and-hn.md)).
 - Ranking formulas / batch size: [002](./decisions/002-hybrid-ranking.md). Optional `RANK_BATCH_SIZE` (20–50, default 30). Generate calls use provider timeouts (`OLLAMA_TIMEOUT_MS` / `OPENAI_TIMEOUT_MS` / `GOOGLE_AI_TIMEOUT_MS`, default **5 minutes**).
 - Sources API (session cookie): `GET/POST /api/sources`, `PATCH/DELETE /api/sources/:id`.
 - Topics / feed API: `GET/POST /api/topics`, `PATCH/DELETE /api/topics/:id`, `GET /api/feed`, `POST /api/feed/:articleId/seen|saved|dismissed`.

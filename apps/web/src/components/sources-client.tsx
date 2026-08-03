@@ -37,8 +37,7 @@ type CommunityAddMode = "reddit" | "rss";
 
 function configSummary(source: Source): string {
   if (source.adapter === "hackernews") {
-    const mode = source.config.mode === "new" ? "New" : "Top";
-    return `${categoryLabel(source.category)} · ${mode} stories`;
+    return `${categoryLabel(source.category)} · Top + new stories`;
   }
   if (source.adapter === "rss") {
     const url =
