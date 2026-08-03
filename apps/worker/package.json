@@ -19,9 +19,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx --env-file=../../.env watch src/index.ts",
-    "start": "pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts",
-    "ingest": "pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts ingest",
-    "rank": "pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts rank",
+    "start": "pnpm --filter @newsroom/sources build && pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts",
+    "ingest": "pnpm --filter @newsroom/sources build && pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts ingest",
+    "rank": "pnpm --filter @newsroom/sources build && pnpm --filter @newsroom/ai build && tsx --env-file=../../.env src/index.ts rank",
     "prune-scores": "tsx --env-file=../../.env src/index.ts prune-scores",
     "test": "tsx --test --test-force-exit src/**/*.test.ts"
   },

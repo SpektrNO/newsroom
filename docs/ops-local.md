@@ -2,11 +2,11 @@
 
 ## Gotcha: `packages/*` changes need a rebuild for the web app
 
-`@newsroom/ai` and `@newsroom/db` publish compiled `dist/*.js` (see their `package.json` `exports`); `apps/web` imports that build output, not the TypeScript source, even though it's listed in `transpilePackages` (that only widens Next's compiler to those files — it does not change module resolution away from `dist/`). CLI scripts (`pnpm worker:rank`, `worker:ingest`, `worker:start`) rebuild `@newsroom/ai` automatically before running, but the web app's in-process routes (e.g. `POST /api/feed/rank`) do not. If you edit `packages/ai/src/**` or `packages/db/src/**` while `pnpm --filter @newsroom/web dev` is already running, that dev server keeps serving the stale compiled behavior until you rebuild and restart it:
+`@newsroom/ai`, `@newsroom/db`, and `@newsroom/sources` publish compiled `dist/*.js` (see their `package.json` `exports`); `apps/web` and the worker import that build output, not the TypeScript source (web's `transpilePackages` only widens Next's compiler — it does not change module resolution away from `dist/`). CLI scripts (`pnpm worker:rank`, `worker:ingest`, `worker:start`) rebuild `@newsroom/sources` and `@newsroom/ai` automatically before running, but the web app's in-process routes (e.g. `POST /api/feed/rank`) do not. If you edit `packages/ai/src/**`, `packages/db/src/**`, or `packages/sources/src/**` while `pnpm --filter @newsroom/web dev` / `make worker` is already running, that process keeps serving the stale compiled behavior until you rebuild and restart it:
 
 ```bash
-pnpm build                                   # or: pnpm --filter @newsroom/ai build
-# then restart the web dev server (Next does not watch dist/ changes)
+pnpm build                                   # or: pnpm --filter @newsroom/sources build && pnpm --filter @newsroom/ai build
+# then restart the web / worker process (they do not watch dist/ changes)
 ```
 
 `pnpm dev` (fresh start) now runs `^build` first via `turbo.json`, so cold starts are safe — this only bites you when editing source against an *already-running* dev server.
