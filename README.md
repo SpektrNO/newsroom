@@ -25,7 +25,7 @@ cp apps/web/.env.example apps/web/.env.local
 # See docs/ops-local.md#environment-files
 
 pnpm install
-docker compose up -d          # Postgres + Ollama
+docker compose up -d          # Postgres + Ollama (published on 127.0.0.1 only)
 pnpm db:migrate
 pnpm db:seed                  # demo user + HN + Platformer Substack + example topic
 # First time: docker exec -it newsroom-ollama ollama pull llama3.2
@@ -85,6 +85,7 @@ pnpm --filter @newsroom/worker start
 | `make up` | Start Postgres; Compose Ollama only if `:11434` is free (else use host Ollama) |
 | `make up-postgres` | Postgres only (skip Ollama) |
 | `make up-gpu` | Compose with NVIDIA GPU passthrough for Ollama |
+| `make up-remote` | Same as `up` but bind Postgres/Ollama on all interfaces (`COMPOSE_HOST_BIND=0.0.0.0`) — see [ops-local](docs/ops-local.md#compose-network-binding) |
 | `make down` | Stop Compose services |
 | `make logs` | Tail Compose logs |
 | `make migrate` | Apply Drizzle migrations |
@@ -96,7 +97,8 @@ pnpm --filter @newsroom/worker start
 | `make ingest` | One-shot ingest then exit |
 | `make rank` | One-shot rank (`RANK_ARGS=-- --all-dirty` optional) |
 | `make prune` | One-shot prune stale scores + old articles |
-| `make test` | AI + sources unit tests (offline-safe) |
+| `make test` | Compose bind assert + AI + sources unit tests (offline-safe) |
+| `make assert-compose` | Assert Compose defaults Postgres/Ollama to loopback |
 | `make test-ai` / `test-web` / `test-worker` / `test-sources` | Package test suites |
 | `make typecheck` / `make build` | Turbo typecheck / build |
 | `make ollama-pull` | Pull model into Compose Ollama (`OLLAMA_MODEL=llama3.2` default) |
@@ -107,7 +109,8 @@ pnpm --filter @newsroom/worker start
 | Command | Description |
 |---------|-------------|
 | `pnpm install` | Install workspace deps |
-| `docker compose up -d` | Start Postgres + Ollama |
+| `docker compose up -d` | Start Postgres + Ollama (loopback bind; see [compose network binding](docs/ops-local.md#compose-network-binding)) |
+| `COMPOSE_HOST_BIND=0.0.0.0 docker compose up -d` | Publish Postgres + Ollama on all interfaces (firewall + rotate DB password first) |
 | `docker compose up -d postgres` | Postgres only (skip Ollama) |
 | `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d` | Start with NVIDIA GPU passthrough for Ollama (needs NVIDIA Container Toolkit on host, see [docs/ops-local.md#gpu-with-docker-compose](docs/ops-local.md#gpu-with-docker-compose)) |
 | `docker exec -it newsroom-ollama ollama pull llama3.2` | Pull ranking model into the Compose Ollama volume |

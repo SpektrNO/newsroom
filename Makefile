@@ -13,11 +13,11 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup install up up-postgres up-gpu down logs \
+.PHONY: help setup install up up-postgres up-gpu up-remote down logs \
         migrate generate seed studio \
         web worker ingest rank prune \
         test test-ai test-web test-worker test-sources typecheck build \
-        ollama-pull verify
+        ollama-pull verify assert-compose
 
 help: ## Show this help
 	@echo "Newsroom — useful commands"
@@ -66,6 +66,14 @@ up-gpu: ## Start Compose with NVIDIA GPU for Ollama (needs free :11434)
 	$(COMPOSE) -f $(ROOT)/docker-compose.yml -f $(ROOT)/docker-compose.gpu.yml up -d
 	@echo "Postgres: localhost:5432  Ollama (GPU): http://localhost:$(OLLAMA_PORT)"
 
+# Publishes Postgres + Ollama on all interfaces. Only for deliberate remote access —
+# put a firewall in front and rotate POSTGRES_PASSWORD (see docs/ops-local.md).
+up-remote: ## Start Compose bound to 0.0.0.0 (COMPOSE_HOST_BIND override)
+	@echo "WARNING: binding Postgres + Ollama on all host interfaces (COMPOSE_HOST_BIND=0.0.0.0)."
+	@echo "See docs/ops-local.md#compose-network-binding"
+	COMPOSE_HOST_BIND=0.0.0.0 $(COMPOSE) -f $(ROOT)/docker-compose.yml up -d
+	@echo "Postgres: 0.0.0.0:5432  Ollama: http://0.0.0.0:$(OLLAMA_PORT)"
+
 down: ## Stop Compose services
 	$(COMPOSE) -f $(ROOT)/docker-compose.yml down
 
@@ -99,8 +107,12 @@ rank: ## One-shot rank then exit (RANK_ARGS=-- --all-dirty optional)
 prune: ## One-shot prune stale scores + old articles
 	cd $(ROOT) && $(PNPM) worker:prune-scores
 
-test: ## Run AI + sources unit tests (offline-safe)
+test: ## Run AI + sources unit tests (offline-safe) + compose bind assert
+	cd $(ROOT) && ./scripts/assert-compose-bind.sh
 	cd $(ROOT) && $(PNPM) ai:test && $(PNPM) sources:test
+
+assert-compose: ## Assert Compose publishes Postgres/Ollama on loopback by default
+	cd $(ROOT) && ./scripts/assert-compose-bind.sh
 
 test-ai: ## AI unit tests
 	cd $(ROOT) && $(PNPM) ai:test

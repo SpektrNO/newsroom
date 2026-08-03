@@ -5,10 +5,14 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: newsroom
-      POSTGRES_PASSWORD: newsroom
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsroom}
       POSTGRES_DB: newsroom
+    # Loopback by default — not LAN/internet-reachable. Override only when you
+    # intentionally expose the host (firewall + rotate POSTGRES_PASSWORD first):
+    #   COMPOSE_HOST_BIND=0.0.0.0 docker compose up -d
+    # See docs/ops-local.md#compose-network-binding
     ports:
-      - "5432:5432"
+      - "${COMPOSE_HOST_BIND:-127.0.0.1}:5432:5432"
     volumes:
       - newsroom_pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -27,7 +31,7 @@ services:
     container_name: newsroom-ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "${COMPOSE_HOST_BIND:-127.0.0.1}:11434:11434"
     volumes:
       - newsroom_ollama_data:/root/.ollama
 

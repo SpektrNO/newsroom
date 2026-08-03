@@ -68,12 +68,29 @@ Ngrok free interstitial / changing subdomain → update env and restart again.
 ## Compose
 
 ```bash
-docker compose up -d          # Postgres + Ollama
+docker compose up -d          # Postgres + Ollama (loopback only)
 docker compose up -d postgres # Postgres only
 # or: make up                 # Postgres; Compose Ollama only if :11434 is free
 ```
 
-Default `DATABASE_URL`:
+### Compose network binding
+
+By default, Compose publishes Postgres (`5432`) and Ollama (`11434`) on **loopback only** (`127.0.0.1`). Host processes still use `localhost`; the ports are **not** reachable from other machines on the LAN or the public internet.
+
+| Intent | Command |
+|--------|---------|
+| Local laptop / WSL (default) | `docker compose up -d` or `make up` |
+| Deliberate remote access | `COMPOSE_HOST_BIND=0.0.0.0 docker compose up -d` or `make up-remote` |
+
+**Do not** set `COMPOSE_HOST_BIND=0.0.0.0` on an internet- or LAN-reachable host unless you also:
+
+1. Put a firewall / security group in front of `5432` and `11434` (or terminate TLS elsewhere).
+2. **Rotate** the Compose Postgres password away from the documented local default `newsroom` / `newsroom` — e.g. `POSTGRES_PASSWORD=… COMPOSE_HOST_BIND=0.0.0.0 docker compose up -d`, and set matching `DATABASE_URL` in both `.env` and `apps/web/.env.local` (existing volume may still use the old password until you recreate the volume or `ALTER USER`).
+3. Treat Ollama as unauthenticated HTTP — anyone who can reach `:11434` can run inference and pull models.
+
+Bare `"5432:5432"` / `"11434:11434"` (no host IP) binds **all interfaces** in Docker. The default file uses `${COMPOSE_HOST_BIND:-127.0.0.1}` so that cannot drift unnoticed — `make assert-compose` / `./scripts/assert-compose-bind.sh` fails if the safe default is removed.
+
+Default `DATABASE_URL` (local-only credentials — fine behind loopback, not for public exposure):
 
 ```text
 postgres://newsroom:newsroom@localhost:5432/newsroom
