@@ -147,6 +147,7 @@ Notes for `ai-cloud-providers-byok`:
 | `web-source-discovery` | Discover/add feeds without knowing URLs | ✅ | `docs/architecture.md` |
 | `web-source-feed-search` | Search RSS/Atom feeds via LangSearch (BFF) | ✅ | `docs/architecture.md` |
 | `web-feed-offline-cache` | Cached feed scroll when API/server is unreachable | ⬜ | `docs/architecture.md` |
+| `web-opml-import-export` | OPML import/export for source subscriptions | ⬜ | `docs/architecture.md` |
 | `wipe-rankings` | Wipe current rankings (keep saved/dismissed) | ✅ | `docs/architecture.md` |
 | `web-elegant-refresh` | Elegant visual/UX polish across web client | ✅ | `docs/architecture.md` |
 | `introduce-themes` | User themes (background + density) + tighter controls | ✅ | `docs/architecture.md` |
@@ -164,6 +165,22 @@ Notes for `web-feed-offline-cache`:
 - **Follow-ups (do not block MVP):** Offline mutation outbox; expose `matchedTopicIds` on feed items for richer offline filters; prefetch next page while online to deepen cache; PWA shell; mobile parity.
 - **Depends on:** Shipped `web-feed-topics-sources` / `FeedClient` + `FeedItem` payload (title, rank, reason, URL, sources, status already sufficient to render the list).
 - **Verify:** Load feed online → go offline (devtools) → reload client path still shows items + banner; Rank/Wipe/Save disabled; online fetch refreshes cache; second browser profile / different user must not see the other user’s cached items; no new server schema required.
+
+Notes for `web-opml-import-export`:
+
+- **Goal:** Let users migrate to/from Feedly, Inoreader, and other readers via standard OPML so switching into Newsroom does not require re-adding every RSS URL by hand.
+- **Model mismatch (normative):** OPML carries **feeds** (and optional folders). Newsroom separates **sources** (`category` + `adapter` + `config`) from **topics** (catalog leaf + keywords + weight). Import/export must not pretend OPML folders are topics.
+- **Import (primary):** Session-authenticated upload/parse of OPML 1.0/2.0. For each outline with `xmlUrl` (or equivalent), create `source_subscriptions` with `adapter: "rss"`, `config.rssUrl` normalized, `enabled: true`. Deduplicate against the user’s existing RSS unique index (skip or report duplicates; do not 500 the whole import). Cap batch size (e.g. soft max ~500 outlines) with a clear error when exceeded.
+- **Category heuristics (import):** Infer `category` best-effort — podcast signals (itunes / enclosure-oriented titles, common podcast hosts) → `podcast`; newsletter-ish titles → `newsletter`; else default `website` (or `community` only when clearly an aggregator/community feed). Always show a **preview** of proposed sources (title, url, category) before commit; user can edit category or deselect rows. Invalid/missing URLs → skip with count in result summary.
+- **Folders → topics (optional assist, not auto-write):** OPML folder titles may be offered as **suggestions** only (e.g. map folder `AI` → nearest selectable topic-tree leaf + starter keywords). User confirms Follow / Add keywords; never invent non-catalog topic names as writable follows. Prefer linking this assist to existing Topics Follow APIs + optional Advisor; v1 may ship import-sources-only and leave folder→topic assist as an explicit follow-up in the same feature if scope slips.
+- **Non-RSS outlines:** Skip Twitter/X, email digests without `xmlUrl`, and other non-feed rows; summarize skipped count. Do **not** invent HN / Bluesky / Reddit subscriptions from OPML.
+- **Export:** Download OPML for the session user’s **RSS** sources only (`adapter: "rss"`), with `xmlUrl` = `config.rssUrl`, `text`/`title` from a stable label (stored title if we add one; else hostname/path). Optionally nest under outline folders named by `category` (`website` / `newsletter` / `podcast` / `community`). Omit `hackernews` / `bluesky` / `reddit` from portable OPML (document in UI). Round-trip of topics/keywords is **out of scope** for standard OPML — if full backup is needed later, use a separate JSON export feature.
+- **API (sketch):** `POST /api/sources/opml/import` (multipart or raw XML; dry-run/preview flag then commit) and `GET /api/sources/opml/export` (returns `application/xml` or `text/x-opml` attachment). Session cookie only; never accept unauthenticated uploads. Reuse existing create-source validation paths where possible rather than a parallel write path.
+- **UI:** Sources page — **Import OPML** / **Export OPML** near Add / Suggested. Import flow: file pick → preview table → Confirm. Export: immediate download. Calm copy that topics are configured separately on Topics.
+- **Mark dirty:** Successful import that creates sources marks the user **dirty** (same as manual source create) so ingest/rank pick up new feeds; do not auto Rank latest.
+- **Out of scope v1:** Mobile/Expo; OPML as topic/keyword backup; Newsroom-namespaced OPML extensions for HN/Bluesky/Reddit; scraping feed titles beyond outline text; replacing curated catalog / LangSearch discovery.
+- **Depends on:** Shipped Sources create API + category/adapter model (`web-source-discovery`). Stronger with topic catalog if folder→topic assist ships in the same feature.
+- **Verify:** Fixture OPML from Feedly/Inoreader-style nesting; preview then import creates RSS rows only; duplicates skipped; export re-imports cleanly for RSS; session isolation (user A cannot import into user B); malformed XML → `400`.
 
 Notes for `wipe-rankings`:
 
@@ -234,7 +251,7 @@ Notes for `web-source-discovery` (shipped — catalog v5):
 
 - **Problem:** Ranking only filters what you already ingest. HN is a shared firehose (discovery built-in); Substack-style sources previously required the user to **already know** an RSS URL.
 - **Shipped:** Static curated feed catalog (`GET /api/feed-catalog`); Sources **Suggested** and **Add** share five categories (Website / Community / Newsletter / Podcast / Social); Me labels match; subscribed catalog rows omitted; Me collapsible (default collapsed). Persisted `category` + `adapter`. Substack/dev.to → community; digests like TLDR → newsletter.
-- **Follow-ups:** `web-source-feed-search` (LangSearch RSS/Atom discovery); Advisor feed suggestions; usage-based suggestions.
+- **Follow-ups:** `web-source-feed-search` (LangSearch RSS/Atom discovery); `web-opml-import-export` (Feedly/Inoreader migration); Advisor feed suggestions; usage-based suggestions.
 - **Out of scope (unchanged):** Scraping paywalled bodies; scraping Substack’s entire network; social popularity; auto-subscribe.
 
 Notes for `web-source-feed-search`:
