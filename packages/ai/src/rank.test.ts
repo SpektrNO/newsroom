@@ -219,6 +219,37 @@ describe("rankArticleBatch", () => {
     assert.deepEqual(ranked.items[0]?.confirmedTopicIds, []);
   });
 
+  it("clamps aiScore to 0 when the model explicitly confirms no topics", async () => {
+    const topicsWithIds = [
+      { id: "topic-break", name: "Breaking & politics", keywords: ["nå"], weight: 1 },
+    ];
+    const articlesWithCandidates = [
+      {
+        articleId: "uuid-1111",
+        title: "Bur rett ved cruisekaia",
+        summary: "Har fått nok",
+        candidateTopicIds: ["topic-break"],
+      },
+    ];
+    const provider = fakeProvider(
+      JSON.stringify([
+        {
+          articleId: "r0",
+          aiScore: 0.99,
+          reason: "Personal anecdote about cruise ships",
+          confirmedTopicIds: [],
+        },
+      ]),
+    );
+
+    const ranked = await rankArticleBatch(provider, {
+      topics: topicsWithIds,
+      articles: articlesWithCandidates,
+    });
+    assert.deepEqual(ranked.items[0]?.confirmedTopicIds, []);
+    assert.equal(ranked.items[0]?.aiScore, 0);
+  });
+
   it("falls back to the keyword reason when the model returns none", async () => {
     const provider = fakeProvider(
       JSON.stringify([{ articleId: "r0", aiScore: 0.5 }]),

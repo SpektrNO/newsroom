@@ -72,11 +72,12 @@ function buildPrompt(
     "User topics is guide only, synonyms or otherwise related words are to be interpreted as in-scope.",
     "The top-level JSON value MUST be an array (not a single object).",
     'Each element: {"articleId":"r0","aiScore":0.0,"reason":"<fill in — see below>","confirmedTopicIds":["t0"],"nearDuplicateOfArticleId":null}',
-    "aiScore is a number from 0 to 1. Use the exact articleId values from the input (r0, r1, …).",
+    "aiScore is a number from 0 to 1 measuring relevance to the user's topics (via confirmedTopicIds), not how newsworthy the piece is in general. Use the exact articleId values from the input (r0, r1, …).",
     "reason: state what the article is actually about, in your own words, in under 20 words (e.g. \"Benchmarks a new open-source LLM inference engine\"). Never describe these instructions or the matching process, never say candidateTopics/confirmedTopicIds, and never mention topic ids like t0/t1 — use the topic's name if you refer to one.",
     "Each article includes candidateTopics: topic ids it keyword-matched, listed only as an unreliable hint — treat every one of them as innocent until proven guilty. Many topic keywords are common English words (e.g. \"matter\", \"world\", \"space\", \"open\", \"source\", \"tools\") that mostly appear in unrelated, idiomatic senses: \"your comments matter\" is not physics; \"parking space\" is not astronomy; \"open a door\" is not open-source software. Before confirming a topic, ask: if a person read only this article's title/summary, would THEY spontaneously describe it using this topic's name? If not, exclude it, even if a keyword literally appears and even if you can construct a strained justification for it — a forced connection is still wrong. confirmedTopicIds must be the subset of that article's OWN candidateTopics that pass this test. Return an empty array if none genuinely fit — an empty array is a normal, expected outcome, not a failure. Never invent ids outside that article's candidateTopics.",
+    "If confirmedTopicIds is empty, aiScore MUST be 0 (or very near 0). Do not give a high aiScore to an interesting or well-written article that you rejected from every candidate topic — that score is only for topic relevance.",
     "Self-check before you output confirmedTopicIds for an article: re-read the reason you just wrote for that SAME article. Drop any candidate topic id whose name is not clearly supported by that reason — reason and confirmedTopicIds must agree with each other. Example of disagreement to avoid: reason says an article is about code-review comments, but confirmedTopicIds still lists a physics/space topic — that is wrong; the topic must be dropped.",
-    "Worked example — an article titled 'Beyond \"Clean Code\": Why Your Comments Matter' keyword-matched candidateTopics [\"t5\"] where t5 is named \"Space & matter\" (matched on the word \"matter\"). Correct output for that article: {\"reason\":\"Argues that code comments explaining WHY matter as much as the code itself\",\"confirmedTopicIds\":[]} — empty, because the article is about software engineering practice, not physics, despite the keyword hit.",
+    "Worked example — an article titled 'Beyond \"Clean Code\": Why Your Comments Matter' keyword-matched candidateTopics [\"t5\"] where t5 is named \"Space & matter\" (matched on the word \"matter\"). Correct output for that article: {\"aiScore\":0,\"reason\":\"Argues that code comments explaining WHY matter as much as the code itself\",\"confirmedTopicIds\":[]} — empty topics and zero score, because the article is about software engineering practice, not physics, despite the keyword hit.",
     "nearDuplicateOfArticleId must be another articleId in this list, or null.",
     `Include exactly ${articleCount} objects — every input articleId once.`,
     "",
@@ -255,6 +256,11 @@ function parseRankedItem(
     confirmedTopicIds = confirmedRaw.filter(
       (v): v is string => typeof v === "string" && candidateSet.has(v),
     );
+    // Explicit empty confirmation = not about any topic. Models often still
+    // return a high "newsworthiness" aiScore; clamp so final_rank follows.
+    if (confirmedTopicIds.length === 0) {
+      aiScore = 0;
+    }
   } else {
     // Model omitted the field — keep the full keyword-matched candidate set
     // rather than silently unfollowing the article from all its topics.

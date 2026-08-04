@@ -13,7 +13,7 @@ Feed ranking needs a deterministic keyword shortlist (no Ollama) plus a batch AI
 
 2. **Keyword score** — `min(1, Σ over keyword hits of topic.weight × 0.25)` across enabled topics. Documented in `packages/ai` `scoreKeywordMatch`.
 
-3. **Final rank** — `0.35 * keyword_score + 0.65 * (ai_score ?? keyword_score)`. Implemented as `combineFinalRank`.
+3. **Final rank** — `0.35 * keyword_score + 0.65 * (ai_score ?? keyword_score)`. Implemented as `combineFinalRank`. **`aiScore` is topic relevance, not general newsworthiness** — when the model returns an explicit empty `confirmedTopicIds` (rejected every keyword candidate), `parseRankedItem` forces `aiScore = 0` so false keyword hits cannot float to the top of the unfiltered feed with a 0.99 “interesting article” score. Omitting the field still falls back to keeping candidates + the model’s score (ADR 004). Fixed 2026-08-04.
 
 4. **AI batching** — Default batch size **30**, env `RANK_BATCH_SIZE` clamped to **20–50**. Helper `rankArticleBatch` uses `AiProvider.complete` only (no DB/Next imports). Malformed items skipped; invalid near-dup ids ignored. Ollama generate timeout defaults to **5 minutes** (`OLLAMA_TIMEOUT_MS`); health probes stay short (~10s).
 
