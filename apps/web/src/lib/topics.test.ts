@@ -54,6 +54,18 @@ describe("mergeTopicKeywords / extras", () => {
       ["rag", "openai"],
     );
   });
+
+  it("Advisor-style suggestions never replace leaf starters", () => {
+    // Regression: Follow used to persist suggestion.keywords alone.
+    assert.deepEqual(
+      mergeTopicKeywords("Physics & mathematics", ["universe", "particle"]),
+      ["Physics", "mathematics", "universe", "particle"],
+    );
+    assert.deepEqual(
+      mergeTopicKeywords("Design & media", ["figma", "css"]),
+      ["Design", "media", "figma", "css"],
+    );
+  });
 });
 
 describe("isFollowingLabel / findTopicByLabel", () => {

@@ -60,9 +60,11 @@ const WEIGHT_HELP = (
     <p>
       <strong>What weight does:</strong> When a keyword from this topic matches
       an article’s title or summary, that hit adds weight × 0.25 toward the
-      keyword score (capped at 1). Keyword score is part of hybrid ranking:
-      final rank blends keyword score (35%) with the AI score (65%). See hybrid
-      ranking.
+      keyword score (capped at 1). Matches are case-insensitive whole words
+      (not substrings), with light English plural folding — e.g.{" "}
+      <code>regulation</code> also hits <code>regulations</code>. Keyword score
+      is part of hybrid ranking: final rank blends keyword score (35%) with the
+      AI score (65%). See hybrid ranking.
     </p>
     <p>
       <strong>Higher weight</strong> (e.g. 2–10): matching keywords push this
@@ -475,9 +477,16 @@ function KeywordChips({
       {lockedKeywords.length > 0 ? (
         <p className="keyword-chips-hint">
           Words from the topic path stay fixed (parents match more weakly when
-          ranking). Add more if you want.
+          ranking). Add more if you want. Matching is whole-word with light
+          plural folding (e.g. <code>agent</code> ↔ <code>agents</code>).
         </p>
-      ) : null}
+      ) : (
+        <p className="keyword-chips-hint">
+          Matching is case-insensitive whole-word (not substrings), with light
+          English plural folding — e.g. <code>agent</code> also hits{" "}
+          <code>agents</code>. Short tokens like <code>ai</code> stay exact.
+        </p>
+      )}
     </div>
   );
 }

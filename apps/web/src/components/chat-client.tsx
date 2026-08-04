@@ -25,22 +25,8 @@ import {
   findTopicByLabel,
   followDefaultsForLabel,
   isFollowingLabel,
+  mergeTopicKeywords,
 } from "@/lib/topics-catalog";
-
-function mergeKeywords(existing: string[], incoming: string[]): string[] {
-  const seen = new Set(existing.map((k) => k.toLowerCase()));
-  const out = [...existing];
-  for (const kw of incoming) {
-    const trimmed = kw.trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(trimmed);
-    if (out.length >= 50) break;
-  }
-  return out;
-}
 
 export function ChatClient(): ReactNode {
   const router = useRouter();
@@ -152,12 +138,13 @@ export function ChatClient(): ReactNode {
     setActionNote(null);
     try {
       const defaults = followDefaultsForLabel(suggestion.topicLabel);
+      // Always keep leaf starters; Advisor suggestions append (never replace).
       await api.createTopic({
         ...defaults,
-        keywords:
-          suggestion.keywords.length > 0
-            ? suggestion.keywords
-            : defaults.keywords,
+        keywords: mergeTopicKeywords(
+          suggestion.topicLabel,
+          suggestion.keywords,
+        ).slice(0, 50),
       });
       setActionNote(`Following ${suggestion.topicLabel}.`);
       await refreshTopics();
@@ -181,7 +168,11 @@ export function ChatClient(): ReactNode {
     }
     setActionNote(null);
     try {
-      const keywords = mergeKeywords(topic.keywords, suggestion.keywords);
+      // Re-assert leaf starters in case an older Follow dropped them.
+      const keywords = mergeTopicKeywords(suggestion.topicLabel, [
+        ...topic.keywords,
+        ...suggestion.keywords,
+      ]).slice(0, 50);
       await api.patchTopic(topic.id, { keywords });
       setActionNote(`Updated keywords on ${suggestion.topicLabel}.`);
       await refreshTopics();

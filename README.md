@@ -162,7 +162,7 @@ Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environmen
 | `GET` | `/api/feed?cursor=&topic=&excludeTopic=&source=&status=&limit=` | Ranked scores; default is `new`/`seen` only; `topic=` includes (OR), `excludeTopic=` excludes; `status=saved` (etc.) filters to that status; returns `rankedCount` / `evaluatedCount` / `articlesCount` pipeline counters |
 | `POST` | `/api/feed/:articleId/seen\|saved\|dismissed` | Update status; `404` if no score row |
 
-Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md). Health, seed, Compose: [docs/ops-local.md](docs/ops-local.md).
+Ranking formulas and job behavior: [docs/decisions/002-hybrid-ranking.md](docs/decisions/002-hybrid-ranking.md) (whole-word keyword match + light English plural folding, then AI). Health, seed, Compose: [docs/ops-local.md](docs/ops-local.md).
 
 ## Docs
 
