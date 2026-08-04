@@ -23,6 +23,7 @@ import { getTopicTree, topicPathLabels } from "@/lib/topic-tree";
 import {
   formatEpisodeDuration,
   feedSourceTypeLabel,
+  formatTopicMembership,
   sourceSubscriptionTitle,
   splitFeedReason,
 } from "@/lib/feed";
@@ -154,17 +155,69 @@ function formatRank(score: number): string {
   return score.toFixed(2);
 }
 
-function StoryReason({ reason }: { reason: string }): ReactNode {
+function StoryReason({
+  reason,
+  membership,
+}: {
+  reason: string | null;
+  membership: ReactNode;
+}): ReactNode {
+  if (!reason?.trim()) {
+    return membership ?? null;
+  }
   const { keywordsLine, detail } = splitFeedReason(reason);
   if (keywordsLine && detail) {
     return (
       <>
         <p className="story-reason story-reason-keywords">{keywordsLine}</p>
+        {membership}
         <p className="story-reason story-reason-ai">{detail}</p>
       </>
     );
   }
-  return <p className="story-reason">{reason}</p>;
+  if (keywordsLine) {
+    return (
+      <>
+        <p className="story-reason story-reason-keywords">{keywordsLine}</p>
+        {membership}
+      </>
+    );
+  }
+  return (
+    <>
+      {membership}
+      <p className="story-reason">{reason}</p>
+    </>
+  );
+}
+
+function StoryTopics({
+  matchedTopicIds,
+  topicNameById,
+  hasAiScore,
+}: {
+  matchedTopicIds: string[] | null | undefined;
+  topicNameById: ReadonlyMap<string, string>;
+  hasAiScore: boolean;
+}): ReactNode {
+  const line = formatTopicMembership({
+    matchedTopicIds,
+    topicNameById,
+    hasAiScore,
+  });
+  if (!line) return null;
+  const empty = matchedTopicIds?.length === 0;
+  return (
+    <p
+      className={
+        empty
+          ? "story-reason story-reason-topics story-reason-topics-empty"
+          : "story-reason story-reason-topics"
+      }
+    >
+      {line}
+    </p>
+  );
 }
 
 function rankDetail(item: FeedItem): string {
@@ -326,6 +379,12 @@ export function FeedClient(): ReactNode {
     () => groupTopics(topics, treeNodes),
     [topics, treeNodes],
   );
+
+  const topicNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const topic of topics) map.set(topic.id, topic.name);
+    return map;
+  }, [topics]);
 
   const allTopicIds = useMemo(() => topics.map((t) => t.id), [topics]);
 
@@ -1116,7 +1175,18 @@ export function FeedClient(): ReactNode {
                       {formatRank(item.finalRank)}
                     </span>
                   </div>
-                  {item.reason ? <StoryReason reason={item.reason} /> : null}
+                  <StoryReason
+                    reason={item.reason}
+                    membership={
+                      <StoryTopics
+                        matchedTopicIds={item.matchedTopicIds}
+                        topicNameById={topicNameById}
+                        hasAiScore={
+                          item.aiScore !== null && item.aiScore !== undefined
+                        }
+                      />
+                    }
+                  />
                   {meta ? <p className="story-meta">{meta}</p> : null}
                   {playAudio ? (
                     <p className="story-meta">

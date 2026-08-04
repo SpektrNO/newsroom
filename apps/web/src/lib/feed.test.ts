@@ -26,6 +26,7 @@ import {
   splitFeedReason,
   feedSourceSubscriptionLabel,
   feedSourceTypeLabel,
+  formatTopicMembership,
   tokenizeFeedSearch,
   formatEpisodeDuration,
 } from "./feed.js";
@@ -243,6 +244,45 @@ describe("feed query parsers", () => {
       keywordsLine: null,
       detail: "Just an AI line",
     });
+  });
+
+  it("formats topic membership for the feed UI", () => {
+    const names = new Map([
+      ["t1", "Breaking & politics"],
+      ["t2", "AI & agents"],
+    ]);
+    assert.equal(
+      formatTopicMembership({
+        matchedTopicIds: ["t1", "t2"],
+        topicNameById: names,
+        hasAiScore: true,
+      }),
+      "Topics: Breaking & politics · AI & agents",
+    );
+    assert.equal(
+      formatTopicMembership({
+        matchedTopicIds: [],
+        topicNameById: names,
+        hasAiScore: true,
+      }),
+      "No topic confirmed",
+    );
+    assert.equal(
+      formatTopicMembership({
+        matchedTopicIds: [],
+        topicNameById: names,
+        hasAiScore: false,
+      }),
+      null,
+    );
+    assert.equal(
+      formatTopicMembership({
+        matchedTopicIds: null,
+        topicNameById: names,
+        hasAiScore: true,
+      }),
+      null,
+    );
   });
 
   it("labels source categories and subscription identities", () => {

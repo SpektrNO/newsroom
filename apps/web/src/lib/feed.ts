@@ -24,6 +24,11 @@ export type FeedItemJson = {
   aiScore: number | null;
   finalRank: number;
   reason: string | null;
+  /**
+   * AI-narrowed topic membership (`[]` = none confirmed).
+   * `null` on legacy rows scored before this field existed.
+   */
+  matchedTopicIds: string[] | null;
   nearDuplicateOfArticleId: string | null;
   status: UserArticleScoreStatus;
   scoredAt: string;
@@ -245,6 +250,7 @@ export type FeedRowInput = {
   aiScore: number | null;
   finalRank: number;
   reason: string | null;
+  matchedTopicIds?: string[] | null;
   nearDuplicateOfArticleId: string | null;
   status: string;
   scoredAt: Date;
@@ -267,10 +273,35 @@ export function toFeedItemJson(row: FeedRowInput): FeedItemJson {
     aiScore: row.aiScore,
     finalRank: row.finalRank,
     reason: row.reason,
+    matchedTopicIds: row.matchedTopicIds ?? null,
     nearDuplicateOfArticleId: row.nearDuplicateOfArticleId,
     status: row.status as UserArticleScoreStatus,
     scoredAt: row.scoredAt.toISOString(),
   };
+}
+
+/**
+ * Feed UI line for stored topic membership (alongside keyword reason).
+ * Returns null when there is nothing useful to show (legacy unknown, or
+ * empty membership before AI has run).
+ */
+export function formatTopicMembership(opts: {
+  matchedTopicIds: string[] | null | undefined;
+  topicNameById: ReadonlyMap<string, string>;
+  hasAiScore: boolean;
+}): string | null {
+  const ids = opts.matchedTopicIds;
+  if (ids === null || ids === undefined) return null;
+  if (ids.length === 0) {
+    return opts.hasAiScore ? "No topic confirmed" : null;
+  }
+  const names: string[] = [];
+  for (const id of ids) {
+    const name = opts.topicNameById.get(id);
+    if (name) names.push(name);
+  }
+  if (names.length === 0) return null;
+  return `Topics: ${names.join(" · ")}`;
 }
 
 /** Human label for a source category (Podcast / Website / …). */

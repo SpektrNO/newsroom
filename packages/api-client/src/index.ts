@@ -132,6 +132,11 @@ export type FeedItem = {
   aiScore: number | null;
   finalRank: number;
   reason: string | null;
+  /**
+   * AI-narrowed topic ids this article belongs to (`[]` = none confirmed).
+   * `null` on legacy rows scored before membership was stored.
+   */
+  matchedTopicIds: string[] | null;
   nearDuplicateOfArticleId: string | null;
   status: FeedItemStatus;
   scoredAt: string;

@@ -728,6 +728,7 @@ export async function GET(request: Request) {
         aiScore: row.aiScore,
         finalRank: row.finalRank,
         reason: row.reason,
+        matchedTopicIds: row.matchedTopicIds,
         nearDuplicateOfArticleId: row.nearDuplicateOfArticleId,
         status: row.status,
         scoredAt: row.scoredAt,

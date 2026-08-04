@@ -808,6 +808,14 @@ button.danger-text:hover {
   font-size: 0.85rem;
 }
 
+.story-reason-topics {
+  font-size: 0.85rem;
+}
+
+.story-reason-topics-empty {
+  font-style: italic;
+}
+
 .story-reason-ai {
   color: color-mix(in srgb, var(--ink) 72%, var(--muted));
 }

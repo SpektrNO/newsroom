@@ -84,6 +84,7 @@ export async function updateFeedStatusResponse(
       aiScore: updated.aiScore,
       finalRank: updated.finalRank,
       reason: updated.reason,
+      matchedTopicIds: updated.matchedTopicIds,
       nearDuplicateOfArticleId: updated.nearDuplicateOfArticleId,
       status: updated.status,
       scoredAt: updated.scoredAt,
