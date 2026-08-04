@@ -141,6 +141,7 @@ Env vars: see [docs/ops-local.md#environment-files](docs/ops-local.md#environmen
 | Method | Path | Notes |
 |--------|------|-------|
 | `GET/PATCH` | `/api/settings/rank-model` | Get / set ranking model tier: `none` \| `fast` \| `standard` |
+| `GET/PATCH` | `/api/settings/score-keep` | Get / set keep-N + drop policy (`rank` \| `age`) for `new`/`seen` scores |
 | `GET/PUT/DELETE` | `/api/settings/ai-credentials` | Optional BYOK OpenAI/Google key (encrypted; requires `AI_CREDENTIALS_KEY`) |
 
 ### Sources API (session cookie)

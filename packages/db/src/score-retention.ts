@@ -2,6 +2,10 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import type { Database } from "./index.js";
 import { userArticleScores } from "./schema/ranking.js";
 import { pruneUserArticleEvaluations } from "./article-evaluations.js";
+import {
+  getUserScoreKeepSettings,
+  type ScoreKeepPolicy,
+} from "./score-keep-settings.js";
 
 const DEFAULT_TTL_DAYS = 30;
 const DEFAULT_KEEP_TOP_N = 500;
@@ -10,8 +14,13 @@ const DEFAULT_ARTICLE_TTL_DAYS = 90;
 export type RankScoreRetentionConfig = {
   /** Delete new/seen/dismissed older than this many days. `0` = no age prune. */
   ttlDays: number;
-  /** Keep at most this many new/seen by final_rank per user. `0` = no top-N prune. */
+  /** Keep at most this many new/seen per user. `0` = no keep-N prune. */
   keepTopN: number;
+  /**
+   * Keep-N overflow policy. Default `rank` (lowest final_rank first).
+   * `age` keeps newest by scored_at.
+   */
+  policy?: ScoreKeepPolicy;
 };
 
 export type ArticleRetentionConfig = {
@@ -42,6 +51,7 @@ export function resolveRankScoreRetention(
   return {
     ttlDays: parseNonNegInt(env.RANK_SCORE_TTL_DAYS, DEFAULT_TTL_DAYS),
     keepTopN: parseNonNegInt(env.RANK_SCORE_KEEP_TOP_N, DEFAULT_KEEP_TOP_N),
+    policy: "rank",
   };
 }
 
@@ -53,12 +63,42 @@ export function resolveArticleRetention(
   };
 }
 
+async function resolvePruneConfig(
+  db: Database,
+  options: {
+    userId?: string;
+    config?: RankScoreRetentionConfig;
+  },
+): Promise<RankScoreRetentionConfig> {
+  if (options.config) {
+    return {
+      ttlDays: options.config.ttlDays,
+      keepTopN: options.config.keepTopN,
+      policy: options.config.policy ?? "rank",
+    };
+  }
+  const env = resolveRankScoreRetention();
+  if (!options.userId) {
+    return env;
+  }
+  const userKeep = await getUserScoreKeepSettings(db, options.userId);
+  return {
+    ttlDays: env.ttlDays,
+    keepTopN: userKeep.keepTopN,
+    policy: userKeep.policy,
+  };
+}
+
 /**
  * Prune `user_article_scores` for one user or all users.
  * - Always keep `saved`.
  * - Delete `dismissed` older than TTL (when ttlDays > 0).
- * - Delete `new`/`seen` that are older than TTL **or** outside top-N by final_rank.
+ * - Delete `new`/`seen` that are older than TTL **or** outside keep-N
+ *   (by final_rank or scored_at per policy).
  * - Also prune stale evaluation markers with the same TTL.
+ *
+ * When `userId` is omitted and `config` is omitted, keep-N uses each user's
+ * Settings (`score_keep_top_n` / `score_keep_policy`); TTL stays env-wide.
  */
 export async function pruneUserArticleScores(
   db: Database,
@@ -67,8 +107,11 @@ export async function pruneUserArticleScores(
     config?: RankScoreRetentionConfig;
   } = {},
 ): Promise<PruneScoresResult> {
-  const config = options.config ?? resolveRankScoreRetention();
-  if (config.ttlDays <= 0 && config.keepTopN <= 0) {
+  const usePerUserKeep =
+    options.userId == null && options.config == null;
+
+  const config = await resolvePruneConfig(db, options);
+  if (!usePerUserKeep && config.ttlDays <= 0 && config.keepTopN <= 0) {
     return { deleted: 0, users: 0, evaluationsDeleted: 0 };
   }
 
@@ -99,39 +142,115 @@ export async function pruneUserArticleScores(
     deleted += dismissed.length;
   }
 
-  if (config.ttlDays > 0 || config.keepTopN > 0) {
-    const result = await db.execute<{ id: string }>(sql`
-      WITH ranked AS (
-        SELECT
-          id,
-          scored_at,
-          row_number() OVER (
-            PARTITION BY user_id
-            ORDER BY final_rank DESC, article_id DESC
-          ) AS rn
-        FROM user_article_scores
-        WHERE status IN ('new', 'seen')
-        ${userFilter}
-      ),
-      doomed AS (
-        SELECT id FROM ranked
-        WHERE
-          (
-            ${config.ttlDays} > 0
-            AND scored_at < NOW() - (${config.ttlDays}::bigint * INTERVAL '1 day')
-          )
-          OR (
-            ${config.keepTopN} > 0
-            AND rn > ${config.keepTopN}
-          )
-      )
-      DELETE FROM user_article_scores AS u
-      USING doomed AS d
-      WHERE u.id = d.id
-      RETURNING u.id
-    `);
-    const rows = result as unknown as Array<{ id: string }>;
-    deleted += rows.length;
+  const shouldKeepN =
+    usePerUserKeep || config.keepTopN > 0 || config.ttlDays > 0;
+  if (shouldKeepN) {
+    if (usePerUserKeep) {
+      const result = await db.execute<{ id: string }>(sql`
+        WITH ranked AS (
+          SELECT
+            s.id,
+            s.scored_at,
+            u.score_keep_top_n AS keep_n,
+            row_number() OVER (
+              PARTITION BY s.user_id
+              ORDER BY
+                CASE
+                  WHEN u.score_keep_policy = 'age' THEN EXTRACT(EPOCH FROM s.scored_at)
+                  ELSE s.final_rank
+                END DESC,
+                s.article_id DESC
+            ) AS rn
+          FROM user_article_scores AS s
+          INNER JOIN "user" AS u ON u.id = s.user_id
+          WHERE s.status IN ('new', 'seen')
+        ),
+        doomed AS (
+          SELECT id FROM ranked
+          WHERE
+            (
+              ${config.ttlDays} > 0
+              AND scored_at < NOW() - (${config.ttlDays}::bigint * INTERVAL '1 day')
+            )
+            OR (
+              keep_n > 0
+              AND rn > keep_n
+            )
+        )
+        DELETE FROM user_article_scores AS u
+        USING doomed AS d
+        WHERE u.id = d.id
+        RETURNING u.id
+      `);
+      const rows = result as unknown as Array<{ id: string }>;
+      deleted += rows.length;
+    } else {
+      const policy = config.policy ?? "rank";
+      const result =
+        policy === "age"
+          ? await db.execute<{ id: string }>(sql`
+        WITH ranked AS (
+          SELECT
+            id,
+            scored_at,
+            row_number() OVER (
+              PARTITION BY user_id
+              ORDER BY scored_at DESC, article_id DESC
+            ) AS rn
+          FROM user_article_scores
+          WHERE status IN ('new', 'seen')
+          ${userFilter}
+        ),
+        doomed AS (
+          SELECT id FROM ranked
+          WHERE
+            (
+              ${config.ttlDays} > 0
+              AND scored_at < NOW() - (${config.ttlDays}::bigint * INTERVAL '1 day')
+            )
+            OR (
+              ${config.keepTopN} > 0
+              AND rn > ${config.keepTopN}
+            )
+        )
+        DELETE FROM user_article_scores AS u
+        USING doomed AS d
+        WHERE u.id = d.id
+        RETURNING u.id
+      `)
+          : await db.execute<{ id: string }>(sql`
+        WITH ranked AS (
+          SELECT
+            id,
+            scored_at,
+            row_number() OVER (
+              PARTITION BY user_id
+              ORDER BY final_rank DESC, article_id DESC
+            ) AS rn
+          FROM user_article_scores
+          WHERE status IN ('new', 'seen')
+          ${userFilter}
+        ),
+        doomed AS (
+          SELECT id FROM ranked
+          WHERE
+            (
+              ${config.ttlDays} > 0
+              AND scored_at < NOW() - (${config.ttlDays}::bigint * INTERVAL '1 day')
+            )
+            OR (
+              ${config.keepTopN} > 0
+              AND rn > ${config.keepTopN}
+            )
+        )
+        DELETE FROM user_article_scores AS u
+        USING doomed AS d
+        WHERE u.id = d.id
+        RETURNING u.id
+      `);
+      const rows = result as unknown as Array<{ id: string }>;
+      deleted += rows.length;
+    }
   }
 
   const evalPrune = await pruneUserArticleEvaluations(db, {

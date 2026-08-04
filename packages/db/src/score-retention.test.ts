@@ -130,13 +130,14 @@ describe("rank score retention", () => {
     assert.deepEqual(resolveRankScoreRetention({} as NodeJS.ProcessEnv), {
       ttlDays: 30,
       keepTopN: 500,
+      policy: "rank",
     });
   });
 
   it("keeps saved; prunes old dismissed; applies TTL and top-N to new/seen", async () => {
     const result = await pruneUserArticleScores(db, {
       userId,
-      config: { ttlDays: 30, keepTopN: 1 },
+      config: { ttlDays: 30, keepTopN: 1, policy: "rank" },
     });
     assert.ok(result.deleted >= 2);
 
@@ -151,6 +152,100 @@ describe("rank score retention", () => {
     assert.equal(byArticle.has(ids.old), false);
     // low is outside top-1 → deleted even if fresh
     assert.equal(byArticle.has(ids.low), false);
+  });
+});
+
+describe("rank score retention age policy", () => {
+  let db: Database;
+  const userId = `ret-age-${randomUUID()}`;
+  const newerLow = `ret-age-newer-${randomUUID()}`;
+  const olderHigh = `ret-age-older-${randomUUID()}`;
+
+  before(async () => {
+    db = createDb(databaseUrl);
+    const now = new Date();
+    const older = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    await db.insert(user).values({
+      id: userId,
+      name: "RetentionAge",
+      email: `${userId}@test.local`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(articles).values([
+      {
+        id: newerLow,
+        canonicalUrl: `https://fixture.example/p/${newerLow}`,
+        title: "newer low rank",
+        summary: null,
+        author: null,
+        publishedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: olderHigh,
+        canonicalUrl: `https://fixture.example/p/${olderHigh}`,
+        title: "older high rank",
+        summary: null,
+        author: null,
+        publishedAt: older,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    await db.insert(userArticleScores).values([
+      {
+        id: randomUUID(),
+        userId,
+        articleId: newerLow,
+        keywordScore: 0.2,
+        aiScore: 0.2,
+        finalRank: 0.2,
+        status: "new",
+        scoredAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: randomUUID(),
+        userId,
+        articleId: olderHigh,
+        keywordScore: 0.9,
+        aiScore: 0.9,
+        finalRank: 0.9,
+        status: "seen",
+        scoredAt: older,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+  });
+
+  after(async () => {
+    await db
+      .delete(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+    for (const id of [newerLow, olderHigh]) {
+      await db.delete(articles).where(eq(articles.id, id));
+    }
+    await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("age policy keeps newest scored_at even if lower ranked", async () => {
+    const result = await pruneUserArticleScores(db, {
+      userId,
+      config: { ttlDays: 0, keepTopN: 1, policy: "age" },
+    });
+    assert.ok(result.deleted >= 1);
+    const rows = await db
+      .select()
+      .from(userArticleScores)
+      .where(eq(userArticleScores.userId, userId));
+    const ids = new Set(rows.map((r) => r.articleId));
+    assert.equal(ids.has(newerLow), true);
+    assert.equal(ids.has(olderHigh), false);
   });
 });
 

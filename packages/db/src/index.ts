@@ -96,6 +96,15 @@ export {
   type RankModelTier,
 } from "./rank-model-tier.js";
 export {
+  SCORE_KEEP_POLICIES,
+  clampScoreKeepTopN,
+  getUserScoreKeepSettings,
+  isScoreKeepPolicy,
+  setUserScoreKeepSettings,
+  type ScoreKeepPolicy,
+  type UserScoreKeepSettings,
+} from "./score-keep-settings.js";
+export {
   getUserAiCredentialMeta,
   upsertUserAiCredential,
   clearUserAiCredential,

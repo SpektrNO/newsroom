@@ -8,6 +8,8 @@ import type {
   AiUsageResponse,
   HealthResponse,
   RankModelTier,
+  ScoreKeepPolicy,
+  ScoreKeepSettingResponse,
 } from "@newsroom/api-client";
 import { ApiError } from "@newsroom/api-client";
 import { authClient } from "@/lib/auth-client";
@@ -47,6 +49,11 @@ const RANK_MODEL_TIER_HELP: Record<RankModelTier, string> = {
   none: "Keyword matching only — no AI calls, no AI budget used.",
 };
 
+const SCORE_KEEP_POLICY_HELP: Record<ScoreKeepPolicy, string> = {
+  rank: "When over the keep limit, drop the lowest-ranked new/seen scores first.",
+  age: "When over the keep limit, drop the oldest new/seen scores first (keep newest).",
+};
+
 export function SettingsClient({ email }: SettingsClientProps): ReactNode {
   const router = useRouter();
   const api = getBrowserApiClient();
@@ -58,6 +65,12 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
   const [rankModelTier, setRankModelTier] = useState<RankModelTier | null>(null);
   const [rankModelSaving, setRankModelSaving] = useState(false);
   const [rankModelError, setRankModelError] = useState(false);
+  const [scoreKeep, setScoreKeep] = useState<ScoreKeepSettingResponse | null>(
+    null,
+  );
+  const [scoreKeepDraftN, setScoreKeepDraftN] = useState("500");
+  const [scoreKeepSaving, setScoreKeepSaving] = useState(false);
+  const [scoreKeepError, setScoreKeepError] = useState(false);
   const [aiCreds, setAiCreds] = useState<AiCredentialsResponse | null>(null);
   const [aiCredsError, setAiCredsError] = useState(false);
   const [byokProvider, setByokProvider] =
@@ -106,6 +119,16 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
         setRankModelError(true);
       });
     void api
+      .getScoreKeepSetting()
+      .then((res) => {
+        setScoreKeep(res);
+        setScoreKeepDraftN(String(res.keepTopN));
+        setScoreKeepError(false);
+      })
+      .catch(() => {
+        setScoreKeepError(true);
+      });
+    void api
       .getAiCredentials()
       .then((res) => {
         setAiCreds(res);
@@ -146,6 +169,43 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
     } finally {
       setRankModelSaving(false);
     }
+  }
+
+  async function saveScoreKeep(next: {
+    keepTopN: number;
+    policy: ScoreKeepPolicy;
+  }) {
+    const previous = scoreKeep;
+    setScoreKeep(next);
+    setScoreKeepDraftN(String(next.keepTopN));
+    setScoreKeepSaving(true);
+    setScoreKeepError(false);
+    try {
+      const res = await api.setScoreKeepSetting(next);
+      setScoreKeep(res);
+      setScoreKeepDraftN(String(res.keepTopN));
+    } catch {
+      setScoreKeep(previous);
+      if (previous) setScoreKeepDraftN(String(previous.keepTopN));
+      setScoreKeepError(true);
+    } finally {
+      setScoreKeepSaving(false);
+    }
+  }
+
+  async function onScoreKeepPolicyChange(policy: ScoreKeepPolicy) {
+    if (!scoreKeep) return;
+    await saveScoreKeep({ keepTopN: scoreKeep.keepTopN, policy });
+  }
+
+  async function onScoreKeepNCommit() {
+    if (!scoreKeep) return;
+    const n = Number(scoreKeepDraftN);
+    if (!Number.isFinite(n)) {
+      setScoreKeepDraftN(String(scoreKeep.keepTopN));
+      return;
+    }
+    await saveScoreKeep({ keepTopN: n, policy: scoreKeep.policy });
   }
 
   async function onSaveByok(e: FormEvent) {
@@ -301,6 +361,59 @@ export function SettingsClient({ email }: SettingsClientProps): ReactNode {
             {rankModelError ? (
               <p className="manage-meta" role="status">
                 Couldn’t save the ranking model setting. Try again.
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className="settings-block">
+        <h2 className="form-heading">Feed score retention</h2>
+        {scoreKeep === null ? (
+          <p className="feed-placeholder">Checking…</p>
+        ) : (
+          <>
+            <label className="filter-field">
+              <span className="filter-label">Keep top N (new / seen)</span>
+              <input
+                type="number"
+                min={0}
+                max={10000}
+                step={1}
+                value={scoreKeepDraftN}
+                disabled={scoreKeepSaving}
+                onChange={(e) => setScoreKeepDraftN(e.target.value)}
+                onBlur={() => void onScoreKeepNCommit()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+            <label className="filter-field">
+              <span className="filter-label">When over limit, drop</span>
+              <select
+                value={scoreKeep.policy}
+                disabled={scoreKeepSaving}
+                onChange={(e) =>
+                  void onScoreKeepPolicyChange(
+                    e.target.value as ScoreKeepPolicy,
+                  )
+                }
+              >
+                <option value="rank">Lowest ranked first</option>
+                <option value="age">Oldest first</option>
+              </select>
+            </label>
+            <p className="manage-meta">
+              {SCORE_KEEP_POLICY_HELP[scoreKeep.policy]} Saved bookmarks are
+              never dropped. Operator score/article TTL still applies. Use 0 to
+              disable the keep-N limit.
+            </p>
+            {scoreKeepError ? (
+              <p className="manage-meta" role="status">
+                Couldn’t save score retention. Try again.
               </p>
             ) : null}
           </>

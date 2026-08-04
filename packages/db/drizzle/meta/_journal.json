@@ -120,6 +120,13 @@
       "when": 1785507200000,
       "tag": "0016_reclassify_rss_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785850000000,
+      "tag": "0017_user_score_keep",
+      "breakpoints": true
     }
   ]
 }

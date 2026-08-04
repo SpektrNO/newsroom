@@ -251,6 +251,14 @@ export type RankModelSettingResponse = {
   tier: RankModelTier;
 };
 
+/** Keep-N overflow: drop lowest final_rank or oldest scored_at. */
+export type ScoreKeepPolicy = "rank" | "age";
+
+export type ScoreKeepSettingResponse = {
+  keepTopN: number;
+  policy: ScoreKeepPolicy;
+};
+
 export type AiCredentialProvider = "openai" | "google";
 
 export type AiCredentialsResponse = {
@@ -501,6 +509,17 @@ export class ApiClient {
     tier: RankModelTier,
   ): Promise<RankModelSettingResponse> {
     return this.requestJson("PATCH", "/api/settings/rank-model", { tier });
+  }
+
+  async getScoreKeepSetting(): Promise<ScoreKeepSettingResponse> {
+    return this.requestJson("GET", "/api/settings/score-keep");
+  }
+
+  async setScoreKeepSetting(input: {
+    keepTopN: number;
+    policy: ScoreKeepPolicy;
+  }): Promise<ScoreKeepSettingResponse> {
+    return this.requestJson("PATCH", "/api/settings/score-keep", input);
   }
 
   async getAiCredentials(): Promise<AiCredentialsResponse> {

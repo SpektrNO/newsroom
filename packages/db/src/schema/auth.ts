@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -28,6 +29,18 @@ export const user = pgTable("user", {
     .notNull()
     .default("fast")
     .$type<"none" | "fast" | "standard">(),
+  /**
+   * Max `new`/`seen` score rows to keep per user (`0` = no keep-N prune).
+   * Default matches env `RANK_SCORE_KEEP_TOP_N` (500).
+   */
+  scoreKeepTopN: integer("score_keep_top_n").notNull().default(500),
+  /**
+   * When over keep-N: `rank` drops lowest final_rank; `age` drops oldest scored_at.
+   */
+  scoreKeepPolicy: text("score_keep_policy")
+    .notNull()
+    .default("rank")
+    .$type<"rank" | "age">(),
 });
 
 export const session = pgTable(
